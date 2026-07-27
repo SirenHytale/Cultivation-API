@@ -1,0 +1,22 @@
+{
+  "Group": "Example",
+  "Name": "ExampleAddon",
+  "Version": "1.0.0",
+  "Description": "A worked example of every Cultivation API integration point.",
+  "Authors": [
+    {
+      "Name": "Example",
+      "Url": "https://example.com/"
+    }
+  ],
+  "ServerVersion": "0.5.x",
+  "Dependencies": {
+    "Siren:Cultivation": ">=0.6.0"
+  },
+  "OptionalDependencies": {},
+  "LoadBefore": {},
+  "DisabledByDefault": false,
+  "IncludesAssetPack": true,
+  "SubPlugins": [],
+  "Main": "com.example.exampleaddon.ExampleAddon"
+}

@@ -1,0 +1,24 @@
+# Build output
+target/
+build/
+*.jar
+*.class
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python (tools/)
+__pycache__/
+*.pyc
+
+# Tools
+tools/
