@@ -10,7 +10,7 @@ is the real code the mod ships — nothing is a summary written after the fact.
 
 | | |
 | --- | --- |
-| **Artifact** | `plugin.siren:Cultivation:0.6.0` |
+| **Artifact** | `plugin.siren:Cultivation:0.6.1` |
 | **Package** | `plugin.siren.API` |
 | **Plugin id** | `Siren:Cultivation` |
 | **Hytale server** | `0.5.x` (built against `com.hypixel.hytale:Server:0.5.7`) |
@@ -28,12 +28,17 @@ internals to change how it behaves. Every one of these is a supported hook:
 | Read a player's realm, level, Qi, race, skill nodes | `CultivationAPI` getters | [Reading player state](docs/reading-state.md) |
 | React when something happens (breakthrough, tame, siege…) | 71 post-events | [Events](docs/events.md) |
 | Veto something, or re-tune its numbers | 64 cancellable pre-events | [Events](docs/events.md) |
+| Grant Qi, force a breakthrough, hand out a skill node | `addQi`, `completeBreakthrough`, `grantSkillNode` | [Driving progression](docs/driving-progression.md) |
+| Read or drain a chunk's spirit vein | `readSpiritVein`, `drainSpiritVein` | [Driving progression](docs/driving-progression.md) |
+| Ask what sect / dao / abode / beast a player has | `getSect`, `getDaoElement`, `getAbode`, `getBeast` | [Driving progression](docs/driving-progression.md) |
+| Read or change **Cultivation's own** settings | `CultivationConfigs` | [Config access](docs/config-access.md) |
 | Add a playable race | `registerRace` | [Registries](docs/registries.md) |
 | Add a technique cultivators can perform | `registerTechnique` | [Registries](docs/registries.md) |
 | Make an item boost Qi absorption | `registerQiAbsorptionItemModifier` | [Registries](docs/registries.md) |
 | Put my own page on the Cultivation menu bar | `registerMenuPage` | [UI integration](docs/ui.md) |
 | Add an article to the in-game Codex | `registerCodexEntry` | [UI integration](docs/ui.md) |
 | Expose my mod's settings in Cultivation's admin menu | `registerAdminConfigSection` | [UI integration](docs/ui.md) |
+| Behave correctly beside Endless Leveling / PlaceholderAPI | `isEndlessLevelingInstalled` and friends | [Compatibility](docs/compatibility.md) |
 | **Replace the entire realm/Qi ladder** with my own progression | `ProgressionProvider` | [Progression provider](docs/progression-provider.md) |
 | Re-word the mod into a different setting | `CultivationTheme` | [Theming](docs/theming.md) |
 
@@ -52,10 +57,10 @@ your local repository once:
 
 ```bash
 mvn install:install-file \
-  -Dfile=Cultivation-0.6.0.jar \
+  -Dfile=Cultivation-0.6.1.jar \
   -DgroupId=plugin.siren \
   -DartifactId=Cultivation \
-  -Dversion=0.6.0 \
+  -Dversion=0.6.1 \
   -Dpackaging=jar
 ```
 
@@ -65,7 +70,7 @@ Then depend on it in `provided` scope:
 <dependency>
     <groupId>plugin.siren</groupId>
     <artifactId>Cultivation</artifactId>
-    <version>0.6.0</version>
+    <version>0.6.1</version>
     <scope>provided</scope>
 </dependency>
 ```
@@ -80,7 +85,7 @@ resolves Cultivation's classes for you:
 
 ```json
 "Dependencies": {
-  "Siren:Cultivation": ">=0.6.0"
+  "Siren:Cultivation": ">=0.6.1"
 }
 ```
 
@@ -138,10 +143,13 @@ float qi = CultivationAPI.getQi(accessor, ref);
 | --- | --- |
 | **[Getting started](docs/getting-started.md)** | Dependency wiring, `setup()`, optional-dependency guard, your first listener |
 | **[Reading player state](docs/reading-state.md)** | Realms, levels, Qi, race, skill nodes; components and `ComponentAccessor` |
+| **[Driving progression](docs/driving-progression.md)** | Granting Qi, ranking up, meditation, spirit veins, and the rest of the world |
+| **[Config access](docs/config-access.md)** | Reading and writing Cultivation's own settings, and when not to |
 | **[Events](docs/events.md)** | Pre vs post, cancelling, re-tuning, threading, error handling |
 | **[Event reference](docs/events-reference.md)** | All 135 listeners with their payloads — generated from source |
 | **[Registries](docs/registries.md)** | Races, techniques, Qi-absorption items |
 | **[UI integration](docs/ui.md)** | Menu pages, Codex articles, admin config sections |
+| **[Compatibility](docs/compatibility.md)** | Endless Leveling, PlaceholderAPI, Marriage; optional-dependency guards |
 | **[Progression provider](docs/progression-provider.md)** | Replacing the realm/Qi ladder entirely |
 | **[Theming](docs/theming.md)** | Re-wording the mod, and why a language file cannot do it |
 | **[Types](docs/types.md)** | The Cultivation and Hytale types the API hands you |
@@ -161,7 +169,7 @@ assistant to read `AGENTS.md` first.
 ## Source layout
 
 ```
-api-sources/plugin/siren/API/   The 21 public API classes, verbatim
+api-sources/plugin/siren/API/   The 23 public API classes, verbatim
 docs/                            Guides and the generated event reference
 examples/                        A worked example addon
 tools/gen_events_reference.py    Regenerates docs/events-reference.md

@@ -173,7 +173,44 @@ typing** unless `.Value` is explicitly set on build and on every refresh — eve
 to `""`. This is an engine quirk, not a Cultivation one, and it costs an
 afternoon every time.
 
-## 12. Stale resources in the built jar
+## 12. Pushing a `Message` at a String UI property
+
+**Symptom:** the player is **disconnected mid-session** the moment the page
+renders. Not a log line, not a blank label — a disconnect.
+
+Some client-side markup properties take a `String` and some take a rendered
+message, and handing one the other is fatal rather than quiet:
+
+| Property | Takes | Notes |
+| --- | --- | --- |
+| `.TextSpans` | `Message` | The localizable path. Use this for anything a player reads. |
+| `.Text` | `String` | Tolerates a bare translation `Message`, and nothing more complex. |
+| `.TooltipText` | `String` **only** | A `Message` here disconnects. |
+
+This is why [`withTooltip`](ui.md#tooltips) takes a plain `String` — a tooltip
+genuinely cannot be localized. Put anything that must be readable in every
+language in the field's *label*, which goes through `TextSpans`.
+
+Related, and just as fatal: a **dangling token** in a `.ui` file fails the whole
+UI load, not just that element, so one typo takes out every mod page on the
+client.
+
+## 13. UI element ids resolve globally
+
+**Symptom:** `CustomUI Set command selector doesn't match a markup property` for a
+selector that is obviously correct — and only for *some* players, or only on some
+pages.
+
+Ids in `.ui` documents are **not scoped to their document**. If `#Here` is a
+`Label` on your page and also a `Group` inside a row template that page renders,
+a `#Here.TextSpans` write resolves against whichever one the client found first
+and fails against the wrong element type.
+
+Prefix ids per document (`#SenseFocus`, not `#Focus`) whenever a page and its row
+template can be on screen together. The condition-dependence is the tell: a bug
+that only appears once enough rows exist to render is almost always this.
+
+## 14. Stale resources in the built jar
 
 If you edit anything under `src/main/resources` (assets, `server.lang`,
 `manifest.json`), run `mvn clean install` rather than `mvn install`. Maven will

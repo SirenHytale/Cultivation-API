@@ -243,6 +243,103 @@ public final class MyAdminSections {
 }
 ```
 
+### Building a section in one call
+
+Implementing the interface is fine, but `newAdminConfigSection` builds the same
+thing from its parts, which reads better for a plain list of settings:
+
+```java
+CultivationAPI.registerAdminConfigSection(
+        CultivationAPI.newAdminConfigSection(PREFIX + "power",
+                "server.myaddon.admin.power",        // label key
+                "server.myaddon.admin.powerHint",    // hint key
+                AdminConfigSection.SORT_LAST,
+                config::save,
+                List.of(
+                        CultivationAPI.newAdminBooleanField(PREFIX + "Enabled",
+                                Message.translation("server.myaddon.admin.enabled"),
+                                () -> config.get().isEnabled(),
+                                config.get()::setEnabled),
+
+                        CultivationAPI.withTooltip(
+                                CultivationAPI.newAdminIntField(PREFIX + "MaxTier",
+                                        Message.translation("server.myaddon.admin.maxTier"),
+                                        () -> config.get().getMaxTier(),
+                                        v -> config.get().setMaxTier((int) v)),
+                                "How far the tier ladder goes. Existing gear is not re-tiered."))));
+```
+
+### Field kinds
+
+Since 0.6.1 a row is one of five kinds, each backed by the vanilla widget of that
+shape. Everything that does not apply to a kind has a harmless default, so an
+implementation only ever writes the half it uses — and a field written before
+kinds existed is a `NUMBER` and behaves exactly as it always did.
+
+| Kind | Factory | Value read/written through |
+| --- | --- | --- |
+| `NUMBER` | `newAdminConfigField` | `get()` / `set(double)` |
+| `INT` | `newAdminIntField` | `get()` / `set(double)`, rounded, no decimal places |
+| `BOOLEAN` | `newAdminBooleanField` | `getBoolean()` / `setBoolean(boolean)` |
+| `CHOICE` | `newAdminChoiceField` | `getText()` / `setText(String)`, options from `getChoices()` |
+| `TEXT` | `newAdminTextField` | `getText()` / `setText(String)` |
+
+A **`CHOICE`** takes a `Supplier<List<AdminConfigChoice>>`, re-read on every
+render — so a set that depends on what other mods have registered stays current:
+
+```java
+CultivationAPI.newAdminChoiceField(PREFIX + "UnlockRealm",
+        Message.translation("server.myaddon.admin.unlockRealm"),
+        () -> Arrays.stream(CultivationRealm.values())
+                    .map(r -> AdminConfigChoice.of(r, r.getTranslationKey()))
+                    .toList(),
+        () -> config.get().getUnlockRealm(),
+        id -> {
+            CultivationRealm parsed = CultivationRealm.fromName(id);   // re-resolve, don't trust
+            if (parsed != null) {
+                config.get().setUnlockRealm(parsed.name());
+            }
+        });
+```
+
+Build choices with `AdminConfigChoice.translated(id, labelKey)`,
+`AdminConfigChoice.raw(id, displayName)`, or `AdminConfigChoice.of(enumConstant,
+labelKey)`. Reach for `CHOICE` over `TEXT` whenever the valid values are a known
+set — a dropdown cannot be typed wrong.
+
+### Tooltips
+
+`withTooltip(field, String)` wraps any field, adding a one-line explanation shown
+as the row's tooltip. It composes with every factory.
+
+> **A plain `String`, deliberately — a tooltip cannot be translated.**
+> `TooltipText` is a String property client-side, and handing it a `Message`
+> **disconnects the player mid-session** rather than failing quietly. Anything
+> that must be readable in every language belongs in the field's *label*, which is
+> rendered through `TextSpans` and does take a `Message`.
+
+### Ordering and visibility
+
+```java
+default int     getSortOrder() { return SORT_LAST; }
+default boolean isVisible()    { return true; }
+```
+
+Sections sit on the rail lowest-first. Cultivation's own occupy
+`SORT_BUILTIN_FIRST` (100) upward in steps of 100, so a value between two of them
+slots your section in **among** them rather than after them. `SORT_LAST`
+(100,000) is the default and where every section registered before ordering
+existed has always appeared. Sections declaring the same order keep registration
+order.
+
+`SORT_BUILTIN_LAST` (10,000) is the end of the range Cultivation reserves for
+itself. A section ordered above it counts as contributed by another mod, which is
+what the settings menu lists — the admin page lists everything either way.
+
+`isVisible()` is read on every render, so a section belonging to a subsystem the
+server owner has switched off can hide itself rather than offering settings that
+do nothing.
+
 ### Rules
 
 - **One section per config file** is the shape Cultivation uses for itself and the
@@ -253,9 +350,15 @@ public final class MyAdminSections {
   fields by key, so a list that changes shape between render and save silently
   drops those edits.
 - **Field keys are global** across every section of every mod. Namespace them.
-- **Only numbers.** The row widget is a number input. A boolean is best expressed
-  as a 0/1 field with a label saying so; anything list-shaped belongs in the config
-  file. Cultivation makes the same call for its own booleans.
+- **Anything list-shaped belongs in the config file**, not this editor.
+  Cultivation makes the same call for its own Qi-absorption item table and its
+  technique rule set.
 - **Clamp in `set`**, not after. The page re-displays whatever `get` returns, so a
   coerced value is shown back to the admin rather than silently disagreeing with
   what they typed. Persisting is `save()`'s job.
+- **Re-resolve a `CHOICE` id in the setter.** It arrived from a client, and an
+  option that has since stopped being valid must not be accepted just because it
+  was once offered.
+
+Cultivation's own 19 sections and 109 rows are ordinary API registrations built
+this same way — which is what lets an addon reorder, hide or replace one.

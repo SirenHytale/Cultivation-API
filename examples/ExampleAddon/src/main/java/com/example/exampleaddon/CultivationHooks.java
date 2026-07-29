@@ -7,6 +7,7 @@ import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import plugin.siren.API.BeastEvents;
 import plugin.siren.API.CultivationAPI;
+import plugin.siren.API.CultivationConfigs;
 import plugin.siren.API.CultivationEvents;
 import plugin.siren.API.DaoEvents;
 import plugin.siren.API.ItemEvents;
@@ -36,6 +37,7 @@ public final class CultivationHooks {
         registerObservers();
         registerVetoes();
         registerRetunes();
+        registerCompatibility();
     }
 
     // ------------------------------------------------------------------
@@ -152,9 +154,23 @@ public final class CultivationHooks {
         // Cultivation's own race/skill/pill/sect/dao multipliers; baseAmount()
         // is what it was before any listener touched it.
         CultivationEvents.onPreQiGain(event -> {
-            if (isDoubleQiWeekend()) {
+            if (ExampleAddon.get().getSettings().isEnabled() && isDoubleQiWeekend()) {
                 event.setAmount(event.amount() * ExampleAddon.get().getSettings().getQiEventMultiplier());
             }
+        });
+
+        // Scaling to THIS server's tuning rather than to the defaults: read
+        // Cultivation's own config through the holder, at the point of use.
+        // Capturing the config object instead would silently detach on reload.
+        CultivationEvents.onPreRitualStart(event -> {
+            float serverBase = CultivationConfigs.breakthrough().get().getBreakthroughBaseSeconds();
+            if (serverBase > 60f) {
+                // A server that has already lengthened its rituals does not need
+                // this mod lengthening them further.
+                return;
+            }
+
+            event.setRequiredSeconds(event.requiredSeconds() * 1.5f);
         });
 
         // Soften tribulation lightning. damage() is the post-lethality-cap
@@ -185,6 +201,34 @@ public final class CultivationHooks {
 
         // Shorten the siege window.
         WarEvents.onPreWarDeclare(event -> event.setWindowMillis(event.windowMillis() / 2));
+    }
+
+    // ------------------------------------------------------------------
+    // Behaving correctly beside the mods Cultivation itself detects.
+    // ------------------------------------------------------------------
+
+    private static void registerCompatibility() {
+        // Endless Leveling: when it is installed, Cultivation hands max health
+        // and outgoing damage to EL rather than applying them itself, so the two
+        // progressions add rather than multiply. An addon applying stats of its
+        // own belongs on the same side of that line.
+        if (CultivationAPI.isEndlessLevelingInstalled()) {
+            ExampleAddon.LOGGER.atInfo().log(
+                    "Endless Leveling owns the stat sheet here - registering bonuses through EL.");
+        }
+
+        // PlaceholderAPI: true only when PAPI is installed AND it accepted
+        // Cultivation's registration. Check before registering an expansion of
+        // your own under a colliding identifier.
+        if (CultivationAPI.isPlaceholderApiRegistered()) {
+            ExampleAddon.LOGGER.atInfo().log("Cultivation's PlaceholderAPI expansion is answering.");
+        }
+
+        // Marriage: what Partnered Cultivation is gated on. Without it, nothing
+        // in CultivationConfigs.partner() has any effect.
+        if (!CultivationAPI.isMarriageInstalled()) {
+            ExampleAddon.LOGGER.atInfo().log("No Marriage mod - skipping the partnered-meditation bonus.");
+        }
     }
 
     // ------------------------------------------------------------------

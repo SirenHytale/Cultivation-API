@@ -34,9 +34,9 @@
           Cultivation is not on a public Maven repository. Install the released
           jar into your local one first:
 
-            mvn install:install-file -Dfile=Cultivation-0.6.0.jar \
+            mvn install:install-file -Dfile=Cultivation-0.6.1.jar \
                 -DgroupId=plugin.siren -DartifactId=Cultivation \
-                -Dversion=0.6.0 -Dpackaging=jar
+                -Dversion=0.6.1 -Dpackaging=jar
 
           provided scope, and never shaded: the server loads the real Cultivation
           jar, and two copies of plugin.siren.Cultivation on the classpath would
@@ -46,7 +46,7 @@
         <dependency>
             <groupId>plugin.siren</groupId>
             <artifactId>Cultivation</artifactId>
-            <version>0.6.0</version>
+            <version>0.6.1</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>

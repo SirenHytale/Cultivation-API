@@ -109,6 +109,17 @@ player's level** (and their progress, if you want a live bar). Cultivation canno
 detect a write inside your component. Skip it and the HUD, the rankings and every
 realm gate show that player's previous standing until their next meditation tick.
 
+### 8. String UI properties take a String, and a `Message` disconnects the player
+
+If you build UI — your own menu page, or an admin config field — `.TextSpans`
+takes a `Message`, `.Text` takes a `String` (tolerating a bare translation
+`Message`), and `.TooltipText` takes a `String` **only**. Pushing a `Message` at
+`.TooltipText` disconnects the player mid-session rather than failing quietly.
+That is why `withTooltip` takes a plain, untranslatable `String`.
+
+Element ids in `.ui` documents also resolve **globally**, not per document, so a
+page and a row template that share an id will fight. Prefix ids per document.
+
 ## Conventions to follow
 
 - **Suppliers, not snapshots.** Where the API takes a `Supplier<RaceConfig>` or a
@@ -143,6 +154,60 @@ boolean          isNodeUnlocked(..., String nodeId)
 void             refreshProgression(...)  // @Nonnull args
 ```
 
+**Driving progression** — the write half; every one goes through the same path the
+mod's own commands take, so events fire and the HUD refreshes:
+
+```java
+void    addQi(accessor, ref, float amount, @Nullable PlayerRef)  // gameplay: all multipliers + PreQiGainEvent
+void    setQi(accessor, ref, float qi)                           // admin: raw, no events
+void    setRealm(accessor, ref, CultivationRealm)                // admin: no ritual, no event
+void    setStage(accessor, ref, CultivationStage)
+boolean completeBreakthrough(accessor, ref, @Nullable PlayerRef) // gameplay: full ritual outcome
+boolean completeAdvancement(accessor, ref, @Nullable PlayerRef)
+void    demote(accessor, ref, @Nullable PlayerRef, boolean wasBreakthrough)
+
+boolean isMaxLevel(accessor, ref)
+float   getQiRequiredForNext(accessor, ref)
+boolean isReadyForBreakthrough(accessor, ref)   // banked enough, needs only the ritual
+boolean isReadyForAdvancement(accessor, ref)
+
+void    grantSkillPoints(accessor, ref, int points)
+boolean unlockSkillNode(accessor, ref, String nodeId)  // spends points
+boolean grantSkillNode(accessor, ref, String nodeId)   // free, for a reward
+
+void startMeditating(accessor, ref)   // stopMeditating does NOT apply the demotion penalty
+void stopMeditating(accessor, ref)
+```
+
+**The world, and the other subsystems** — chunk coords, not block coords:
+
+```java
+SpiritVeinManager.VeinReading readSpiritVein(World, int chunkX, int chunkZ)  // pure, creates nothing
+float drainSpiritVein(World, int chunkX, int chunkZ, float amount)           // returns what was ACTUALLY drawn
+
+Sect getSect(UUID)  Sect getSectByName(String)  float getSectQiBonusPercent(UUID)
+DaoComponent getOrCreateDao(accessor, ref)  DaoElement getDaoElement(accessor, ref)
+CultivationPath getPath(accessor, ref)  float getYinPercent(accessor, ref)  float getKarma(accessor, ref)
+Dwelling getAbode(UUID)  Dwelling getDwellingAt(String world, int cx, int cz)
+SpiritBeastComponent getBeast(accessor, ref)  DuelManager.Duel getDuel(UUID)
+float getMeditationRegenMultiplier(String world, int cx, int cz, UUID player)
+```
+
+**Cultivation's own settings** — `CultivationConfigs`, one accessor per file
+(`cultivation()`, `spiritVein()`, `dao()`, `sect()`, … , `endlessLeveling()`,
+plus `race(PlayerRace)`). Each returns the live `Config<T>` **holder**; call
+`.get()` at the point of use and `.save()` after writing. To change a value for
+one player or one event, use the matching `Pre*` event instead — a config write
+changes the server permanently and overwrites what its owner tuned.
+
+**Compatibility flags:**
+
+```java
+boolean isEndlessLevelingInstalled()   // EL owns health+damage; put your stat bonuses there too
+boolean isPlaceholderApiRegistered()   // the %cultivation_...% expansion is answering
+boolean isMarriageInstalled()          // Partnered Cultivation is live
+```
+
 **Registration** (from `setup()`):
 
 ```java
@@ -166,8 +231,17 @@ void registerCodexEntry(CodexEntry)                 // + unregisterCodexEntry(St
 void registerCodexCategory(CodexCategory)           // + unregisterCodexCategory(String)
 void registerAdminConfigSection(AdminConfigSection)  // + unregisterAdminConfigSection(String)
 
-AdminConfigField newAdminConfigField(String key, Message label,
-                                     DoubleSupplier getter, DoubleConsumer setter)
+AdminConfigSection newAdminConfigSection(String key, String labelKey, String hintKey,
+                                         int sortOrder, Runnable save, List<AdminConfigField> fields)
+
+// Five field kinds. Pick the one that matches the value's shape.
+AdminConfigField newAdminConfigField (String key, Message label, DoubleSupplier, DoubleConsumer)   // NUMBER
+AdminConfigField newAdminIntField    (String key, Message label, DoubleSupplier, DoubleConsumer)   // INT
+AdminConfigField newAdminBooleanField(String key, Message label, BooleanSupplier, Consumer<Boolean>)
+AdminConfigField newAdminChoiceField (String key, Message label, Supplier<List<AdminConfigChoice>>,
+                                      Supplier<String> getter, Consumer<String> setter)            // dropdown
+AdminConfigField newAdminTextField   (String key, Message label, Supplier<String>, Consumer<String>)
+AdminConfigField withTooltip(AdminConfigField field, String tooltip)   // String, NEVER a Message
 
 void setProgressionProvider(@Nullable ProgressionProvider)  // null restores built-in
 void setTheme(@Nullable CultivationTheme)                   // null restores built-in

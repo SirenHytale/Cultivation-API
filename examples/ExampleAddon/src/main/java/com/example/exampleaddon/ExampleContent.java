@@ -6,6 +6,7 @@ import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import org.joml.Vector3d;
+import plugin.siren.API.AdminConfigChoice;
 import plugin.siren.API.AdminConfigField;
 import plugin.siren.API.AdminConfigSection;
 import plugin.siren.API.CodexCategory;
@@ -19,6 +20,7 @@ import plugin.siren.ECS.Technique.TechniqueContext;
 import plugin.siren.Utils.Config.RaceConfig;
 
 import javax.annotation.Nonnull;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -227,6 +229,15 @@ public final class ExampleContent {
                 return Message.translation("server.exampleaddon.admin.balance.hint");
             }
 
+            @Override
+            public int getSortOrder() {
+                // SORT_LAST is the default: after every one of Cultivation's own
+                // sections. A value between two of theirs (they sit at
+                // SORT_BUILTIN_FIRST upward in steps of 100) would slot this in
+                // among them instead.
+                return AdminConfigSection.SORT_LAST;
+            }
+
             @Nonnull
             @Override
             public List<AdminConfigField> getFields() {
@@ -234,6 +245,19 @@ public final class ExampleContent {
                 // fields by key, so a list that changes shape between render and
                 // save silently drops those edits.
                 return List.of(
+                        // BOOLEAN - a real checkbox, not a 0/1 number.
+                        CultivationAPI.withTooltip(
+                                CultivationAPI.newAdminBooleanField(PREFIX + "Enabled",
+                                        Message.translation("server.exampleaddon.admin.enabled"),
+                                        () -> ExampleAddon.get().getSettings().isEnabled(),
+                                        ExampleAddon.get().getSettings()::setEnabled),
+                                // A plain String, deliberately: TooltipText is a
+                                // String property client-side and a Message
+                                // pushed at it DISCONNECTS the player. Anything
+                                // that must be localized belongs in the label.
+                                "Turns off every Stargazer mechanic without unloading the mod."),
+
+                        // NUMBER - the default kind, two decimal places.
                         CultivationAPI.newAdminConfigField(PREFIX + "QiEventMultiplier",
                                 Message.translation("server.exampleaddon.admin.qiEventMultiplier"),
                                 () -> ExampleAddon.get().getSettings().getQiEventMultiplier(),
@@ -250,7 +274,27 @@ public final class ExampleContent {
                         CultivationAPI.newAdminConfigField(PREFIX + "RareDropChance",
                                 Message.translation("server.exampleaddon.admin.rareDropChance"),
                                 () -> ExampleAddon.get().getSettings().getRareDropChance() * 100f,
-                                value -> ExampleAddon.get().getSettings().setRareDropChance((float) (value / 100f))));
+                                value -> ExampleAddon.get().getSettings().setRareDropChance((float) (value / 100f))),
+
+                        // INT - a count, where decimal places would be noise.
+                        CultivationAPI.newAdminIntField(PREFIX + "MaxStargazers",
+                                Message.translation("server.exampleaddon.admin.maxStargazers"),
+                                () -> ExampleAddon.get().getSettings().getMaxStargazers(),
+                                value -> ExampleAddon.get().getSettings().setMaxStargazers((int) value)),
+
+                        // CHOICE - a dropdown cannot be typed wrong, which is why
+                        // an enum-valued setting should never be a TEXT field.
+                        CultivationAPI.newAdminChoiceField(PREFIX + "UnlockRealm",
+                                Message.translation("server.exampleaddon.admin.unlockRealm"),
+                                ExampleContent::realmChoices,
+                                () -> ExampleAddon.get().getSettings().getUnlockRealm(),
+                                ExampleContent::setUnlockRealm),
+
+                        // TEXT - free-form, for the cases with no known value set.
+                        CultivationAPI.newAdminTextField(PREFIX + "WelcomeMessage",
+                                Message.translation("server.exampleaddon.admin.welcomeMessage"),
+                                () -> ExampleAddon.get().getSettings().getWelcomeMessage(),
+                                ExampleAddon.get().getSettings()::setWelcomeMessage));
             }
 
             @Override
@@ -259,6 +303,29 @@ public final class ExampleContent {
                 ExampleAddon.LOGGER.atInfo().log("Example Addon settings saved from the admin menu.");
             }
         });
+    }
+
+    /**
+     * Re-read on every render, so a choice set that depends on what other mods
+     * have registered stays current.
+     */
+    @Nonnull
+    private static List<AdminConfigChoice> realmChoices() {
+        return Arrays.stream(CultivationRealm.values())
+                .map(realm -> AdminConfigChoice.of(realm, realm.getTranslationKey()))
+                .toList();
+    }
+
+    /**
+     * Re-resolve rather than trust: the id arrived from a client, and an option
+     * that has since stopped being valid must not be accepted just because it was
+     * once offered.
+     */
+    private static void setUnlockRealm(String id) {
+        CultivationRealm realm = CultivationRealm.fromName(id);
+        if (realm != null) {
+            ExampleAddon.get().getSettings().setUnlockRealm(realm.name());
+        }
     }
 
     // ------------------------------------------------------------------

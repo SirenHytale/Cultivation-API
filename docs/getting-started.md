@@ -7,10 +7,10 @@ jar once:
 
 ```bash
 mvn install:install-file \
-  -Dfile=Cultivation-0.6.0.jar \
+  -Dfile=Cultivation-0.6.1.jar \
   -DgroupId=plugin.siren \
   -DartifactId=Cultivation \
-  -Dversion=0.6.0 \
+  -Dversion=0.6.1 \
   -Dpackaging=jar
 ```
 
@@ -35,7 +35,7 @@ Repeat whenever you move to a new Cultivation version.
     <dependency>
         <groupId>plugin.siren</groupId>
         <artifactId>Cultivation</artifactId>
-        <version>0.6.0</version>
+        <version>0.6.1</version>
         <scope>provided</scope>
     </dependency>
 </dependencies>
@@ -63,7 +63,7 @@ need them. In `src/main/resources/manifest.json`:
   "Version": "1.0.0",
   "ServerVersion": "0.5.x",
   "Dependencies": {
-    "Siren:Cultivation": ">=0.6.0"
+    "Siren:Cultivation": ">=0.6.1"
   },
   "Main": "com.example.myaddon.MyAddon"
 }
@@ -144,7 +144,7 @@ If your mod should also work on a server without Cultivation, move the entry:
 
 ```json
 "OptionalDependencies": {
-  "Siren:Cultivation": ">=0.6.0"
+  "Siren:Cultivation": ">=0.6.1"
 }
 ```
 
@@ -182,4 +182,7 @@ guard.
 
 - [Reading player state](reading-state.md) — what you can ask about a player
 - [Events](events.md) — reacting to and changing what the mod does
+- [Driving progression](driving-progression.md) — granting Qi, ranking up, spirit veins
+- [Config access](config-access.md) — reading and writing Cultivation's own settings
+- [Compatibility](compatibility.md) — Endless Leveling, PlaceholderAPI, Marriage
 - [Pitfalls](pitfalls.md) — read before you ship

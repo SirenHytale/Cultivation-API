@@ -8,27 +8,43 @@ import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.entity.entities.player.pages.CustomUIPage;
 import com.hypixel.hytale.server.core.ui.builder.UICommandBuilder;
 import com.hypixel.hytale.server.core.ui.builder.UIEventBuilder;
+import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.ChunkStore;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
+import com.hypixel.hytale.math.util.ChunkUtil;
 import plugin.siren.Cultivation;
 import plugin.siren.ECS.Components.Chunk.SpiritVeinComponent;
 import plugin.siren.ECS.Components.CultivationComponent;
 import plugin.siren.ECS.Components.CultivationSettingsComponent;
 import plugin.siren.ECS.Components.CultivationStateComponent;
+import plugin.siren.ECS.Components.DaoComponent;
 import plugin.siren.ECS.Components.RaceComponent;
 import plugin.siren.ECS.Components.SkillTreeComponent;
+import plugin.siren.ECS.Components.SpiritBeastComponent;
 import plugin.siren.ECS.Components.TechniqueComponent;
+import plugin.siren.ECS.Dao.CultivationPath;
+import plugin.siren.ECS.Dao.DaoElement;
 import plugin.siren.ECS.Races.PlayerRace;
 import plugin.siren.ECS.Realms.CultivationRealm;
 import plugin.siren.ECS.Realms.CultivationStage;
 import plugin.siren.ECS.Technique.Technique;
 import plugin.siren.ECS.Technique.TechniqueEffect;
 import plugin.siren.Utils.CultivationManager;
+import plugin.siren.Utils.DaoManager;
 import plugin.siren.Utils.QiAbsorptionItemRegistry;
+import plugin.siren.Utils.SkillTreeManager;
+import plugin.siren.Utils.SpiritVeinManager;
 import plugin.siren.Utils.TechniqueManager;
 import plugin.siren.Utils.Config.RaceConfig;
 import plugin.siren.Utils.Config.TechniqueRule;
+import plugin.siren.Utils.Duel.DuelManager;
+import plugin.siren.Utils.Dwelling.Dwelling;
+import plugin.siren.Utils.Dwelling.DwellingManager;
+import plugin.siren.Utils.Formation.FormationManager;
+import plugin.siren.Utils.Sect.Sect;
+import plugin.siren.Utils.Sect.SectManager;
 import plugin.siren.Utils.UI.CultivationNav;
+import com.hypixel.hytale.server.core.modules.entity.component.TransformComponent;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 
 import javax.annotation.Nonnull;
@@ -36,7 +52,10 @@ import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 import java.util.function.DoubleConsumer;
 import java.util.function.DoubleSupplier;
 import java.util.function.Supplier;
@@ -298,12 +317,101 @@ public class CultivationAPI {
     }
 
     /**
-     * @return every section other mods have contributed, in registration order.
-     * Safe to iterate without locking.
+     * @return every registered section - Cultivation's own included, since those
+     * are ordinary registrations too - ordered by
+     * {@link AdminConfigSection#getSortOrder()} and then registration order, with
+     * anything currently hiding itself ({@link AdminConfigSection#isVisible()})
+     * left out. A fresh list, safe to hold.
      */
     @Nonnull
     public static List<AdminConfigSection> getAdminConfigSections(){
-        return ADMIN_CONFIG_SECTIONS;
+        List<AdminConfigSection> sections = new ArrayList<>();
+        for(AdminConfigSection section : ADMIN_CONFIG_SECTIONS){
+            if(section.isVisible()){
+                sections.add(section);
+            }
+        }
+
+        sections.sort(Comparator.comparingInt(AdminConfigSection::getSortOrder));
+        return sections;
+    }
+
+    /** @return the section registered under this key, or null if nothing claims it. */
+    @Nullable
+    public static AdminConfigSection getAdminConfigSection(@Nonnull String sectionKey){
+        for(AdminConfigSection section : ADMIN_CONFIG_SECTIONS){
+            if(section.getKey().equals(sectionKey)){
+                return section;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Builds a section from its parts, so contributing settings is one call
+     * rather than an interface implementation:
+     *
+     * <pre>{@code CultivationAPI.registerAdminConfigSection(
+     *     CultivationAPI.newAdminConfigSection("MyMod:power",
+     *             "server.mymod.admin.power", "server.mymod.admin.powerHint",
+     *             AdminConfigSection.SORT_LAST, config::save,
+     *             List.of(
+     *                 CultivationAPI.newAdminConfigField("MyMod:BaseXp",
+     *                         Message.translation("server.mymod.admin.baseXp"),
+     *                         () -> config.get().getBaseXp(),
+     *                         value -> config.get().setBaseXp((float) value)),
+     *                 CultivationAPI.newAdminBooleanField("MyMod:Enabled",
+     *                         Message.translation("server.mymod.admin.enabled"),
+     *                         () -> config.get().isEnabled(),
+     *                         config.get()::setEnabled))));}</pre>
+     *
+     * @param labelKey a {@code server.lang} key for the section's name.
+     * @param hintKey  a {@code server.lang} key for its one-line explanation.
+     * @param save     persists the section after edits are applied - normally
+     *                 {@code yourConfigHolder::save}. Called at most once per
+     *                 Save, and only if one of these fields actually changed.
+     */
+    @Nonnull
+    public static AdminConfigSection newAdminConfigSection(@Nonnull String key, @Nonnull String labelKey,
+                                                            @Nonnull String hintKey, int sortOrder,
+                                                            @Nonnull Runnable save,
+                                                            @Nonnull List<AdminConfigField> fields){
+        return new AdminConfigSection(){
+            @Nonnull
+            @Override
+            public String getKey(){
+                return key;
+            }
+
+            @Nonnull
+            @Override
+            public Message getLabel(){
+                return Message.translation(labelKey);
+            }
+
+            @Nonnull
+            @Override
+            public Message getHint(){
+                return Message.translation(hintKey);
+            }
+
+            @Nonnull
+            @Override
+            public List<AdminConfigField> getFields(){
+                return fields;
+            }
+
+            @Override
+            public int getSortOrder(){
+                return sortOrder;
+            }
+
+            @Override
+            public void save(){
+                save.run();
+            }
+        };
     }
 
     /**
@@ -349,6 +457,255 @@ public class CultivationAPI {
             @Override
             public void set(double value){
                 setter.accept(value);
+            }
+        };
+    }
+
+    /**
+     * As {@link #newAdminConfigField}, but rendered as a whole-number field - the
+     * right shape for a count, a level cap or a tier, where the two decimal
+     * places a normal number row shows are noise.
+     */
+    @Nonnull
+    public static AdminConfigField newAdminIntField(@Nonnull String key, @Nonnull Message label,
+                                                    @Nonnull DoubleSupplier getter, @Nonnull DoubleConsumer setter){
+        AdminConfigField numeric = newAdminConfigField(key, label, getter, setter);
+        return new AdminConfigField(){
+            @Nonnull
+            @Override
+            public String getKey(){
+                return numeric.getKey();
+            }
+
+            @Nonnull
+            @Override
+            public Message getLabel(){
+                return numeric.getLabel();
+            }
+
+            @Nonnull
+            @Override
+            public Kind getKind(){
+                return Kind.INT;
+            }
+
+            @Override
+            public double get(){
+                return numeric.get();
+            }
+
+            @Override
+            public void set(double value){
+                numeric.set(Math.rint(value));
+            }
+        };
+    }
+
+    /**
+     * A real checkbox row, so a master on/off switch no longer has to masquerade
+     * as a 0/1 number - which is what every boolean in Cultivation's own settings
+     * had to do before this existed, and why so many of them were config-file
+     * only.
+     */
+    @Nonnull
+    public static AdminConfigField newAdminBooleanField(@Nonnull String key, @Nonnull Message label,
+                                                        @Nonnull BooleanSupplier getter, @Nonnull Consumer<Boolean> setter){
+        return new AdminConfigField(){
+            @Nonnull
+            @Override
+            public String getKey(){
+                return key;
+            }
+
+            @Nonnull
+            @Override
+            public Message getLabel(){
+                return label;
+            }
+
+            @Nonnull
+            @Override
+            public Kind getKind(){
+                return Kind.BOOLEAN;
+            }
+
+            @Override
+            public boolean getBoolean(){
+                return getter.getAsBoolean();
+            }
+
+            @Override
+            public void setBoolean(boolean value){
+                setter.accept(value);
+            }
+        };
+    }
+
+    /**
+     * A dropdown row over a fixed set of options - the right shape for anything
+     * enum-valued (a realm name, a dao element, a join policy), where a text
+     * field would let an admin type something that resolves to nothing.
+     *
+     * <p>{@code choices} is re-read on every render, so a set that depends on
+     * what other mods have registered stays current. The setter is handed the
+     * chosen option's id; re-resolve it rather than trusting it, since the id
+     * arrived from a client.</p>
+     */
+    @Nonnull
+    public static AdminConfigField newAdminChoiceField(@Nonnull String key, @Nonnull Message label,
+                                                       @Nonnull Supplier<List<AdminConfigChoice>> choices,
+                                                       @Nonnull Supplier<String> getter, @Nonnull Consumer<String> setter){
+        return new AdminConfigField(){
+            @Nonnull
+            @Override
+            public String getKey(){
+                return key;
+            }
+
+            @Nonnull
+            @Override
+            public Message getLabel(){
+                return label;
+            }
+
+            @Nonnull
+            @Override
+            public Kind getKind(){
+                return Kind.CHOICE;
+            }
+
+            @Nonnull
+            @Override
+            public String getText(){
+                String value = getter.get();
+                return value == null ? "" : value;
+            }
+
+            @Override
+            public void setText(@Nonnull String value){
+                setter.accept(value);
+            }
+
+            @Nonnull
+            @Override
+            public List<AdminConfigChoice> getChoices(){
+                return choices.get();
+            }
+        };
+    }
+
+    /**
+     * A free-form text row. Use {@link #newAdminChoiceField} instead whenever the
+     * valid values are a known set - a dropdown cannot be typed wrong.
+     */
+    @Nonnull
+    public static AdminConfigField newAdminTextField(@Nonnull String key, @Nonnull Message label,
+                                                     @Nonnull Supplier<String> getter, @Nonnull Consumer<String> setter){
+        return new AdminConfigField(){
+            @Nonnull
+            @Override
+            public String getKey(){
+                return key;
+            }
+
+            @Nonnull
+            @Override
+            public Message getLabel(){
+                return label;
+            }
+
+            @Nonnull
+            @Override
+            public Kind getKind(){
+                return Kind.TEXT;
+            }
+
+            @Nonnull
+            @Override
+            public String getText(){
+                String value = getter.get();
+                return value == null ? "" : value;
+            }
+
+            @Override
+            public void setText(@Nonnull String value){
+                setter.accept(value);
+            }
+        };
+    }
+
+    /**
+     * Adds a one-line explanation to any field, shown as its row's tooltip.
+     * Wraps rather than replaces, so it composes with every factory above:
+     * {@code withTooltip(newAdminBooleanField(...), "What this setting does")}.
+     *
+     * <p>A plain String rather than a {@link Message}, and therefore not
+     * translatable - {@code TooltipText} is a String property client-side and a
+     * Message pushed at it disconnects the player. Put anything that must be
+     * readable in every language in the field's LABEL instead.</p>
+     */
+    @Nonnull
+    public static AdminConfigField withTooltip(@Nonnull AdminConfigField field, @Nonnull String tooltip){
+        return new AdminConfigField(){
+            @Nonnull
+            @Override
+            public String getKey(){
+                return field.getKey();
+            }
+
+            @Nonnull
+            @Override
+            public Message getLabel(){
+                return field.getLabel();
+            }
+
+            @Nonnull
+            @Override
+            public Kind getKind(){
+                return field.getKind();
+            }
+
+            @Nonnull
+            @Override
+            public String getTooltip(){
+                return tooltip;
+            }
+
+            @Override
+            public double get(){
+                return field.get();
+            }
+
+            @Override
+            public void set(double value){
+                field.set(value);
+            }
+
+            @Override
+            public boolean getBoolean(){
+                return field.getBoolean();
+            }
+
+            @Override
+            public void setBoolean(boolean value){
+                field.setBoolean(value);
+            }
+
+            @Nonnull
+            @Override
+            public String getText(){
+                return field.getText();
+            }
+
+            @Override
+            public void setText(@Nonnull String value){
+                field.setText(value);
+            }
+
+            @Nonnull
+            @Override
+            public List<AdminConfigChoice> getChoices(){
+                return field.getChoices();
             }
         };
     }
@@ -804,5 +1161,421 @@ public class CultivationAPI {
     public static boolean performTechnique(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref,
                                            @Nonnull PlayerRef playerRef, @Nonnull Technique technique){
         return TechniqueManager.activate(accessor, ref, playerRef, technique) == TechniqueManager.ActivateResult.SUCCESS;
+    }
+
+    // --- Changing a cultivator's progression ---
+    //
+    // The write half of the reads at the top of this class. Every one of these
+    // goes through the same code path the mod's own commands and rituals use, so
+    // an addon granting Qi fires the same events, honours an installed
+    // ProgressionProvider, and refreshes the HUD and rankings exactly as
+    // meditating would - none of which is true of reaching into the component.
+    //
+    // All of them run on the caller's thread and touch only the given entity, so
+    // they are safe from a system, a command, or an interaction on that entity's
+    // own world thread. To act on a player who may be in ANOTHER world, hop to
+    // their world thread first (Universe.get().getPlayer(uuid) -> PlayerRef ->
+    // CompletableFuture.runAsync(..., theirWorld)), as this mod's own admin
+    // tooling does.
+
+    /**
+     * Grants Qi, exactly as absorbing a core or meditating would: through every
+     * multiplier (race, skill tree, pills, sect hall, Yin-Yang balance), through
+     * the cancellable {@code PreQiGainEvent}, and into whatever progression is
+     * installed. A no-op for an entity with no CultivationComponent.
+     *
+     * @param playerRef the gaining player, for the sect-hall bonus and the event.
+     *                  May be null for a non-player cultivator.
+     */
+    public static void addQi(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref,
+                             float amount, @Nullable PlayerRef playerRef){
+        CultivationComponent component = getCultivationComponent(accessor, ref);
+        if(component == null){
+            return;
+        }
+
+        CultivationManager.addQi(accessor, ref, component, amount, playerRef);
+    }
+
+    /**
+     * Sets banked Qi outright, skipping every multiplier and event - the admin
+     * {@code /cultivation admin setqi} path, not the gameplay one. Prefer
+     * {@link #addQi} for anything a player earned. Does not rank anyone up: that
+     * still requires the meditation ritual.
+     */
+    public static void setQi(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref, float qi){
+        CultivationComponent component = getCultivationComponent(accessor, ref);
+        if(component == null){
+            return;
+        }
+
+        component.setQi(Math.max(0f, qi));
+        CultivationManager.refreshHud(accessor, ref, component);
+    }
+
+    /**
+     * Moves a cultivator to a realm outright and re-applies their stat bonuses.
+     * The admin path - it fires no breakthrough event and runs no ritual, because
+     * nothing was broken through.
+     */
+    public static void setRealm(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref,
+                                @Nonnull CultivationRealm realm){
+        CultivationComponent component = getCultivationComponent(accessor, ref);
+        if(component == null){
+            return;
+        }
+
+        component.setRealm(realm);
+        CultivationManager.applyRealmStats(accessor, ref, component);
+    }
+
+    /** As {@link #setRealm}, for the sub-stage. */
+    public static void setStage(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref,
+                                @Nonnull CultivationStage stage){
+        CultivationComponent component = getCultivationComponent(accessor, ref);
+        if(component == null){
+            return;
+        }
+
+        component.setStage(stage);
+        CultivationManager.applyRealmStats(accessor, ref, component);
+    }
+
+    /**
+     * Completes a realm breakthrough right now - consuming the banked Qi,
+     * granting the skill points, firing {@code PreBreakthroughEvent} and
+     * {@code BreakthroughEvent}, and playing the celebration - as though the
+     * ritual had just finished. What an addon offering its own path to a
+     * breakthrough (a quest, an item, a boss kill) should call rather than
+     * setting the realm directly.
+     *
+     * @return false if a listener vetoed it, or the entity has no CultivationComponent.
+     */
+    public static boolean completeBreakthrough(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref,
+                                               @Nullable PlayerRef playerRef){
+        CultivationComponent component = getCultivationComponent(accessor, ref);
+        if(component == null || isMaxLevel(accessor, ref)){
+            return false;
+        }
+
+        CultivationRealm before = component.getRealm();
+        CultivationManager.completeBreakthrough(accessor, ref, component, playerRef);
+        return component.getRealm() != before;
+    }
+
+    /** As {@link #completeBreakthrough}, for a single sub-stage advancement. */
+    public static boolean completeAdvancement(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref,
+                                              @Nullable PlayerRef playerRef){
+        CultivationComponent component = getCultivationComponent(accessor, ref);
+        if(component == null || isMaxLevel(accessor, ref)){
+            return false;
+        }
+
+        CultivationStage before = component.getStage();
+        CultivationManager.completeAdvancement(accessor, ref, component, playerRef);
+        return component.getStage() != before;
+    }
+
+    /**
+     * Applies the failed-ritual penalty: one sub-stage down (never below the
+     * current realm's first stage) and the banked Qi wiped, with the demotion
+     * events fired.
+     *
+     * @param wasBreakthrough only picks which message the cultivator is sent.
+     */
+    public static void demote(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref,
+                              @Nullable PlayerRef playerRef, boolean wasBreakthrough){
+        CultivationComponent component = getCultivationComponent(accessor, ref);
+        if(component == null){
+            return;
+        }
+
+        CultivationManager.demoteStage(accessor, ref, component, playerRef, wasBreakthrough);
+    }
+
+    /** @return true when this cultivator is at the top of whichever progression is live. */
+    public static boolean isMaxLevel(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref){
+        CultivationComponent component = getCultivationComponent(accessor, ref);
+        return component != null && CultivationManager.isMaxLevel(accessor, ref, component);
+    }
+
+    /** @return the Qi this cultivator needs to bank before their next rank-up becomes possible. */
+    public static float getQiRequiredForNext(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref){
+        CultivationComponent component = getCultivationComponent(accessor, ref);
+        return component == null ? 0f : CultivationManager.getQiRequiredForNext(accessor, ref, component);
+    }
+
+    /** @return true when this cultivator has banked enough for a realm breakthrough and only needs the ritual. */
+    public static boolean isReadyForBreakthrough(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref){
+        CultivationComponent component = getCultivationComponent(accessor, ref);
+        return component != null && CultivationManager.isReadyForBreakthrough(accessor, ref, component);
+    }
+
+    /** @return true when this cultivator has banked enough for a sub-stage advancement and only needs the ritual. */
+    public static boolean isReadyForAdvancement(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref){
+        CultivationComponent component = getCultivationComponent(accessor, ref);
+        return component != null && CultivationManager.isReadyForAdvancement(accessor, ref, component);
+    }
+
+    /** Grants unspent skill tree points. A no-op for an entity with no SkillTreeComponent. */
+    public static void grantSkillPoints(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref, int points){
+        SkillTreeComponent skillTree = accessor.getComponent(ref, getSkillTreeComponentType());
+        if(skillTree != null){
+            skillTree.addPoints(points);
+        }
+    }
+
+    /**
+     * Unlocks a skill tree node for this cultivator, spending their points and
+     * re-applying the stat modifiers the node grants - the same path the skill
+     * tree menu takes.
+     *
+     * @return true if the node was unlocked.
+     */
+    public static boolean unlockSkillNode(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref,
+                                          @Nonnull String nodeId){
+        SkillTreeComponent skillTree = accessor.getComponent(ref, getSkillTreeComponentType());
+        return skillTree != null
+                && SkillTreeManager.unlockNode(accessor, ref, skillTree, nodeId) == SkillTreeManager.UnlockResult.SUCCESS;
+    }
+
+    /**
+     * Grants a skill tree node WITHOUT charging points - for an addon handing out
+     * a node as a reward rather than as a purchase.
+     *
+     * @return true if the node was granted.
+     */
+    public static boolean grantSkillNode(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref,
+                                         @Nonnull String nodeId){
+        SkillTreeComponent skillTree = accessor.getComponent(ref, getSkillTreeComponentType());
+        return skillTree != null
+                && SkillTreeManager.grantNode(accessor, ref, skillTree, nodeId) == SkillTreeManager.UnlockResult.SUCCESS;
+    }
+
+    // --- Meditation ---
+
+    /**
+     * Seats a cultivator in meditation, playing the cross-legged pose and letting
+     * the meditation system start drawing Qi on the next tick - as
+     * {@code /cultivation meditate} does.
+     *
+     * <p>Movement still cancels it, and a cultivator already meditating is left
+     * alone.</p>
+     */
+    public static void startMeditating(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref){
+        CultivationStateComponent state = getCultivationStateComponent(accessor, ref);
+        if(state == null || state.isMeditating()){
+            return;
+        }
+
+        TransformComponent transform = accessor.getComponent(ref, TransformComponent.getComponentType());
+        if(transform != null){
+            // The anchor is what the movement-cancel system measures drift
+            // against - without it a cultivator seated by an addon is cancelled
+            // on the next check for having "moved" away from the origin.
+            org.joml.Vector3d position = transform.getPosition();
+            state.setAnchor(position.x, position.y, position.z);
+        }
+
+        state.setMeditating(true);
+        CultivationManager.setMeditationAnimation(accessor, ref, true);
+    }
+
+    /**
+     * Ends a cultivator's meditation and stops the pose. Note this does NOT apply
+     * the failed-ritual penalty - call {@link #demote} as well if you are
+     * interrupting a ritual and mean it to cost something.
+     */
+    public static void stopMeditating(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref){
+        CultivationStateComponent state = getCultivationStateComponent(accessor, ref);
+        if(state == null || !state.isMeditating()){
+            return;
+        }
+
+        state.setMeditating(false);
+        CultivationManager.setMeditationAnimation(accessor, ref, false);
+    }
+
+    // --- The world's Qi ---
+
+    /**
+     * Reads the Spirit Vein of a chunk without touching it: no component is
+     * created, nothing is written, and a chunk nobody has ever visited still
+     * gives a truthful answer, because the seeding roll is a pure function of the
+     * world seed and the chunk position.
+     *
+     * <p>This is what Spirit Sense reads, and the right call for a map overlay, a
+     * divining item, or worldgen decoration that should follow the Qi.</p>
+     *
+     * @param world  the world whose seed and chunks are consulted.
+     * @param chunkX chunk coordinates, not block coordinates - divide by 16, or
+     *               use {@code ChunkUtil.chunkCoordinate(blockX)}.
+     */
+    @Nonnull
+    public static SpiritVeinManager.VeinReading readSpiritVein(@Nonnull World world, int chunkX, int chunkZ){
+        long chunkIndex = ChunkUtil.indexChunk(chunkX, chunkZ);
+        Ref<ChunkStore> chunkRef = world.getChunkStore().getChunkReference(chunkIndex);
+
+        return SpiritVeinManager.read(world.getChunkStore().getStore(), chunkRef, chunkIndex,
+                world.getWorldConfig().getSeed(), System.currentTimeMillis());
+    }
+
+    /**
+     * Draws Qi out of a chunk's Spirit Vein, creating and seeding it if this is
+     * the first time anything has touched it.
+     *
+     * <p>Must run on {@code world}'s own thread - it writes to that world's chunk
+     * store. Regenerates the vein to now first, so the amount available is the
+     * real one rather than whatever it held when last drained.</p>
+     *
+     * @return how much was actually drawn, which is less than requested when the
+     * vein is running dry, and 0 when the chunk is not loaded.
+     */
+    public static float drainSpiritVein(@Nonnull World world, int chunkX, int chunkZ, float amount){
+        if(amount <= 0f){
+            return 0f;
+        }
+
+        long chunkIndex = ChunkUtil.indexChunk(chunkX, chunkZ);
+        Ref<ChunkStore> chunkRef = world.getChunkStore().getChunkReference(chunkIndex);
+        if(chunkRef == null || !chunkRef.isValid()){
+            return 0f;
+        }
+
+        SpiritVeinComponent vein = SpiritVeinManager.getOrCreateVein(world.getChunkStore().getStore(), chunkRef,
+                chunkIndex, world.getWorldConfig().getSeed());
+        SpiritVeinManager.regenerate(vein, System.currentTimeMillis());
+
+        return SpiritVeinManager.drain(vein, amount);
+    }
+
+    // --- Sects, daos and the rest of the world ---
+    //
+    // Read-side entry points into the subsystems whose EVENTS this package
+    // already exposes. Listening to SectEvents without being able to ask "what
+    // sect is this player in" meant an addon had to shadow the whole registry
+    // itself; these close that gap.
+
+    /** @return the sect this player belongs to, or null. */
+    @Nullable
+    public static Sect getSect(@Nonnull UUID player){
+        return SectManager.getSectOf(player);
+    }
+
+    /** @return the sect of this name (case-insensitively), or null. */
+    @Nullable
+    public static Sect getSectByName(@Nonnull String name){
+        return SectManager.getByName(name);
+    }
+
+    /** @return the extra Qi percentage this player's sect hall is worth them, or 0. */
+    public static float getSectQiBonusPercent(@Nonnull UUID player){
+        return SectManager.getQiBonusPercent(player);
+    }
+
+    /** @return this cultivator's Dao component, creating it if they have never touched the Dao system. */
+    @Nonnull
+    public static DaoComponent getOrCreateDao(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref){
+        return DaoManager.getOrCreate(accessor, ref);
+    }
+
+    /** @return this cultivator's chosen element, or null when they walk no dao. */
+    @Nullable
+    public static DaoElement getDaoElement(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref){
+        DaoComponent dao = accessor.getComponent(ref, DaoComponent.getComponentType());
+        return dao == null ? null : dao.getChosenElement();
+    }
+
+    /**
+     * @return this cultivator's moral path (Righteous, Devil or neither) under
+     * the live Yin-Yang balance, or null when they have no Dao component.
+     */
+    @Nullable
+    public static CultivationPath getPath(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref){
+        DaoComponent dao = accessor.getComponent(ref, DaoComponent.getComponentType());
+        CultivationComponent cultivation = getCultivationComponent(accessor, ref);
+        return dao == null || cultivation == null ? null : DaoManager.getPath(dao, cultivation);
+    }
+
+    /** @return this cultivator's Yin percentage, 0 (wholly Yang) to 100 (wholly Yin). */
+    public static float getYinPercent(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref){
+        DaoComponent dao = accessor.getComponent(ref, DaoComponent.getComponentType());
+        return dao == null ? 50f : dao.getYinPercent();
+    }
+
+    /** @return this cultivator's karma - the blood on their ledger that deepens a tribulation. */
+    public static float getKarma(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref){
+        DaoComponent dao = accessor.getComponent(ref, DaoComponent.getComponentType());
+        return dao == null ? 0f : dao.getKarma();
+    }
+
+    /** @return this player's claimed Cave Abode, or null when they have none. */
+    @Nullable
+    public static Dwelling getAbode(@Nonnull UUID player){
+        return DwellingManager.getPersonal(player);
+    }
+
+    /** @return whichever dwelling encloses this chunk (personal or a sect hall's), or null. */
+    @Nullable
+    public static Dwelling getDwellingAt(@Nonnull String world, int chunkX, int chunkZ){
+        return DwellingManager.getDwellingAt(world, chunkX, chunkZ);
+    }
+
+    /** @return this player's bound spirit beast, or null when they have none. */
+    @Nullable
+    public static SpiritBeastComponent getBeast(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref){
+        SpiritBeastComponent beast = accessor.getComponent(ref, SpiritBeastComponent.getComponentType());
+        return beast != null && beast.hasBeast() ? beast : null;
+    }
+
+    /** @return the duel this player is currently in, or null. */
+    @Nullable
+    public static DuelManager.Duel getDuel(@Nonnull UUID player){
+        return DuelManager.getDuel(player);
+    }
+
+    /**
+     * @return the combined meditation multiplier the formations and dwelling
+     * covering this chunk are worth this player - above 1 inside a Qi-gathering
+     * array or their own abode, below 1 where a warding array chokes an outsider.
+     */
+    public static float getMeditationRegenMultiplier(@Nonnull String world, int chunkX, int chunkZ, @Nonnull UUID player){
+        return FormationManager.getMeditationRegenMultiplier(world, chunkX, chunkZ, player)
+                * DwellingManager.getMeditationRegenMultiplier(world, chunkX, chunkZ, player);
+    }
+
+    /**
+     * @return whether the Marriage mod is installed, which is what Partnered
+     * Cultivation is gated on. False on a server without it, in which case
+     * nothing in {@link CultivationConfigs#partner()} has any effect.
+     */
+    public static boolean isMarriageInstalled(){
+        return Cultivation.ifMarriage();
+    }
+
+    /**
+     * @return whether Endless Leveling is installed. When it is, Cultivation
+     * hands max health and outgoing damage to EL rather than applying them
+     * itself, so the two progressions add rather than multiply - see
+     * {@link CultivationConfigs#endlessLeveling()} for the switches.
+     *
+     * <p>Worth checking from an addon that applies stats of its own: on a server
+     * running both, EL is where a bonus belongs.</p>
+     */
+    public static boolean isEndlessLevelingInstalled(){
+        return Cultivation.ifEndlessLeveling();
+    }
+
+    /**
+     * @return whether Cultivation's {@code %cultivation_...%} PlaceholderAPI
+     * expansion is registered and answering - PAPI installed AND it accepted the
+     * registration.
+     *
+     * <p>Worth checking before an addon registers an expansion of its own under a
+     * colliding identifier, or before a format is written that assumes the
+     * placeholders resolve.</p>
+     */
+    public static boolean isPlaceholderApiRegistered(){
+        return Cultivation.ifPlaceholderAPI();
     }
 }

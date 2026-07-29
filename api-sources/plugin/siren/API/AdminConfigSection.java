@@ -52,6 +52,41 @@ public interface AdminConfigSection {
     List<AdminConfigField> getFields();
 
     /**
+     * Where this section sits on the rail, lowest first. Cultivation's own nine
+     * occupy {@link #SORT_BUILTIN_FIRST} upward in steps of 100, so a value
+     * between two of them slots a section in among them rather than after them.
+     * Sections declaring the same order keep registration order.
+     *
+     * <p>Defaults to {@link #SORT_LAST}, which is where every section registered
+     * before ordering existed has always appeared: after Cultivation's own.</p>
+     */
+    default int getSortOrder() {
+        return SORT_LAST;
+    }
+
+    /**
+     * @return whether this section should appear at all right now. Read on every
+     * render, so a section belonging to a subsystem the server owner has switched
+     * off can hide itself instead of offering settings that do nothing.
+     */
+    default boolean isVisible() {
+        return true;
+    }
+
+    /** Where Cultivation's own first section sits; its own are spaced 100 apart from here. */
+    int SORT_BUILTIN_FIRST = 100;
+
+    /**
+     * The end of the range Cultivation reserves for its own sections. A section
+     * ordered above this counts as contributed by another mod, which is what the
+     * settings menu lists (the admin page lists everything either way).
+     */
+    int SORT_BUILTIN_LAST = 10_000;
+
+    /** The default - after every built-in section. */
+    int SORT_LAST = 100_000;
+
+    /**
      * Persists this section after an admin's edits have been applied through
      * {@link AdminConfigField#set}. Called once per save, and only if at least
      * one of this section's fields actually changed.

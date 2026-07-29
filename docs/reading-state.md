@@ -115,6 +115,11 @@ RaceComponent             getRaceComponent(accessor, ref)
 
 ### Reading a chunk's spirit vein
 
+Prefer `CultivationAPI.readSpiritVein(world, chunkX, chunkZ)` — see
+[Driving progression](driving-progression.md#the-worlds-qi). It answers truthfully
+for a chunk nobody has ever visited, creates nothing, and does not need the chunk
+loaded. The raw component is there for the cases it does not cover:
+
 ```java
 SpiritVeinComponent vein = chunkAccessor.getComponent(
         chunkRef, CultivationAPI.getSpiritVeinComponentType());
@@ -123,6 +128,18 @@ SpiritVeinComponent vein = chunkAccessor.getComponent(
 Never call `World.getBlock` / `getChunk` / `getNonTickingChunk` from inside a
 ticking system unless the chunk is already resident — use
 `World.getChunkIfInMemory` and skip on `null`.
+
+## Beyond the player
+
+The subsystems this API raises events for also expose read-side entry points —
+sect membership, dao and path, karma, abode, bound beast, active duel, and the
+meditation multiplier of a piece of ground. They are listed in
+[Driving progression](driving-progression.md#reading-the-rest-of-the-world),
+alongside the writes they pair with.
+
+Cultivation's own settings are readable too, through
+[`CultivationConfigs`](config-access.md) — the right way to ask "what does a
+breakthrough cost on *this* server" rather than assuming the defaults.
 
 ## Telling Cultivation something changed
 

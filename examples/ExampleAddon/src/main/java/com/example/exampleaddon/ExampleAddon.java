@@ -75,10 +75,18 @@ public class ExampleAddon extends JavaPlugin {
 
     /** Stand-in for a real config class. See the note on {@link #settings}. */
     public static final class ExampleSettings {
+        private boolean enabled = true;
         private float qiEventMultiplier = 2.0f;
         private float charmMultiplier = 1.5f;
         /** Stored as a 0-1 fraction. The admin row scales it to a percent. */
         private float rareDropChance = 0.004f;
+        private int maxStargazers = 12;
+        /** A CultivationRealm's enum name. Edited through a dropdown, never typed. */
+        private String unlockRealm = "FOUNDATION_ESTABLISHMENT";
+        private String welcomeMessage = "The stars are watching.";
+
+        public boolean isEnabled() { return this.enabled; }
+        public void setEnabled(boolean value) { this.enabled = value; }
 
         public float getQiEventMultiplier() { return this.qiEventMultiplier; }
         public void setQiEventMultiplier(float value) { this.qiEventMultiplier = Math.max(1f, value); }
@@ -88,5 +96,14 @@ public class ExampleAddon extends JavaPlugin {
 
         public float getRareDropChance() { return this.rareDropChance; }
         public void setRareDropChance(float value) { this.rareDropChance = Math.clamp(value, 0f, 1f); }
+
+        public int getMaxStargazers() { return this.maxStargazers; }
+        public void setMaxStargazers(int value) { this.maxStargazers = Math.max(1, value); }
+
+        public String getUnlockRealm() { return this.unlockRealm; }
+        public void setUnlockRealm(String value) { this.unlockRealm = value; }
+
+        public String getWelcomeMessage() { return this.welcomeMessage; }
+        public void setWelcomeMessage(String value) { this.welcomeMessage = value; }
     }
 }
