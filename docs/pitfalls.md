@@ -210,7 +210,32 @@ Prefix ids per document (`#SenseFocus`, not `#Focus`) whenever a page and its ro
 template can be on screen together. The condition-dependence is the tell: a bug
 that only appears once enough rows exist to render is almost always this.
 
-## 14. Stale resources in the built jar
+## 14. A palette naming a document it does not ship
+
+**Symptom:** a **blank screen** for anybody wearing that palette. No exception, no
+log line, and every static check in your build passed.
+
+A `.ui` path that does not resolve fails the **entire** UI load on the client, not
+the one element — and no validator checks `append()` paths, so nothing catches it
+before a player does.
+
+This is why [`resolveDocument`](palettes.md#it-falls-back-and-that-is-the-whole-point)
+only ever redirects a document the palette explicitly declared, and why the
+declared `Set<String>` should be written by whatever generates the variants rather
+than maintained by hand. Two ways the two lists drift apart:
+
+- Adding a palette entry without re-running the generator.
+- Emitting a variant into a folder that mirrors the base mod's layout. Matching is
+  by **bare file name** — `resolveDocument` discards the folder the base document
+  was in and rebuilds the path as `documentRoot + fileName` — so every document a
+  palette declares has to sit under the one `documentRoot`, including the HUD's,
+  which Cultivation itself keeps in a different folder from its pages.
+
+Related, and quieter: a themed page that appends an **unthemed** row draws that
+row in the old colors, and `buildMenuNav` without `store`/`ref` draws the nav bar
+in the old colors. Neither breaks anything; both look broken.
+
+## 15. Stale resources in the built jar
 
 If you edit anything under `src/main/resources` (assets, `server.lang`,
 `manifest.json`), run `mvn clean install` rather than `mvn install`. Maven will

@@ -7,10 +7,10 @@ jar once:
 
 ```bash
 mvn install:install-file \
-  -Dfile=Cultivation-0.6.1.jar \
+  -Dfile=Cultivation-0.7.0.jar \
   -DgroupId=plugin.siren \
   -DartifactId=Cultivation \
-  -Dversion=0.6.1 \
+  -Dversion=0.7.0 \
   -Dpackaging=jar
 ```
 
@@ -35,7 +35,7 @@ Repeat whenever you move to a new Cultivation version.
     <dependency>
         <groupId>plugin.siren</groupId>
         <artifactId>Cultivation</artifactId>
-        <version>0.6.1</version>
+        <version>0.7.0</version>
         <scope>provided</scope>
     </dependency>
 </dependencies>
@@ -63,7 +63,7 @@ need them. In `src/main/resources/manifest.json`:
   "Version": "1.0.0",
   "ServerVersion": "0.5.x",
   "Dependencies": {
-    "Siren:Cultivation": ">=0.6.1"
+    "Siren:Cultivation": ">=0.7.0"
   },
   "Main": "com.example.myaddon.MyAddon"
 }
@@ -144,7 +144,7 @@ If your mod should also work on a server without Cultivation, move the entry:
 
 ```json
 "OptionalDependencies": {
-  "Siren:Cultivation": ">=0.6.1"
+  "Siren:Cultivation": ">=0.7.0"
 }
 ```
 

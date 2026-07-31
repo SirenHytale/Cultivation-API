@@ -75,6 +75,26 @@ cultivator's Yin-Yang lean.
 `UNALIGNED`, `RIGHTEOUS` (正道), `DEVIL` (魔道). Devil-path cultivators harvest Qi
 from player kills; each path carries its own combat perks.
 
+### `SkillTreeBranch`
+
+`plugin.siren.ECS.SkillTree.SkillTreeBranch` — the nine directions the skill tree
+radiates out in, one per stat. Appears in signatures only through
+[`CultivationPalette`](palettes.md#halos-are-the-exception), which carries a halo
+color per branch.
+
+| Constant | Stat | Constant | Stat |
+| --- | --- | --- | --- |
+| `VITALITY` | Health | `HARMONY` | Ritual speed |
+| `RESILIENCE` | Breath | `SWIFTNESS` | Move speed |
+| `MIGHT` | Damage | `ENDURANCE` | Stamina |
+| `WARDING` | Damage reduction | `SPIRIT` | Mana |
+| `INSIGHT` | Qi gain | | |
+
+**Declaration order is ring order**, 40° apart clockwise from straight up, and
+each branch's neighbors (`previous()` / `next()`, wrapping) are what a tier-5/6
+hybrid fork borrows from. A palette must give a color to **all nine or none** —
+hue is what tells a player which branch a node belongs to.
+
 ---
 
 ## Object types

@@ -21,6 +21,15 @@ ExampleAddon/
 | `CultivationHooks.java` | Observing (post-events), vetoing and re-tuning (pre-events), cross-world thread hopping, null-guarding `player()` |
 | `ExampleContent.java` | `registerRace`, `registerTechnique` + a technique effect, `registerQiAbsorptionItemModifier`, `registerCodexEntry`, `registerAdminConfigSection`, `registerMenuPage` |
 
+### One hook it deliberately does not show
+
+**Palettes.** A palette is inseparable from the recolored `.ui` documents it points
+at, and a path that does not resolve fails the whole UI load on the client — so an
+illustrative, uncompiled `registerPalette` call with no documents behind it would
+be worse than no example at all. [Palettes](../docs/palettes.md) carries a full
+worked registration instead, alongside the reasoning for how the documents are
+generated.
+
 ## Read this before copying
 
 These files are **illustrative**. Every Cultivation API call in them was written

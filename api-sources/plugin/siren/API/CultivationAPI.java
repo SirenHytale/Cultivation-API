@@ -21,6 +21,7 @@ import plugin.siren.ECS.Components.DaoComponent;
 import plugin.siren.ECS.Components.RaceComponent;
 import plugin.siren.ECS.Components.SkillTreeComponent;
 import plugin.siren.ECS.Components.SpiritBeastComponent;
+import plugin.siren.ECS.Components.CultivationProfilesComponent;
 import plugin.siren.ECS.Components.TechniqueComponent;
 import plugin.siren.ECS.Dao.CultivationPath;
 import plugin.siren.ECS.Dao.DaoElement;
@@ -52,7 +53,9 @@ import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
@@ -146,6 +149,43 @@ public class CultivationAPI {
      */
     private static final List<CodexEntry> CODEX_ENTRIES = new CopyOnWriteArrayList<>();
     private static final List<CodexCategory> CODEX_CATEGORIES = new CopyOnWriteArrayList<>();
+
+    /**
+     * Every look a player may wear. Copy-on-write for the same reason as the
+     * registries above - and read far harder than any of them, since every page
+     * build asks the wearer's palette which document to draw.
+     */
+    private static final List<CultivationPalette> PALETTES = new CopyOnWriteArrayList<>();
+
+    /**
+     * Every cosmetic title a player may equip - Cultivation's own realm/dao/
+     * path/sect-rank set, put there by {@code CultivationTitles.registerBuiltins()}
+     * during setup, plus whatever other mods contribute. Copy-on-write for the
+     * same reason as the registries above.
+     */
+    private static final List<CultivationTitle> TITLES = new CopyOnWriteArrayList<>();
+
+    /**
+     * How many keybind layouts each installed addon says a player may keep, by
+     * addon key. The effective cap is the highest of them (see
+     * {@link #getMaxTechniquePresets}), never their sum: two addons that both
+     * raise it to six mean six, not twelve.
+     */
+    private static final Map<String, Integer> PRESET_CAPS = new ConcurrentHashMap<>();
+
+    /**
+     * How many cultivation profiles each installed addon says a player may keep,
+     * by addon key. The effective cap is the highest of them (see
+     * {@link #getMaxProfiles}), never their sum.
+     */
+    private static final Map<String, Integer> PROFILE_CAPS = new ConcurrentHashMap<>();
+
+    /**
+     * Every banner a sect may fly over its hall. Copy-on-write for the same
+     * reason as the registries above: written once at setup, read on every
+     * beacon pulse and every sect page build.
+     */
+    private static final List<SectBanner> SECT_BANNERS = new CopyOnWriteArrayList<>();
 
     // --- Component type getters ---
 
@@ -766,6 +806,372 @@ public class CultivationAPI {
         return null;
     }
 
+    // --- Technique keybind layouts ---
+
+    /**
+     * Lets an addon raise how many keybind layouts a player may keep, above
+     * Cultivation's own {@link TechniqueComponent#DEFAULT_MAX_PRESETS}.
+     *
+     * <p>A layout is one named set of the {@link TechniqueComponent#BIND_COUNT}
+     * bindings; players switch between them so a combat set and a travelling set
+     * need not be re-bound by hand. This raises how many they may <i>keep</i> - it
+     * does not change how many keys each one has, which is fixed.</p>
+     *
+     * <p>Call from your plugin's {@code setup()} and withdraw it in
+     * {@code shutdown()} with {@link #unregisterTechniquePresetCap}, the same way
+     * a palette is handed back. Registering the same key twice replaces the first,
+     * so this is safe across a reload.</p>
+     *
+     * <p><b>Nothing is destroyed when the cap falls.</b> A player who filled six
+     * layouts and then lost the addon that allowed them keeps all six - they are
+     * decoded up to {@link TechniqueComponent#PRESET_CEILING} regardless of the
+     * live cap, and only <i>adding</i> is refused until they are back under it.
+     * Re-installing the addon simply lets them add again.</p>
+     *
+     * @param key an id for your mod, e.g. {@code "jadeSlip"}
+     * @param cap how many layouts you want players to be able to keep; values
+     *            above {@link TechniqueComponent#PRESET_CEILING} are clamped to it
+     */
+    public static void registerTechniquePresetCap(@Nonnull String key, int cap){
+        PRESET_CAPS.put(key, Math.min(cap, TechniqueComponent.PRESET_CEILING));
+    }
+
+    /** Withdraws a cap raise - for a plugin unloading cleanly. */
+    public static void unregisterTechniquePresetCap(@Nonnull String key){
+        PRESET_CAPS.remove(key);
+    }
+
+    /**
+     * How many keybind layouts a player may keep right now: the highest any
+     * installed addon asked for, never below Cultivation's own
+     * {@link TechniqueComponent#DEFAULT_MAX_PRESETS} and never above
+     * {@link TechniqueComponent#PRESET_CEILING}.
+     */
+    public static int getMaxTechniquePresets(){
+        int cap = TechniqueComponent.DEFAULT_MAX_PRESETS;
+        for(int registered : PRESET_CAPS.values()){
+            cap = Math.max(cap, registered);
+        }
+
+        return Math.min(cap, TechniqueComponent.PRESET_CEILING);
+    }
+
+    // --- Cultivation profiles ---
+
+    /**
+     * Lets an addon raise how many cultivation profiles a player may keep, above
+     * Cultivation's own {@link CultivationProfilesComponent#DEFAULT_MAX_PROFILES}.
+     *
+     * <p>A profile is a separate save of a cultivator's progress. This raises how
+     * many they may <i>keep</i>; it does not change what a profile holds, and the
+     * permission-gated sandbox slot is counted separately either way.</p>
+     *
+     * <p>Call from your plugin's {@code setup()} and withdraw it in
+     * {@code shutdown()} with {@link #unregisterProfileCap}, the same way a
+     * palette is handed back.</p>
+     *
+     * <p><b>Nothing is destroyed when the cap falls.</b> A player who filled five
+     * profiles and then lost the addon that allowed them keeps all five - they are
+     * decoded up to {@link CultivationProfilesComponent#PROFILE_CEILING}
+     * regardless of the live cap, and only <i>adding</i> is refused until they are
+     * back under it.</p>
+     *
+     * @param key an id for your mod, e.g. {@code "jadeSlip"}
+     * @param cap how many profiles you want players to keep; values above
+     *            {@link CultivationProfilesComponent#PROFILE_CEILING} are clamped
+     */
+    public static void registerProfileCap(@Nonnull String key, int cap){
+        PROFILE_CAPS.put(key, Math.min(cap, CultivationProfilesComponent.PROFILE_CEILING));
+    }
+
+    /** Withdraws a cap raise - for a plugin unloading cleanly. */
+    public static void unregisterProfileCap(@Nonnull String key){
+        PROFILE_CAPS.remove(key);
+    }
+
+    /**
+     * How many profiles a player may keep right now: the highest any installed
+     * addon asked for, never below
+     * {@link CultivationProfilesComponent#DEFAULT_MAX_PROFILES} and never above
+     * {@link CultivationProfilesComponent#PROFILE_CEILING}.
+     */
+    public static int getMaxProfiles(){
+        int cap = CultivationProfilesComponent.DEFAULT_MAX_PROFILES;
+        for(int registered : PROFILE_CAPS.values()){
+            cap = Math.max(cap, registered);
+        }
+
+        return Math.min(cap, CultivationProfilesComponent.PROFILE_CEILING);
+    }
+
+    /**
+     * The name of the profile this player is currently cultivating, or
+     * {@code ""} if they have never had one created.
+     *
+     * <p>Readable at any time, unlike the switch events - which is what an addon
+     * needs when a player JOINS, since no switch has fired yet and their state
+     * still has to be keyed to the right cultivator.</p>
+     */
+    @Nonnull
+    public static String getActiveProfileName(@Nonnull Store<EntityStore> store, @Nonnull Ref<EntityStore> ref){
+        CultivationProfilesComponent profiles =
+                store.getComponent(ref, CultivationProfilesComponent.getComponentType());
+        if(profiles == null){
+            return "";
+        }
+
+        CultivationProfilesComponent.Profile active = profiles.getActiveProfile();
+        return active == null ? "" : active.getName();
+    }
+
+    /** How many real (non-sandbox) profiles this player keeps. */
+    public static int getProfileCount(@Nonnull Store<EntityStore> store, @Nonnull Ref<EntityStore> ref){
+        CultivationProfilesComponent profiles =
+                store.getComponent(ref, CultivationProfilesComponent.getComponentType());
+        return profiles == null ? 0 : profiles.getRealProfileCount();
+    }
+
+    /**
+     * Whether this player is currently on the permission-gated sandbox profile,
+     * whose realm was set by hand rather than earned.
+     *
+     * <p>Worth checking anywhere your own mod records or ranks a player's
+     * standing - Cultivation keeps a sandbox cultivator off its own leaderboard
+     * for exactly this reason.</p>
+     */
+    public static boolean isTestProfileActive(@Nonnull Store<EntityStore> store, @Nonnull Ref<EntityStore> ref){
+        CultivationProfilesComponent profiles =
+                store.getComponent(ref, CultivationProfilesComponent.getComponentType());
+        return profiles != null && profiles.isTestActive();
+    }
+
+    // --- Sect hall banners ---
+
+    /**
+     * Adds a banner sects may fly over their hall, to the picker and to the
+     * beacon that stands over every claimed hall.
+     *
+     * <p>Call from your plugin's {@code setup()}; load order does not matter,
+     * since nothing reads the registry until a hall pulses or a sect opens the
+     * picker. Registering the same id twice replaces the first, so this is safe
+     * across a reload - and is how a mod restyles one of Cultivation's own
+     * banners rather than adding beside it.</p>
+     *
+     * @see SectBanner#builder for building one, and for why a banner names a
+     * particle asset rather than carrying a colour
+     */
+    public static void registerSectBanner(@Nonnull SectBanner banner){
+        SECT_BANNERS.removeIf(existing -> existing.getKey().equals(banner.getKey()));
+        SECT_BANNERS.add(banner);
+    }
+
+    /**
+     * Removes a previously registered banner - for a plugin unloading cleanly.
+     *
+     * <p>Sects still flying it are not migrated and do not need to be: a sect
+     * stores the id, never the banner, and {@link #getSectBanner} answers null
+     * for an id nobody claims - which the hall beacon reads as "use the vein-tier
+     * default". Uninstalling the mod that added a banner simply returns those
+     * halls to the light they had before it.</p>
+     */
+    public static void unregisterSectBanner(@Nonnull String bannerKey){
+        SECT_BANNERS.removeIf(existing -> existing.getKey().equals(bannerKey));
+    }
+
+    /** @return every registered banner, in registration order. A fresh list, safe to hold. */
+    @Nonnull
+    public static List<SectBanner> getSectBanners(){
+        return new ArrayList<>(SECT_BANNERS);
+    }
+
+    /** @return the banner registered under this id, or null if nothing claims it. */
+    @Nullable
+    public static SectBanner getSectBanner(@Nullable String bannerKey){
+        if(bannerKey == null || bannerKey.isEmpty()){
+            return null;
+        }
+
+        for(SectBanner banner : SECT_BANNERS){
+            if(banner.getKey().equals(bannerKey)){
+                return banner;
+            }
+        }
+
+        return null;
+    }
+
+    // --- Palettes ---
+
+    /**
+     * Adds a look players may wear, to the picker and to every page build.
+     *
+     * <p>Call from your plugin's {@code setup()}; load order does not matter.
+     * Registering the same id twice replaces the first, so this is safe across a
+     * reload - and is how a mod restyles Cultivation's own default rather than
+     * adding beside it.</p>
+     *
+     * @see CultivationPalette#builder for building one, and for why a palette is
+     * a set of documents rather than a set of hex values.
+     */
+    public static void registerPalette(@Nonnull CultivationPalette palette){
+        PALETTES.removeIf(existing -> existing.getKey().equals(palette.getKey()));
+        PALETTES.add(palette);
+    }
+
+    /**
+     * Removes a previously registered palette - for a plugin unloading cleanly.
+     *
+     * <p>Players still wearing it are not migrated and do not need to be: nothing
+     * stores a palette object, only its id, and {@link #getPalette(Store, Ref)}
+     * falls back to the default for an id nobody claims. Uninstalling the mod that
+     * added a look simply returns its wearers to crimson and gold.</p>
+     */
+    public static void unregisterPalette(@Nonnull String paletteKey){
+        PALETTES.removeIf(existing -> existing.getKey().equals(paletteKey));
+    }
+
+    /** @return every registered palette, in registration order. A fresh list, safe to hold. */
+    @Nonnull
+    public static List<CultivationPalette> getPalettes(){
+        return new ArrayList<>(PALETTES);
+    }
+
+    /** @return the palette registered under this id, or null if nothing claims it. */
+    @Nullable
+    public static CultivationPalette getPalette(@Nonnull String paletteKey){
+        for(CultivationPalette palette : PALETTES){
+            if(palette.getKey().equals(paletteKey)){
+                return palette;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * The palette this player is wearing, or null if they are on Cultivation's own
+     * default look.
+     *
+     * <p>Null rather than a default instance is deliberate: it lets every caller
+     * say "no palette, use what you were already doing" and keeps a server with no
+     * palette mod installed on exactly the code path it had before palettes
+     * existed.</p>
+     *
+     * <p>Returns null too when the stored id names a palette nobody registered -
+     * the mod that provided it has been removed - so a player is never stuck
+     * wearing a look that no longer exists.</p>
+     */
+    @Nullable
+    public static CultivationPalette getPalette(@Nonnull Store<EntityStore> store, @Nonnull Ref<EntityStore> ref){
+        CultivationSettingsComponent settings = store.getComponent(ref, CultivationSettingsComponent.getComponentType());
+        if(settings == null){
+            return null;
+        }
+
+        String key = settings.getPaletteId();
+        if(key == null || key.isEmpty() || CultivationPalette.DEFAULT_KEY.equals(key)){
+            return null;
+        }
+
+        return getPalette(key);
+    }
+
+    /**
+     * The document to draw for this player in place of {@code basePath} - their
+     * palette's variant of it, or {@code basePath} unchanged.
+     *
+     * <p>This is what every page build calls. Route <b>every</b>
+     * {@code commandBuilder.append(...)} through it, not just the root document:
+     * a themed page that appends an unthemed row draws that row in the old colors,
+     * which is more jarring than not theming at all.</p>
+     */
+    @Nonnull
+    public static String document(@Nonnull Store<EntityStore> store, @Nonnull Ref<EntityStore> ref, @Nonnull String basePath){
+        return document(getPalette(store, ref), basePath);
+    }
+
+    /**
+     * The same resolution against an already-looked-up palette, for a build that
+     * appends many documents and should not re-read the player's settings for
+     * each one. Null means the default look, and returns {@code basePath} as-is.
+     */
+    @Nonnull
+    public static String document(@Nullable CultivationPalette palette, @Nonnull String basePath){
+        return palette == null ? basePath : palette.resolveDocument(basePath);
+    }
+
+    // --- Titles ---
+
+    /**
+     * Adds a cosmetic title players may equip, to the picker and to every
+     * place a title is displayed (Rankings, sect roster, chat, the overhead
+     * nameplate).
+     *
+     * <p>Call from your plugin's {@code setup()}; load order does not matter.
+     * Registering the same id twice replaces the first, so this is safe across
+     * a reload.</p>
+     *
+     * @see CultivationTitle#builder for building one, and for the difference
+     * between {@link CultivationTitle#isVisibleTo} and
+     * {@link CultivationTitle#isUnlockedFor}.
+     */
+    public static void registerTitle(@Nonnull CultivationTitle title){
+        TITLES.removeIf(existing -> existing.getKey().equals(title.getKey()));
+        TITLES.add(title);
+    }
+
+    /** Removes a previously registered title - for a plugin unloading cleanly. */
+    public static void unregisterTitle(@Nonnull String titleKey){
+        TITLES.removeIf(existing -> existing.getKey().equals(titleKey));
+    }
+
+    /** @return every registered title, in registration order. A fresh list, safe to hold. */
+    @Nonnull
+    public static List<CultivationTitle> getTitles(){
+        return new ArrayList<>(TITLES);
+    }
+
+    /** @return the title registered under this id, or null if nothing claims it. */
+    @Nullable
+    public static CultivationTitle getTitle(@Nonnull String titleKey){
+        for(CultivationTitle title : TITLES){
+            if(title.getKey().equals(titleKey)){
+                return title;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * The title this player has equipped, or null if they have none - or the
+     * id they last chose names a title nobody currently registers (the mod
+     * that added it has been removed, so a player is never stuck showing a
+     * title that no longer exists).
+     *
+     * <p>Not re-validated against {@link CultivationTitle#isUnlockedFor} here -
+     * that check runs once, when the title is equipped (see
+     * {@code TitleManager.equip}), the same point {@link CultivationPalette
+     * #isAvailableTo} is checked at rather than on every later read. A title a
+     * player has since fallen out of the requirements for (their moral path
+     * drifted after equipping a path-locked title, say) is purely cosmetic, so
+     * it is left alone rather than silently unequipped.</p>
+     */
+    @Nullable
+    public static CultivationTitle getTitle(@Nonnull Store<EntityStore> store, @Nonnull Ref<EntityStore> ref){
+        CultivationSettingsComponent settings = store.getComponent(ref, CultivationSettingsComponent.getComponentType());
+        if(settings == null){
+            return null;
+        }
+
+        String key = settings.getTitleId();
+        if(key == null || key.isEmpty()){
+            return null;
+        }
+
+        return getTitle(key);
+    }
+
     /**
      * The event-data key a nav click arrives under. Add it to your page's codec
      * as a plain {@code Codec.STRING} field - it carries a literal page id, not
@@ -787,6 +1193,21 @@ public class CultivationAPI {
     public static void buildMenuNav(@Nonnull UICommandBuilder commandBuilder, @Nonnull UIEventBuilder eventBuilder,
                                     @Nonnull PlayerRef playerRef, @Nonnull String currentPageKey){
         CultivationNav.build(commandBuilder, eventBuilder, playerRef, currentPageKey);
+    }
+
+    /**
+     * The same bar, drawn in the viewer's chosen palette.
+     *
+     * <p>Prefer this one. The overload without {@code store}/{@code ref} cannot
+     * see which look the player is wearing, so it always draws the bar in
+     * Cultivation's default crimson and gold - which on a themed page is a strip
+     * of the old colors across the bottom of an otherwise recolored menu. It is
+     * kept only so pages written before palettes existed still compile.</p>
+     */
+    public static void buildMenuNav(@Nonnull UICommandBuilder commandBuilder, @Nonnull UIEventBuilder eventBuilder,
+                                    @Nonnull PlayerRef playerRef, @Nonnull String currentPageKey,
+                                    @Nonnull Store<EntityStore> store, @Nonnull Ref<EntityStore> ref){
+        CultivationNav.build(commandBuilder, eventBuilder, playerRef, currentPageKey, getPalette(store, ref));
     }
 
     /**

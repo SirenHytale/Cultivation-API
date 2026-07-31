@@ -1,7 +1,7 @@
 # Event reference
 
 Every event Cultivation fires, grouped by the class that declares it.
-**135 listener hooks** across 10 subsystems.
+**144 listener hooks** across 11 subsystems.
 
 > Generated from `api-sources/` by `tools/gen_events_reference.py`. Do not edit
 > by hand — re-run the script instead. The prose in each entry is the javadoc on
@@ -1422,6 +1422,21 @@ A sect's motto was replaced.
 | `oldMotto()` | `String` |
 | `newMotto()` | `String` |
 
+### `SectBannerChangeEvent`
+
+```java
+SectEvents.onSectBannerChange(event -> { /* ... */ });
+```
+
+A sect changed the banner flown over its hall.
+
+| Accessor | Type |
+| --- | --- |
+| `manager()` | `UUID` |
+| `sect()` | `Sect` |
+| `oldBannerId()` | `String` |
+| `newBannerId()` | `String` |
+
 ### `SectJoinPolicyChangeEvent`
 
 ```java
@@ -1618,6 +1633,22 @@ A motto is about to be set. Cancel to refuse it; `setMotto` to rewrite it (the 6
 | `oldMotto()` | `String` | read |
 | `motto()` | `String` | read |
 | `setMotto(String)` | `void` | re-tune |
+
+### `PreSectBannerChangeEvent`
+
+```java
+SectEvents.onPreSectBannerChange(event -> { /* ... */ });
+```
+
+A hall banner is about to change. Cancel to refuse it; `setBannerId` to force a different one - useful for a server that wants a sect's banner decided by something other than the sect's own taste (a war outcome, a rank, an alliance). The id is not validated after a listener rewrites it. An id nobody has registered is not an error: it resolves to the vein-tier default light, the same as an id whose mod has been uninstalled.
+
+| Member | Type | |
+| --- | --- | --- |
+| `manager()` | `UUID` | read |
+| `sect()` | `Sect` | read |
+| `oldBannerId()` | `String` | read |
+| `bannerId()` | `String` | read |
+| `setBannerId(String)` | `void` | re-tune |
 
 ### `PreSectJoinPolicyChangeEvent`
 
@@ -2207,4 +2238,115 @@ A seclusion retreat is about to pay out. Cancel to forfeit it (reported to the p
 | `hours()` | `float` | read |
 | `qi()` | `float` | read |
 | `setQi(float)` | `void` | re-tune |
+
+
+---
+
+## Cultivation profiles
+
+`plugin.siren.API.ProfileEvents` — Switching, creating and erasing the separate saves a player keeps of their own progress, and the expiry of a temporary sandbox profile.
+
+**Post-events** — fired once the change is committed; cannot be cancelled.
+
+### `ProfileSwitchEvent`
+
+```java
+ProfileEvents.onProfileSwitch(event -> { /* ... */ });
+```
+
+A player is now on a different profile. Their components have already been replaced, so anything read here describes the cultivator they switched TO. @param from the profile they left, or null when they were placed on one without leaving another (a first-time backfill)
+
+| Accessor | Type |
+| --- | --- |
+| `ref()` | `Ref<EntityStore>` |
+| `player()` | `PlayerRef` |
+| `from()` | `Profile` |
+| `to()` | `Profile` |
+
+### `ProfileCreateEvent`
+
+```java
+ProfileEvents.onProfileCreate(event -> { /* ... */ });
+```
+
+A new, empty profile was created and switched to.
+
+| Accessor | Type |
+| --- | --- |
+| `ref()` | `Ref<EntityStore>` |
+| `player()` | `PlayerRef` |
+| `profile()` | `Profile` |
+
+### `ProfileDeleteEvent`
+
+```java
+ProfileEvents.onProfileDelete(event -> { /* ... */ });
+```
+
+A profile was erased. It is already off the player's list.
+
+| Accessor | Type |
+| --- | --- |
+| `ref()` | `Ref<EntityStore>` |
+| `player()` | `PlayerRef` |
+| `profile()` | `Profile` |
+
+### `ProfileExpireEvent`
+
+```java
+ProfileEvents.onProfileExpire(event -> { /* ... */ });
+```
+
+A temp profile's time ran out and it was removed. @param wasActive whether the player was playing it, and so has just been put back on a real one
+
+| Accessor | Type |
+| --- | --- |
+| `ref()` | `Ref<EntityStore>` |
+| `player()` | `PlayerRef` |
+| `profile()` | `Profile` |
+| `wasActive()` | `boolean` |
+
+**Pre-events** — fired before the change; `setCancelled(true)` vetoes it, and any setter below re-tunes the numbers the mod then uses.
+
+### `PreProfileSwitchEvent`
+
+```java
+ProfileEvents.onPreProfileSwitch(event -> { /* ... */ });
+```
+
+A profile is about to be swapped in. Cancel to refuse the switch. Fired BEFORE the outgoing profile is saved, so this is the point at which an addon's own state still belongs to the cultivator being left - save it here, keyed by `from()`, and restore it in `ProfileSwitchEvent`.
+
+| Member | Type | |
+| --- | --- | --- |
+| `ref()` | `Ref<EntityStore>` | read |
+| `player()` | `PlayerRef` | read |
+| `from()` | `Profile` | read (may be null) |
+| `to()` | `Profile` | read |
+
+### `PreProfileCreateEvent`
+
+```java
+ProfileEvents.onPreProfileCreate(event -> { /* ... */ });
+```
+
+A new profile is about to be created. Cancel to refuse it.
+
+| Member | Type | |
+| --- | --- | --- |
+| `ref()` | `Ref<EntityStore>` | read |
+| `player()` | `PlayerRef` | read |
+
+### `PreProfileDeleteEvent`
+
+```java
+ProfileEvents.onPreProfileDelete(event -> { /* ... */ });
+```
+
+A profile is about to be erased. Cancel to keep it.
+
+| Member | Type | |
+| --- | --- | --- |
+| `ref()` | `Ref<EntityStore>` | read |
+| `player()` | `PlayerRef` | read |
+| `profile()` | `Profile` | read |
 

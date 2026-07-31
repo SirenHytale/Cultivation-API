@@ -169,6 +169,38 @@ public interface ProgressionProvider {
         return null;
     }
 
+    // --- Profiles ---
+
+    /**
+     * Whether this provider can keep its own progression in step with
+     * Cultivation's profiles - the separate saves a player keeps of their
+     * progress.
+     *
+     * <p><b>Returns false by default, and that default refuses profile switching
+     * outright while this provider is installed.</b> The reason is that a switch
+     * replaces the components describing what a cultivator has become, and when
+     * a provider owns progression the player's real level is not in those
+     * components at all - it is in the provider. Swapping without the provider's
+     * participation would leave the two disagreeing: Cultivation showing a fresh
+     * cultivator while the provider still had them at their old level. Refusing
+     * is the safe reading, and it is what a provider that has not thought about
+     * profiles gets for free.</p>
+     *
+     * <p>Return true once you handle {@link ProfileEvents.PreProfileSwitchEvent}
+     * (save your state for the profile being left) and
+     * {@link ProfileEvents.ProfileSwitchEvent} (load it for the one arriving).
+     * With those two in place a switch is safe, and Cultivation stops standing in
+     * the way of it.</p>
+     *
+     * <p>The permission-gated sandbox profile is allowed either way - its realm
+     * is set by hand rather than earned, and it is kept off every ranking - but
+     * a provider that returns false is told, through the message the player sees,
+     * that setting a realm there changes Cultivation's view alone.</p>
+     */
+    default boolean supportsProfiles(){
+        return false;
+    }
+
     // --- Gating ---
 
     /**

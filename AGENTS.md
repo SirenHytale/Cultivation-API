@@ -33,7 +33,7 @@ cover it, because nearly every mechanic is re-tunable there.
 1. **`docs/pitfalls.md`** — the mistakes that crash servers. Read this first.
 2. `docs/getting-started.md` — dependency wiring and `setup()`.
 3. The guide for whatever the user is doing (see `README.md`'s table).
-4. `docs/events-reference.md` — all 135 listeners with their payloads. Generated
+4. `docs/events-reference.md` — all 144 listeners with their payloads. Generated
    from source, so it is accurate; it is long, so search it rather than reading
    it end to end.
 
@@ -64,8 +64,8 @@ Cultivation is ready".
 
 There is deliberately **no unregister for event listeners** — listener lifetime
 is server lifetime. The registries (`registerMenuPage`, `registerCodexEntry`,
-`registerAdminConfigSection`) *do* have unregister methods, for a plugin
-unloading cleanly.
+`registerAdminConfigSection`, `registerPalette`) *do* have unregister methods, for
+a plugin unloading cleanly.
 
 ### 3. Listeners run on the subject's world thread
 
@@ -87,19 +87,24 @@ is silent — no exception, the feature simply never appears.
 
 ### 5. Namespace every id
 
-Race ids, technique ids, menu page keys, codex entry ids, admin config section
-and field keys are all **global across every mod on the server**. Namespace them
-with your mod's name — `"MyMod:flame_step"`, `"MyMod:alchemy"`. Registering an
-existing id **replaces** the previous holder rather than erroring, so a collision
-silently steals another mod's feature.
+Race ids, technique ids, menu page keys, codex entry ids, palette keys, admin
+config section and field keys are all **global across every mod on the server**.
+Namespace them with your mod's name — `"MyMod:flame_step"`, `"MyMod:alchemy"`.
+Registering an existing id **replaces** the previous holder rather than erroring,
+so a collision silently steals another mod's feature.
+
+The same is true of asset paths: every mod's `Common/UI/Custom/` merges into one
+tree, so a palette's `documentRoot` needs your mod's name in it too
+(`"Pages/MyMod_Frost/"`).
 
 ### 6. Lang keys cannot override Cultivation's
 
 Language files from every asset pack merge into one catalog, **first-writer-wins**.
 Cultivation's pack loads before any addon that depends on it, so shipping
 `server.cultivation.*` keys in your own `server.lang` is silently ignored. To
-re-word Cultivation, implement `CultivationTheme` (see `docs/theming.md`). Keep
-your own strings under your own key prefix.
+re-word Cultivation, implement `CultivationTheme` (see `docs/theming.md`) — words
+only; its colors are a separate registry, `docs/palettes.md`. Keep your own
+strings under your own key prefix.
 
 ### 7. A `ProgressionProvider` must call `refreshProgression`
 
@@ -119,6 +124,27 @@ That is why `withTooltip` takes a plain, untranslatable `String`.
 
 Element ids in `.ui` documents also resolve **globally**, not per document, so a
 page and a row template that share an id will fight. Prefix ids per document.
+
+### 9. A `.ui` path that does not resolve kills the whole page
+
+Not the one element — the **entire** UI load, as a blank screen with no log line,
+and no validator in this repository or the workspace checks `append()` paths.
+
+This is the constraint that shapes `CultivationPalette`: it redirects only the
+documents it explicitly declared and falls back to the base path otherwise, and
+the declared list is meant to be written by whatever generates the recolored
+documents rather than by hand. Matching is on the **bare file name**
+(`documentRoot + fileName`), so every document a palette declares must live under
+its single `documentRoot` — including `CultivationHud.ui`, which the base mod
+keeps in a different folder from its pages.
+
+### 10. `CultivationTheme` and `CultivationPalette` are unrelated
+
+The names mislead. `CultivationTheme` re-maps **translation keys** — words, and
+nothing visual. `CultivationPalette` supplies **colors** — recolored `.ui`
+documents plus the nine skill-tree halo hues. If the user asks to "theme" or
+"reskin" Cultivation, work out which they mean before writing anything; they
+compose freely, and a mod may register both.
 
 ## Conventions to follow
 
@@ -230,6 +256,7 @@ void registerMenuPage(CultivationMenuPage)          // + unregisterMenuPage(Stri
 void registerCodexEntry(CodexEntry)                 // + unregisterCodexEntry(String)
 void registerCodexCategory(CodexCategory)           // + unregisterCodexCategory(String)
 void registerAdminConfigSection(AdminConfigSection)  // + unregisterAdminConfigSection(String)
+void registerPalette(CultivationPalette)            // + unregisterPalette(String)
 
 AdminConfigSection newAdminConfigSection(String key, String labelKey, String hintKey,
                                          int sortOrder, Runnable save, List<AdminConfigField> fields)
@@ -245,6 +272,23 @@ AdminConfigField withTooltip(AdminConfigField field, String tooltip)   // String
 
 void setProgressionProvider(@Nullable ProgressionProvider)  // null restores built-in
 void setTheme(@Nullable CultivationTheme)                   // null restores built-in
+```
+
+**Palettes** (0.7.0) — the *color* half, unrelated to `CultivationTheme` above.
+See [`docs/palettes.md`](docs/palettes.md); build one with
+`CultivationPalette.builder(key)`:
+
+```java
+List<CultivationPalette>     getPalettes()                       // registration order
+@Nullable CultivationPalette getPalette(String key)
+@Nullable CultivationPalette getPalette(Store, Ref)              // null = the default look
+
+String document(Store, Ref, String basePath)                     // route EVERY append through
+String document(@Nullable CultivationPalette, String basePath)   // when built once per page
+
+void buildMenuNav(UICommandBuilder, UIEventBuilder, PlayerRef, String pageKey, Store, Ref)
+void buildMenuNav(UICommandBuilder, UIEventBuilder, PlayerRef, String pageKey)  // back-compat,
+                                                        // ignores the palette - avoid
 ```
 
 **Events** — one class per subsystem, all in `plugin.siren.API`:
@@ -264,6 +308,8 @@ CultivationRealm  BODY_REFINEMENT, QI_CONDENSATION, FOUNDATION_ESTABLISHMENT,
 CultivationStage  EARLY, MIDDLE, LATE, PEAK
 DaoElement        WOOD, EARTH, WATER, FIRE, METAL, ICE, WIND, POISON, LIGHTNING, VOID
 CultivationPath   UNALIGNED, RIGHTEOUS, DEVIL
+SkillTreeBranch   VITALITY, RESILIENCE, MIGHT, WARDING, INSIGHT, HARMONY,
+                  SWIFTNESS, ENDURANCE, SPIRIT   (a palette colors all nine or none)
 ```
 
 ## Before you tell the user it's done
@@ -279,6 +325,9 @@ CultivationPath   UNALIGNED, RIGHTEOUS, DEVIL
 - [ ] If a `ProgressionProvider` is installed: `refreshProgression` is called on
       every level change, and `shutdown()` passes `null` back to
       `setProgressionProvider` and `setTheme`.
+- [ ] If a palette is registered: every declared document name exists under the
+      one `documentRoot`, all nine halos are set, every `append` is routed through
+      `CultivationAPI.document`, and `buildMenuNav` was given `store`/`ref`.
 
 If you could not verify something against the sources, say which part and why —
 do not present an unverified integration as working.

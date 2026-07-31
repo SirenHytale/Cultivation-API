@@ -1,6 +1,6 @@
 # Compatibility with other mods
 
-Cultivation detects three other mods and changes its own behaviour when they are
+Cultivation detects three other mods and changes its own behavior when they are
 present. Each is exposed as a single boolean, so an addon can ask the same
 question without doing its own plugin lookup:
 
@@ -101,7 +101,7 @@ under `OptionalDependencies` rather than `Dependencies`:
 
 ```json
 "OptionalDependencies": {
-  "Siren:Cultivation": ">=0.6.1"
+  "Siren:Cultivation": ">=0.7.0"
 }
 ```
 

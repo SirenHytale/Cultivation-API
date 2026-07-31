@@ -72,6 +72,9 @@ public final class SectEvents {
     /** A sect's motto was replaced. */
     public record SectMottoChangeEvent(@Nonnull UUID manager, @Nonnull Sect sect, @Nonnull String oldMotto, @Nonnull String newMotto) {}
 
+    /** A sect changed the banner flown over its hall. */
+    public record SectBannerChangeEvent(@Nonnull UUID manager, @Nonnull Sect sect, @Nonnull String oldBannerId, @Nonnull String newBannerId) {}
+
     /** A sect's join policy was changed. */
     public record SectJoinPolicyChangeEvent(@Nonnull UUID leader, @Nonnull Sect sect, @Nonnull Sect.JoinPolicy oldPolicy, @Nonnull Sect.JoinPolicy newPolicy) {}
 
@@ -234,6 +237,36 @@ public final class SectEvents {
         public void setMotto(@Nonnull String motto){ this.motto = motto; }
     }
 
+    /**
+     * A hall banner is about to change. Cancel to refuse it; {@link #setBannerId}
+     * to force a different one - useful for a server that wants a sect's banner
+     * decided by something other than the sect's own taste (a war outcome, a
+     * rank, an alliance).
+     *
+     * <p>The id is not validated after a listener rewrites it. An id nobody has
+     * registered is not an error: it resolves to the vein-tier default light, the
+     * same as an id whose mod has been uninstalled.</p>
+     */
+    public static final class PreSectBannerChangeEvent extends CancellableEvent {
+        private final UUID manager;
+        private final Sect sect;
+        private final String oldBannerId;
+        private String bannerId;
+
+        public PreSectBannerChangeEvent(@Nonnull UUID manager, @Nonnull Sect sect, @Nonnull String oldBannerId, @Nonnull String bannerId){
+            this.manager = manager;
+            this.sect = sect;
+            this.oldBannerId = oldBannerId;
+            this.bannerId = bannerId;
+        }
+
+        @Nonnull public UUID manager(){ return this.manager; }
+        @Nonnull public Sect sect(){ return this.sect; }
+        @Nonnull public String oldBannerId(){ return this.oldBannerId; }
+        @Nonnull public String bannerId(){ return this.bannerId; }
+        public void setBannerId(@Nonnull String bannerId){ this.bannerId = bannerId; }
+    }
+
     /** A join policy is about to change. Cancel to keep the current one; {@link #setPolicy} to force a different one. */
     public static final class PreSectJoinPolicyChangeEvent extends CancellableEvent {
         private final UUID leader;
@@ -368,6 +401,8 @@ public final class SectEvents {
     private static final List<Consumer<PreSectRankChangeEvent>> PRE_RANK_CHANGE = EventBus.newListenerList();
     private static final List<Consumer<SectMottoChangeEvent>> MOTTO_CHANGE = EventBus.newListenerList();
     private static final List<Consumer<PreSectMottoChangeEvent>> PRE_MOTTO_CHANGE = EventBus.newListenerList();
+    private static final List<Consumer<SectBannerChangeEvent>> BANNER_CHANGE = EventBus.newListenerList();
+    private static final List<Consumer<PreSectBannerChangeEvent>> PRE_BANNER_CHANGE = EventBus.newListenerList();
     private static final List<Consumer<SectJoinPolicyChangeEvent>> JOIN_POLICY_CHANGE = EventBus.newListenerList();
     private static final List<Consumer<PreSectJoinPolicyChangeEvent>> PRE_JOIN_POLICY_CHANGE = EventBus.newListenerList();
     private static final List<Consumer<SectRenameEvent>> RENAME = EventBus.newListenerList();
@@ -396,6 +431,8 @@ public final class SectEvents {
     public static void onPreSectRankChange(@Nonnull Consumer<PreSectRankChangeEvent> listener){ PRE_RANK_CHANGE.add(listener); }
     public static void onSectMottoChange(@Nonnull Consumer<SectMottoChangeEvent> listener){ MOTTO_CHANGE.add(listener); }
     public static void onPreSectMottoChange(@Nonnull Consumer<PreSectMottoChangeEvent> listener){ PRE_MOTTO_CHANGE.add(listener); }
+    public static void onSectBannerChange(@Nonnull Consumer<SectBannerChangeEvent> listener){ BANNER_CHANGE.add(listener); }
+    public static void onPreSectBannerChange(@Nonnull Consumer<PreSectBannerChangeEvent> listener){ PRE_BANNER_CHANGE.add(listener); }
     public static void onSectJoinPolicyChange(@Nonnull Consumer<SectJoinPolicyChangeEvent> listener){ JOIN_POLICY_CHANGE.add(listener); }
     public static void onPreSectJoinPolicyChange(@Nonnull Consumer<PreSectJoinPolicyChangeEvent> listener){ PRE_JOIN_POLICY_CHANGE.add(listener); }
     public static void onSectRename(@Nonnull Consumer<SectRenameEvent> listener){ RENAME.add(listener); }
@@ -426,6 +463,8 @@ public final class SectEvents {
     public static boolean firePreSectRankChange(@Nonnull PreSectRankChangeEvent event){ return EventBus.fire(PRE_RANK_CHANGE, event, "PreSectRankChangeEvent"); }
     public static void fireSectMottoChange(@Nonnull SectMottoChangeEvent event){ EventBus.dispatch(MOTTO_CHANGE, event, "SectMottoChangeEvent"); }
     public static boolean firePreSectMottoChange(@Nonnull PreSectMottoChangeEvent event){ return EventBus.fire(PRE_MOTTO_CHANGE, event, "PreSectMottoChangeEvent"); }
+    public static void fireSectBannerChange(@Nonnull SectBannerChangeEvent event){ EventBus.dispatch(BANNER_CHANGE, event, "SectBannerChangeEvent"); }
+    public static boolean firePreSectBannerChange(@Nonnull PreSectBannerChangeEvent event){ return EventBus.fire(PRE_BANNER_CHANGE, event, "PreSectBannerChangeEvent"); }
     public static void fireSectJoinPolicyChange(@Nonnull SectJoinPolicyChangeEvent event){ EventBus.dispatch(JOIN_POLICY_CHANGE, event, "SectJoinPolicyChangeEvent"); }
     public static boolean firePreSectJoinPolicyChange(@Nonnull PreSectJoinPolicyChangeEvent event){ return EventBus.fire(PRE_JOIN_POLICY_CHANGE, event, "PreSectJoinPolicyChangeEvent"); }
     public static void fireSectRename(@Nonnull SectRenameEvent event){ EventBus.dispatch(RENAME, event, "SectRenameEvent"); }

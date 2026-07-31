@@ -8,6 +8,13 @@ cultivators and sects reads as its own game instead of a reskin.
 CultivationAPI.setTheme(new MyTheme());
 ```
 
+> **A theme changes words, not colors.** Despite the name, `CultivationTheme` is
+> a pure text facility: it re-maps translation keys and touches nothing visual.
+> The one that changes what the menus, HUD and skill tree *look* like is
+> `CultivationPalette` — a separate registry, see [Palettes](palettes.md). The
+> two compose, and a mod that wants its own setting *and* its own colors
+> registers both.
+
 Every string Cultivation shows a player — chat, commands, HUD, menus, item names,
 tooltips — is routed through `translate` first, and whatever you return is used
 verbatim. Pass `null` to restore Cultivation's own wording.

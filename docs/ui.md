@@ -90,10 +90,17 @@ Four steps, in your `CustomUIPage`:
 2. Draw the bar from your `build`:
 
    ```java
-   CultivationAPI.buildMenuNav(commandBuilder, eventBuilder, playerRef, "myAddon:alchemy");
+   CultivationAPI.buildMenuNav(commandBuilder, eventBuilder, playerRef,
+           "myAddon:alchemy", store, ref);
    ```
 
    Passing your own id disables that button, marking where the player is.
+
+   > Prefer this overload. There is a four-argument one without `store`/`ref`,
+   > kept so pages written before 0.7.0 still compile, but it cannot see which
+   > [palette](palettes.md) the viewer is wearing and always draws the bar in
+   > Cultivation's crimson and gold — a strip of the old colors across the
+   > bottom of an otherwise recolored menu.
 
 3. Add the nav key to your event codec. It carries a literal page id, **not** a
    selector, so it takes no `'@'` prefix:
@@ -117,6 +124,15 @@ Four steps, in your `CustomUIPage`:
 `getLabel`, `isVisibleTo` and `open` are called on the viewing player's world
 thread while their page is being built or swapped. Read that player's components
 freely; **do not write to the `Store`**.
+
+### Drawing your page in the viewer's colors
+
+A player may be wearing a [palette](palettes.md), in which case Cultivation's own
+pages are drawn from a recolored set of `.ui` documents. Your page keeps its own
+look unless you opt in — route each `append` through `CultivationAPI.document`
+and ship variants of your documents in the palette's folder. Rows and fragments
+included; a themed page that appends an unthemed row draws that row in the old
+colors.
 
 ---
 
