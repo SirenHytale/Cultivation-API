@@ -82,6 +82,7 @@ public final class CultivationPalette {
     private final String sectionKey;
     private final int swatch;
     private final String documentRoot;
+    private final String auraPrefix;
     private final Set<String> documents;
     private final Map<SkillTreeBranch, Integer> halos;
     private final String permission;
@@ -93,6 +94,7 @@ public final class CultivationPalette {
         this.sectionKey = builder.sectionKey;
         this.swatch = builder.swatch;
         this.documentRoot = builder.documentRoot;
+        this.auraPrefix = builder.auraPrefix;
         this.documents = Set.copyOf(builder.documents);
         this.halos = Collections.unmodifiableMap(new EnumMap<>(builder.halos));
         this.permission = builder.permission;
@@ -170,6 +172,36 @@ public final class CultivationPalette {
         return this.documents.contains(fileName) ? this.documentRoot + fileName : basePath;
     }
 
+    /**
+     * This palette's aura id for one realm, or the base mod's when it ships no
+     * aura set.
+     *
+     * @param baseId the id Cultivation would otherwise spawn, e.g.
+     *               {@code Cultivation_RealmAura_NascentSoul}. Its realm suffix
+     *               is what gets carried onto this palette's prefix.
+     */
+    @Nonnull
+    public String resolveAura(@Nonnull String baseId) {
+        if (this.auraPrefix == null) {
+            return baseId;
+        }
+
+        // The suffix after the last underscore is the realm name - the same
+        // shape gen_realm_auras.py writes and the only part that varies.
+        int underscore = baseId.lastIndexOf('_');
+        if (underscore < 0 || underscore == baseId.length() - 1) {
+            return baseId;
+        }
+
+        return this.auraPrefix + baseId.substring(underscore + 1);
+    }
+
+    /** @return this palette's aura id prefix, or null if it keeps Cultivation's own auras. */
+    @Nullable
+    public String getAuraPrefix() {
+        return this.auraPrefix;
+    }
+
     /** The document file names this palette ships a variant of. */
     @Nonnull
     public Set<String> getDocuments() {
@@ -195,6 +227,7 @@ public final class CultivationPalette {
         private String sectionKey;
         private int swatch = 0xD9A63E;
         private String documentRoot;
+        private String auraPrefix;
         private Set<String> documents = new HashSet<>();
         private final Map<SkillTreeBranch, Integer> halos = new EnumMap<>(SkillTreeBranch.class);
         private String permission;
@@ -236,6 +269,26 @@ public final class CultivationPalette {
          * ship {@code Pages/Cultivation/CultivationStatsPage.ui} would collide.</p>
          */
         @Nonnull
+        /**
+         * The id prefix this palette's own realm auras are named with, so the
+         * cultivation aura is recoloured along with the menus.
+         *
+         * <p>Resolved the same way {@link #documentRoot} resolves a document:
+         * the base mod appends the realm's own name, so a prefix of
+         * {@code "MyMod_RealmAura_"} is asked for
+         * {@code MyMod_RealmAura_GoldenCoreFormation}. A palette that ships no
+         * aura set simply omits this and keeps Cultivation's own - there is no
+         * partial state to get wrong, because a prefix either names a full set
+         * of seven or it names nothing.</p>
+         *
+         * <p>The aura is the one cosmetic other players see from across a
+         * field, which is why it is worth a palette shipping one at all.</p>
+         */
+        public Builder auraPrefix(@Nonnull String auraPrefix) {
+            this.auraPrefix = auraPrefix;
+            return this;
+        }
+
         public Builder documentRoot(@Nonnull String documentRoot) {
             this.documentRoot = documentRoot.endsWith("/") ? documentRoot : documentRoot + "/";
             return this;

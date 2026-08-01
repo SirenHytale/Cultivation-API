@@ -4,6 +4,7 @@ import com.hypixel.hytale.server.core.util.Config;
 import plugin.siren.Cultivation;
 import plugin.siren.Utils.Config.AlchemyConfig;
 import plugin.siren.Utils.Config.BeastConfig;
+import plugin.siren.Utils.Config.BodyTemperingConfig;
 import plugin.siren.Utils.Config.BreakthroughConfig;
 import plugin.siren.Utils.Config.CultivationConfig;
 import plugin.siren.Utils.Config.DaoConfig;
@@ -22,6 +23,7 @@ import plugin.siren.Utils.Config.SkillTreeConfig;
 import plugin.siren.Utils.Config.SpiritCoreConfig;
 import plugin.siren.Utils.Config.SpiritVeinConfig;
 import plugin.siren.Utils.Config.TechniqueConfig;
+import plugin.siren.Utils.Config.UpdateConfig;
 import plugin.siren.Utils.Config.WarConfig;
 import plugin.siren.ECS.Races.PlayerRace;
 
@@ -94,6 +96,12 @@ public final class CultivationConfigs {
     @Nonnull
     public static Config<BreakthroughConfig> breakthrough() {
         return Cultivation.getBreakthroughConfig();
+    }
+
+    /** The body-tempering ladder: its curve, how armor blunts it, and the reduction it pays back. */
+    @Nonnull
+    public static Config<BodyTemperingConfig> bodyTempering() {
+        return Cultivation.getBodyTemperingConfig();
     }
 
     /** Skill point grants, the stat caps, and respec. */
@@ -211,6 +219,16 @@ public final class CultivationConfigs {
     }
 
     /**
+     * Whether this server checks for mod updates, how often, and whether
+     * administrators are told on join. Governs every mod registered through
+     * {@link CultivationAPI#registerUpdateCheck}, not only Cultivation's own.
+     */
+    @Nonnull
+    public static Config<UpdateConfig> update() {
+        return Cultivation.getUpdateConfig();
+    }
+
+    /**
      * Writes every config file to disk. Rarely what you want - prefer saving the
      * one holder you edited - but useful after a bulk rewrite.
      */
@@ -219,6 +237,7 @@ public final class CultivationConfigs {
         spiritCores().save();
         spiritVein().save();
         breakthrough().save();
+        bodyTempering().save();
         skillTree().save();
         raceSystem().save();
         dao().save();
@@ -235,5 +254,6 @@ public final class CultivationConfigs {
         duel().save();
         partner().save();
         endlessLeveling().save();
+        update().save();
     }
 }

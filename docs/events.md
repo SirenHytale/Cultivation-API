@@ -1,6 +1,6 @@
 # Events
 
-Cultivation exposes **144 listener hooks** across eleven subsystems. This page covers
+Cultivation exposes **148 listener hooks** across twelve subsystems. This page covers
 the rules that apply to all of them. For the full catalogue — every event, its
 payload, and what each field means — see
 **[the event reference](events-reference.md)**.

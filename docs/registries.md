@@ -1,8 +1,12 @@
 # Registries
 
-Three open registries let a mod add content that behaves exactly like
-Cultivation's own. All three are called from your plugin's `setup()`, in any load
-order, and re-registering an id is a safe no-op rather than an error.
+Open registries let a mod add content that behaves exactly like Cultivation's
+own. All of them are called from your plugin's `setup()`, in any load order, and
+re-registering an id is a safe no-op rather than an error.
+
+The three content registries come first (races, techniques, Qi absorption
+modifiers); the two release registries at the end put your mod on Cultivation's
+Info page.
 
 ---
 
@@ -184,3 +188,89 @@ CultivationAPI.registerQiAbsorptionItemModifier("MyAddon_JadeCharm", 1.5f);
 
 One line, and the item is part of the meditation economy. Registering an existing
 item id overwrites its multiplier.
+
+---
+
+## Update checks
+
+Puts your mod on Cultivation's **Info page** and into its background update
+sweep, so a server behind on three mods is told **once** rather than three
+times.
+
+```java
+CultivationAPI.registerUpdateCheck(
+        "MyMod",                                          // stable id
+        "My Mod",                                         // shown to a reader
+        this.getManifest().getVersion().toString(),       // never hardcode this
+        "https://example.com/api/version/MyMod.json",     // your manifest
+        "https://example.com/download");                  // optional
+```
+
+The manifest is one static JSON object:
+
+```json
+{
+  "release": "1.2.0",
+  "ignore": ["1.1.3"]
+}
+```
+
+`release` is the version you consider current. `ignore` lists **installed**
+versions that are never notified even though they are behind it — a beta you
+would rather leave alone, or a build whose upgrade path is not ready.
+
+Administrators (`cultivation.admin`) get one combined message on join naming
+every mod that is behind. Everything fails **open**: a dead host, a timeout, a
+404, a body that is not JSON, or a manifest missing `release` all mean "no
+update", never an error a player sees.
+
+The server owner's `Update-Check-Enabled` governs every registered mod including
+yours — if they have switched checking off, your registration is kept but never
+fetched.
+
+---
+
+## Build checks
+
+Answers a narrower question: **is this jar the build that was published?**
+
+```java
+CultivationAPI.registerBuildCheck(
+        "MyMod",
+        "My Mod",
+        this.getManifest().getVersion().toString(),
+        this.getFile(),                                   // your own jar
+        "https://example.com/api/build/MyMod.json");
+```
+
+```json
+{
+  "builds": {
+    "1.2.0": ["a3f2...9c"],
+    "1.1.0": ["71bd...04", "5e90...11"]
+  }
+}
+```
+
+Cultivation hashes your jar's compiled classes and compares. An array per
+version, so a version you legitimately rebuilt can carry more than one digest.
+
+Read the verdict with `getBuildStatus("MyMod")`, which returns
+[`BuildStatus`](../api-sources/plugin/siren/API/BuildStatus.java):
+
+| Status | Means |
+| --- | --- |
+| `OFFICIAL` | The code matches a published digest. |
+| `UNOFFICIAL` | Digests exist for this exact version and this jar matches none. |
+| `UNKNOWN` | Nobody could confirm it — not checked yet, no network, or that version was never published. |
+
+**Read this before relying on it.** This is detection, not protection. Anybody
+able to rebuild your mod is equally able to delete the call, and nothing running
+on someone else's machine can do better. What it catches is the cases nobody
+bothered to strip it from: a repackaged upload, a redistributed paid addon, a
+download that arrived damaged. Treat `UNOFFICIAL` as a signal, never a lock —
+and be aware that gating features on it mostly punishes honest servers.
+
+It also fails open. A version absent from `builds` leaves an install `UNKNOWN`
+rather than condemning it, which is what makes forgetting to publish a digest
+harmless rather than an incident.

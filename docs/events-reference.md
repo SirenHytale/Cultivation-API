@@ -1,7 +1,7 @@
 # Event reference
 
 Every event Cultivation fires, grouped by the class that declares it.
-**144 listener hooks** across 11 subsystems.
+**148 listener hooks** across 12 subsystems.
 
 > Generated from `api-sources/` by `tools/gen_events_reference.py`. Do not edit
 > by hand — re-run the script instead. The prose in each entry is the javadoc on
@@ -2238,6 +2238,78 @@ A seclusion retreat is about to pay out. Cancel to forfeit it (reported to the p
 | `hours()` | `float` | read |
 | `qi()` | `float` | read |
 | `setQi(float)` | `void` | re-tune |
+
+
+---
+
+## Body tempering
+
+`plugin.siren.API.BodyTemperingEvents` — The second ladder, climbed by taking blows rather than by gathering Qi: XP earned from damage that reached the body, and the levels it buys. The pre-XP event carries a MUTABLE amount, so a listener can scale the reward rather than only allow or forbid it.
+
+**Post-events** — fired once the change is committed; cannot be cancelled.
+
+### `XpGainEvent`
+
+```java
+BodyTemperingEvents.onXpGain(event -> { /* ... */ });
+```
+
+XP was banked. `amount` is what was actually granted, after any pre-event scaling.
+
+| Accessor | Type |
+| --- | --- |
+| `ref()` | `Ref<EntityStore>` |
+| `player()` | `PlayerRef` |
+| `level()` | `int` |
+| `amount()` | `float` |
+
+### `LevelUpEvent`
+
+```java
+BodyTemperingEvents.onLevelUp(event -> { /* ... */ });
+```
+
+A body gained a level. Fires once per level when a single blow crosses several.
+
+| Accessor | Type |
+| --- | --- |
+| `ref()` | `Ref<EntityStore>` |
+| `player()` | `PlayerRef` |
+| `fromLevel()` | `int` |
+| `toLevel()` | `int` |
+
+**Pre-events** — fired before the change; `setCancelled(true)` vetoes it, and any setter below re-tunes the numbers the mod then uses.
+
+### `PreXpGainEvent`
+
+```java
+BodyTemperingEvents.onPreXpGain(event -> { /* ... */ });
+```
+
+About to bank XP for a blow. Unusually, this one is not merely cancellable - it carries a mutable amount, so a listener can scale the reward rather than being limited to allowing or forbidding it. Setting the amount to 0 or below cancels the gain outright.
+
+| Member | Type | |
+| --- | --- | --- |
+| `ref()` | `Ref<EntityStore>` | read |
+| `player()` | `PlayerRef` | read (may be null) |
+| `level()` | `int` | read |
+| `amount()` | `float` | read |
+| `setAmount(float)` | `void` | re-tune |
+
+### `PreLevelUpEvent`
+
+```java
+BodyTemperingEvents.onPreLevelUp(event -> { /* ... */ });
+```
+
+About to gain a level. Cancelling holds the body where it is; the XP stays banked.
+
+| Member | Type | |
+| --- | --- | --- |
+| `ref()` | `Ref<EntityStore>` | read |
+| `player()` | `PlayerRef` | read (may be null) |
+| `fromLevel()` | `int` | read |
+| `toLevel()` | `int` | read |
 
 
 ---

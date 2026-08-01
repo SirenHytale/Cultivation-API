@@ -14,6 +14,7 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import com.hypixel.hytale.math.util.ChunkUtil;
 import plugin.siren.Cultivation;
 import plugin.siren.ECS.Components.Chunk.SpiritVeinComponent;
+import plugin.siren.ECS.Components.BodyTemperingComponent;
 import plugin.siren.ECS.Components.CultivationComponent;
 import plugin.siren.ECS.Components.CultivationSettingsComponent;
 import plugin.siren.ECS.Components.CultivationStateComponent;
@@ -30,6 +31,7 @@ import plugin.siren.ECS.Realms.CultivationRealm;
 import plugin.siren.ECS.Realms.CultivationStage;
 import plugin.siren.ECS.Technique.Technique;
 import plugin.siren.ECS.Technique.TechniqueEffect;
+import plugin.siren.Utils.BodyTemperingManager;
 import plugin.siren.Utils.CultivationManager;
 import plugin.siren.Utils.DaoManager;
 import plugin.siren.Utils.QiAbsorptionItemRegistry;
@@ -45,6 +47,8 @@ import plugin.siren.Utils.Formation.FormationManager;
 import plugin.siren.Utils.Sect.Sect;
 import plugin.siren.Utils.Sect.SectManager;
 import plugin.siren.Utils.UI.CultivationNav;
+import plugin.siren.Utils.Update.BuildIntegrity;
+import plugin.siren.Utils.Update.UpdateChecker;
 import com.hypixel.hytale.server.core.modules.entity.component.TransformComponent;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 
@@ -750,6 +754,307 @@ public class CultivationAPI {
         };
     }
 
+    // --- Body tempering ---
+
+    /**
+     * @return this cultivator's body-tempering level, or
+     * {@link BodyTemperingComponent#MIN_LEVEL} if they have none yet (a player
+     * whose join hook has not run).
+     *
+     * @see BodyTemperingEvents for hooking the ladder itself.
+     */
+    public static int getBodyTemperingLevel(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref){
+        BodyTemperingComponent component = accessor.getComponent(ref, BodyTemperingComponent.getComponentType());
+        return component == null ? BodyTemperingComponent.MIN_LEVEL : component.getLevel();
+    }
+
+    /** @return the ceiling a body can temper to, from the config. */
+    public static int getMaxBodyTemperingLevel(){
+        return BodyTemperingManager.getMaxLevel();
+    }
+
+    /** @return how far through the current level this body is, 0..1. Always 1 at the ceiling. */
+    public static float getBodyTemperingProgress(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref){
+        BodyTemperingComponent component = accessor.getComponent(ref, BodyTemperingComponent.getComponentType());
+        return component == null ? 0f : BodyTemperingManager.getLevelProgress(component);
+    }
+
+    /**
+     * How armored this entity is right now, 0 for bare skin and 1 for the most
+     * protective set the server's config describes.
+     *
+     * <p>Read live off the worn items, scoring a modded piece on the same terms
+     * as a vanilla one - so an addon wanting "is this player wearing anything
+     * serious" can ask this rather than enumerating armor itself.</p>
+     */
+    public static float getArmorProtectionScore(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref){
+        return BodyTemperingManager.getProtectionScore(accessor, ref);
+    }
+
+    /**
+     * @return the fraction of incoming damage this cultivator's tempered body
+     * currently turns aside, 0..1 - scaled by both how far up the ladder they
+     * are and what they are wearing at this instant.
+     *
+     * <p>0 when body tempering is switched off. Note this is what Cultivation
+     * <em>would</em> apply; with the Endless Leveling protection handoff on, EL
+     * applies it instead and this still reports the same figure.</p>
+     */
+    public static float getBodyTemperingDamageReduction(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref){
+        BodyTemperingComponent component = accessor.getComponent(ref, BodyTemperingComponent.getComponentType());
+        if(component == null){
+            return 0f;
+        }
+
+        return BodyTemperingManager.getDamageReduction(component, BodyTemperingManager.getProtectionScore(accessor, ref));
+    }
+
+    /**
+     * Grants body-tempering XP directly, levelling the body up as far as it
+     * goes and firing the same events a real blow would.
+     *
+     * <p>For an addon with its own idea of what tempers a body - a training
+     * dummy, a hot spring, a technique. The armor scaling is NOT applied here:
+     * this is the raw amount to bank, so the caller decides whether their source
+     * cares about armor.</p>
+     *
+     * @return how many levels were gained, 0 if none.
+     */
+    public static int addBodyTemperingXp(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref,
+                                         @Nullable PlayerRef playerRef, float amount){
+        BodyTemperingComponent component = accessor.getComponent(ref, BodyTemperingComponent.getComponentType());
+        if(component == null){
+            return 0;
+        }
+
+        return BodyTemperingManager.addXp(accessor, ref, component, playerRef, amount);
+    }
+
+    // --- Update checking ---
+
+    /**
+     * Puts your mod into Cultivation's update check: it fetches the manifest you
+     * name on a background thread, and when the installed version is behind the
+     * one published there, tells server administrators as they join.
+     *
+     * <p>Three lines in your {@code setup()} is the whole integration:</p>
+     *
+     * <pre>{@code CultivationAPI.registerUpdateCheck("SoulRings", "Soul Rings",
+     *         this.getManifest().getVersion().toString(),
+     *         "https://xianxia.dev/api/get/version/SoulRings.json",
+     *         "https://xianxia.dev/");}</pre>
+     *
+     * <p>Your mod gets a line in the same message Cultivation's own update would
+     * appear in, rather than a message of its own - a server two versions behind
+     * on three mods is told once. See {@link UpdateCheck} for the manifest format
+     * and for what happens when a fetch fails (nothing anyone sees).</p>
+     *
+     * <p>Load order does not matter. Registering before Cultivation has started
+     * its sweep simply joins that sweep; registering after it has run triggers a
+     * fetch for your mod alone rather than waiting out an interval. Registering
+     * the same id twice replaces the first, so this is safe across a reload of
+     * your plugin.</p>
+     *
+     * <p>The server owner's {@code Update-Check-Enabled} switch governs every
+     * registered mod, yours included - if they have turned update checking off,
+     * this registration is kept but never fetched.</p>
+     *
+     * @param modId          a stable id unique across registered mods; your plugin's name.
+     * @param displayName    how the mod is named to a reader - plain text, not a language key.
+     * @param currentVersion the installed version; use {@code getManifest().getVersion().toString()}
+     *                       so it cannot drift from your manifest.json.
+     * @param manifestUrl    the JSON manifest naming your current release.
+     * @param downloadUrl    where to get the new version, or null to name no destination.
+     * @return the registration, should you want to read what the last check found.
+     */
+    @Nonnull
+    public static UpdateCheck registerUpdateCheck(@Nonnull String modId, @Nonnull String displayName,
+                                                  @Nonnull String currentVersion, @Nonnull String manifestUrl,
+                                                  @Nullable String downloadUrl){
+        return UpdateChecker.register(modId, displayName, currentVersion, manifestUrl, downloadUrl);
+    }
+
+    /** As above, naming no download destination - the message then states the versions alone. */
+    @Nonnull
+    public static UpdateCheck registerUpdateCheck(@Nonnull String modId, @Nonnull String displayName,
+                                                  @Nonnull String currentVersion, @Nonnull String manifestUrl){
+        return UpdateChecker.register(modId, displayName, currentVersion, manifestUrl, null);
+    }
+
+    /** Removes a previously registered mod from the sweep - for a plugin unloading cleanly. */
+    public static void unregisterUpdateCheck(@Nonnull String modId){
+        UpdateChecker.unregister(modId);
+    }
+
+    /**
+     * @return every registered mod - Cultivation's own registration included,
+     * since that is an ordinary one too - in registration order. A fresh list,
+     * safe to hold; the results on each entry stay live.
+     */
+    @Nonnull
+    public static List<UpdateCheck> getUpdateChecks(){
+        return UpdateChecker.getChecks();
+    }
+
+    /**
+     * @return only those currently known to be behind and not suppressed by
+     * their own manifest's {@code ignore} list. Empty until the first sweep has
+     * landed, which is a few seconds after startup.
+     */
+    @Nonnull
+    public static List<UpdateCheck> getAvailableUpdates(){
+        return UpdateChecker.getAvailableUpdates();
+    }
+
+    // --- Build verification ---
+
+    /**
+     * Puts your mod into Cultivation's build check: it hashes your jar's
+     * compiled classes and compares the result against the digests you have
+     * published as official, so a jar that was decompiled and rebuilt can be
+     * told from the one you shipped.
+     *
+     * <pre>{@code CultivationAPI.registerBuildCheck("SoulRings", "Soul Rings",
+     *         this.getManifest().getVersion().toString(),
+     *         this.getFile(),
+     *         "https://xianxia.dev/api/get/build/SoulRings.json");}</pre>
+     *
+     * <p>Rides the same background thread and the same
+     * {@code Update-Check-Enabled} switch as {@link #registerUpdateCheck}. The
+     * verdict goes to the console and to {@link #getBuildStatus(String)}; nothing
+     * in the game changes and no player is told.</p>
+     *
+     * <h2>Read this before relying on it</h2>
+     *
+     * <p>This is detection, not protection. Anybody able to rebuild your mod is
+     * equally able to delete this call, and nothing running on someone else's
+     * machine can do better. What it catches is the cases nobody bothered to
+     * strip it from - a repackaged upload, a redistributed paid addon, a damaged
+     * download. Treat {@link BuildStatus#UNOFFICIAL} as a signal, never a lock,
+     * and be aware that gating features on it mostly punishes honest servers.</p>
+     *
+     * <p>It also fails open: an unreachable endpoint, an unreadable jar, or a
+     * version you never published a digest for all leave the verdict
+     * {@link BuildStatus#UNKNOWN} rather than condemning the build. See
+     * {@link BuildCheck} for the manifest format.</p>
+     *
+     * @param modId       a stable id unique across registered mods; your plugin's name.
+     * @param displayName how the mod is named in the log line - plain text.
+     * @param version     the installed version, which is the key looked up in the published map.
+     * @param jarPath     your plugin's own jar - {@code this.getFile()} on a JavaPlugin.
+     * @param manifestUrl the JSON file listing the digests you published as official.
+     * @return the registration, should you want to read the verdict yourself.
+     */
+    @Nonnull
+    public static BuildCheck registerBuildCheck(@Nonnull String modId, @Nonnull String displayName,
+                                                @Nonnull String version, @Nonnull java.nio.file.Path jarPath,
+                                                @Nonnull String manifestUrl){
+        return BuildIntegrity.register(modId, displayName, version, jarPath, manifestUrl);
+    }
+
+    /** Removes a previously registered mod from the build check - for a plugin unloading cleanly. */
+    public static void unregisterBuildCheck(@Nonnull String modId){
+        BuildIntegrity.unregister(modId);
+    }
+
+    /** @return every registered mod's build check, in registration order. A fresh list, safe to hold. */
+    @Nonnull
+    public static List<BuildCheck> getBuildChecks(){
+        return BuildIntegrity.getChecks();
+    }
+
+    /**
+     * @return what the build check concluded about one registered mod, or
+     * {@link BuildStatus#UNKNOWN} if nothing is registered under that id.
+     */
+    @Nonnull
+    public static BuildStatus getBuildStatus(@Nonnull String modId){
+        BuildCheck check = BuildIntegrity.getCheck(modId);
+        return check == null ? BuildStatus.UNKNOWN : check.getStatus();
+    }
+
+    /** @return what the build check concluded about Cultivation itself. */
+    @Nonnull
+    public static BuildStatus getBuildStatus(){
+        return getBuildStatus(Cultivation.UPDATE_MOD_ID);
+    }
+
+    /**
+     * The same question as {@link #getBuildStatus()} reduced to a boolean, for
+     * code that only wants a yes or no.
+     *
+     * <p><strong>False only on a positive mismatch.</strong> A build nobody
+     * could reach the network to check is reported as official, because the
+     * alternative treats every offline server as forged. If you need to tell
+     * "verified official" from "could not tell", ask
+     * {@link #getBuildStatus()} instead - this method deliberately cannot.</p>
+     *
+     * @return false only when Cultivation's own jar is known to be unofficial.
+     */
+    public static boolean isOfficialBuild(){
+        return getBuildStatus() != BuildStatus.UNOFFICIAL;
+    }
+
+    /**
+     * Wraps a section so it appears on the admin page only, not on the
+     * Cultivation settings menu.
+     *
+     * <pre>{@code CultivationAPI.registerAdminConfigSection(
+     *         CultivationAPI.adminPageOnly(mySection));}</pre>
+     *
+     * <p>For a mod contributing several sections of real balance numbers: the
+     * settings menu is meant to surface the handful an addon added, and three
+     * config files' worth turn it into a second copy of the admin page.</p>
+     */
+    @Nonnull
+    public static AdminConfigSection adminPageOnly(@Nonnull AdminConfigSection section){
+        return new AdminConfigSection(){
+            @Nonnull
+            @Override
+            public String getKey(){
+                return section.getKey();
+            }
+
+            @Nonnull
+            @Override
+            public Message getLabel(){
+                return section.getLabel();
+            }
+
+            @Nonnull
+            @Override
+            public Message getHint(){
+                return section.getHint();
+            }
+
+            @Nonnull
+            @Override
+            public List<AdminConfigField> getFields(){
+                return section.getFields();
+            }
+
+            @Override
+            public int getSortOrder(){
+                return section.getSortOrder();
+            }
+
+            @Override
+            public boolean isVisible(){
+                return section.isVisible();
+            }
+
+            @Override
+            public boolean isShownInSettings(){
+                return false;
+            }
+
+            @Override
+            public void save(){
+                section.save();
+            }
+        };
+    }
+
     // --- Contributing a page to the menus ---
 
     /**
@@ -1062,7 +1367,7 @@ public class CultivationAPI {
      * wearing a look that no longer exists.</p>
      */
     @Nullable
-    public static CultivationPalette getPalette(@Nonnull Store<EntityStore> store, @Nonnull Ref<EntityStore> ref){
+    public static CultivationPalette getPalette(@Nonnull ComponentAccessor<EntityStore> store, @Nonnull Ref<EntityStore> ref){
         CultivationSettingsComponent settings = store.getComponent(ref, CultivationSettingsComponent.getComponentType());
         if(settings == null){
             return null;

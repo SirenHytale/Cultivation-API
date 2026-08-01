@@ -5,7 +5,7 @@ progression mod for Hytale servers — realms and Qi, daos, sects, techniques, s
 beasts, formations, cave abodes, duels and alchemy.
 
 This repository is for **mod developers**. It contains the API's Java sources,
-a complete reference for all **144 events**, and worked examples. Everything here
+a complete reference for all **148 events**, and worked examples. Everything here
 is the real code the mod ships — nothing is a summary written after the fact.
 
 | | |
@@ -43,6 +43,9 @@ internals to change how it behaves. Every one of these is a supported hook:
 | **Replace the entire realm/Qi ladder** with my own progression | `ProgressionProvider` | [Progression provider](docs/progression-provider.md) |
 | Re-word the mod into a different setting | `CultivationTheme` | [Theming](docs/theming.md) |
 | Re-**color** the menus, HUD and skill tree | `registerPalette` | [Palettes](docs/palettes.md) |
+| Put my mod on the Info page, and tell admins when it is out of date | `registerUpdateCheck` | [Registries](docs/registries.md) |
+| Tell whether my jar is the build that was published | `registerBuildCheck` | [Registries](docs/registries.md) |
+| React to a cultivator's body tempering, or scale the XP it earns | `BodyTemperingEvents` | [Event reference](docs/events-reference.md) |
 
 The last three are the big ones — and the last two are easy to confuse, so:
 `CultivationTheme` changes the **words**, `CultivationPalette` changes the
@@ -150,7 +153,7 @@ float qi = CultivationAPI.getQi(accessor, ref);
 | **[Driving progression](docs/driving-progression.md)** | Granting Qi, ranking up, meditation, spirit veins, and the rest of the world |
 | **[Config access](docs/config-access.md)** | Reading and writing Cultivation's own settings, and when not to |
 | **[Events](docs/events.md)** | Pre vs post, cancelling, re-tuning, threading, error handling |
-| **[Event reference](docs/events-reference.md)** | All 144 listeners with their payloads — generated from source |
+| **[Event reference](docs/events-reference.md)** | All 148 listeners with their payloads — generated from source |
 | **[Registries](docs/registries.md)** | Races, techniques, Qi-absorption items |
 | **[Profiles](docs/profiles.md)** | Keeping your own progression in step with a player's separate saves |
 | **[UI integration](docs/ui.md)** | Menu pages, Codex articles, admin config sections |

@@ -52,6 +52,24 @@ public interface AdminConfigSection {
     List<AdminConfigField> getFields();
 
     /**
+     * Whether this section also appears on the Cultivation settings menu, which
+     * shows contributed sections so an admin meets them without opening the
+     * admin page.
+     *
+     * <p>Return false to keep it to the admin page alone. Worth doing for a mod
+     * contributing SEVERAL sections of genuine balance numbers: the settings
+     * menu exists to surface the handful an addon added, and a mod that adds
+     * three config files' worth turns that convenience into a second, longer
+     * copy of a page that already exists.</p>
+     *
+     * <p>Defaults to true, so a section written before this existed keeps
+     * appearing exactly where it did.</p>
+     */
+    default boolean isShownInSettings() {
+        return true;
+    }
+
+    /**
      * Where this section sits on the rail, lowest first. Cultivation's own nine
      * occupy {@link #SORT_BUILTIN_FIRST} upward in steps of 100, so a value
      * between two of them slots a section in among them rather than after them.

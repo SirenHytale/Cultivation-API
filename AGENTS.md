@@ -33,7 +33,7 @@ cover it, because nearly every mechanic is re-tunable there.
 1. **`docs/pitfalls.md`** — the mistakes that crash servers. Read this first.
 2. `docs/getting-started.md` — dependency wiring and `setup()`.
 3. The guide for whatever the user is doing (see `README.md`'s table).
-4. `docs/events-reference.md` — all 144 listeners with their payloads. Generated
+4. `docs/events-reference.md` — all 148 listeners with their payloads. Generated
    from source, so it is accurate; it is long, so search it rather than reading
    it end to end.
 
