@@ -3,6 +3,7 @@ package plugin.siren.API;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
+import plugin.siren.ECS.Beast.BeastArt;
 import plugin.siren.ECS.Components.SpiritBeastComponent;
 import plugin.siren.ECS.Realms.CultivationRealm;
 import plugin.siren.ECS.Realms.CultivationStage;
@@ -60,6 +61,19 @@ public final class BeastEvents {
     /** A companion advanced a stage (or rolled into the next realm). Fires once per stage. */
     public record BeastAdvanceEvent(@Nonnull Ref<EntityStore> owner, @Nullable PlayerRef player,
                                     @Nonnull CultivationRealm realm, @Nonnull CultivationStage stage) {}
+
+    /** A companion performed one of its arts. */
+    public record BeastArtEvent(@Nonnull Ref<EntityStore> owner, @Nullable PlayerRef player,
+                                @Nonnull SpiritBeastComponent beast, @Nonnull BeastArt art, boolean commanded) {}
+
+    /** A companion's evolution ritual resolved - {@code succeeded} says which way, and {@code to} is null on failure. */
+    public record BeastEvolveEvent(@Nonnull Ref<EntityStore> owner, @Nullable PlayerRef player,
+                                   @Nonnull SpiritBeastComponent beast, @Nonnull BeastSpecies from,
+                                   @Nullable BeastSpecies to, boolean succeeded) {}
+
+    /** A companion was summoned in its rideable body. */
+    public record BeastMountEvent(@Nonnull Ref<EntityStore> owner, @Nullable PlayerRef player,
+                                  @Nonnull SpiritBeastComponent beast, @Nonnull BeastSpecies species) {}
 
     // --- Pre-events ---
 
@@ -185,6 +199,90 @@ public final class BeastEvents {
         @Nonnull public CultivationStage fromStage(){ return this.fromStage; }
     }
 
+    /**
+     * A companion is about to perform an art. Cancel to stop it - the cooldown is
+     * only stamped once the effect has actually run, so a vetoed art costs the
+     * beast nothing and it will try again on its next opening.
+     */
+    public static final class PreBeastArtEvent extends CancellableEvent {
+        private final Ref<EntityStore> owner;
+        private final PlayerRef player;
+        private final SpiritBeastComponent beast;
+        private final BeastArt art;
+        private final boolean commanded;
+
+        public PreBeastArtEvent(@Nonnull Ref<EntityStore> owner, @Nullable PlayerRef player,
+                                @Nonnull SpiritBeastComponent beast, @Nonnull BeastArt art, boolean commanded){
+            this.owner = owner;
+            this.player = player;
+            this.beast = beast;
+            this.art = art;
+            this.commanded = commanded;
+        }
+
+        @Nonnull public Ref<EntityStore> owner(){ return this.owner; }
+        @Nullable public PlayerRef player(){ return this.player; }
+        @Nonnull public SpiritBeastComponent beast(){ return this.beast; }
+        @Nonnull public BeastArt art(){ return this.art; }
+        /** True when the owner named this art, false when the beast chose it itself. */
+        public boolean commanded(){ return this.commanded; }
+    }
+
+    /**
+     * A companion is about to be put through the evolution ritual. Cancel to
+     * refuse it - the Qi has NOT been taken at this point, so a veto here costs
+     * the cultivator nothing.
+     */
+    public static final class PreBeastEvolveEvent extends CancellableEvent {
+        private final Ref<EntityStore> owner;
+        private final PlayerRef player;
+        private final SpiritBeastComponent beast;
+        private final BeastSpecies from;
+        private final BeastSpecies to;
+        private float successChance;
+
+        public PreBeastEvolveEvent(@Nonnull Ref<EntityStore> owner, @Nullable PlayerRef player,
+                                   @Nonnull SpiritBeastComponent beast, @Nonnull BeastSpecies from,
+                                   @Nonnull BeastSpecies to, float successChance){
+            this.owner = owner;
+            this.player = player;
+            this.beast = beast;
+            this.from = from;
+            this.to = to;
+            this.successChance = successChance;
+        }
+
+        @Nonnull public Ref<EntityStore> owner(){ return this.owner; }
+        @Nullable public PlayerRef player(){ return this.player; }
+        @Nonnull public SpiritBeastComponent beast(){ return this.beast; }
+        @Nonnull public BeastSpecies from(){ return this.from; }
+        @Nonnull public BeastSpecies to(){ return this.to; }
+        /** The odds the ritual takes. Mutable, so an addon can make its own creature safer or wilder to evolve. */
+        public float successChance(){ return this.successChance; }
+        public void setSuccessChance(float successChance){ this.successChance = successChance; }
+    }
+
+    /** A companion is about to be summoned in its rideable body. Cancel to refuse the mount. */
+    public static final class PreBeastMountEvent extends CancellableEvent {
+        private final Ref<EntityStore> owner;
+        private final PlayerRef player;
+        private final SpiritBeastComponent beast;
+        private final BeastSpecies species;
+
+        public PreBeastMountEvent(@Nonnull Ref<EntityStore> owner, @Nullable PlayerRef player,
+                                  @Nonnull SpiritBeastComponent beast, @Nonnull BeastSpecies species){
+            this.owner = owner;
+            this.player = player;
+            this.beast = beast;
+            this.species = species;
+        }
+
+        @Nonnull public Ref<EntityStore> owner(){ return this.owner; }
+        @Nullable public PlayerRef player(){ return this.player; }
+        @Nonnull public SpiritBeastComponent beast(){ return this.beast; }
+        @Nonnull public BeastSpecies species(){ return this.species; }
+    }
+
     // --- Listener registration ---
 
     private static final List<Consumer<BeastTameAttemptEvent>> TAME = EventBus.newListenerList();
@@ -197,6 +295,12 @@ public final class BeastEvents {
     private static final List<Consumer<PreBeastDismissEvent>> PRE_DISMISS = EventBus.newListenerList();
     private static final List<Consumer<BeastXpGainEvent>> XP_GAIN = EventBus.newListenerList();
     private static final List<Consumer<PreBeastXpGainEvent>> PRE_XP_GAIN = EventBus.newListenerList();
+    private static final List<Consumer<BeastArtEvent>> ART = EventBus.newListenerList();
+    private static final List<Consumer<PreBeastArtEvent>> PRE_ART = EventBus.newListenerList();
+    private static final List<Consumer<BeastEvolveEvent>> EVOLVE = EventBus.newListenerList();
+    private static final List<Consumer<PreBeastEvolveEvent>> PRE_EVOLVE = EventBus.newListenerList();
+    private static final List<Consumer<BeastMountEvent>> MOUNT = EventBus.newListenerList();
+    private static final List<Consumer<PreBeastMountEvent>> PRE_MOUNT = EventBus.newListenerList();
     private static final List<Consumer<BeastAdvanceEvent>> ADVANCE = EventBus.newListenerList();
     private static final List<Consumer<PreBeastAdvanceEvent>> PRE_ADVANCE = EventBus.newListenerList();
 
@@ -212,6 +316,12 @@ public final class BeastEvents {
     public static void onPreBeastXpGain(@Nonnull Consumer<PreBeastXpGainEvent> listener){ PRE_XP_GAIN.add(listener); }
     public static void onBeastAdvance(@Nonnull Consumer<BeastAdvanceEvent> listener){ ADVANCE.add(listener); }
     public static void onPreBeastAdvance(@Nonnull Consumer<PreBeastAdvanceEvent> listener){ PRE_ADVANCE.add(listener); }
+    public static void onBeastArt(@Nonnull Consumer<BeastArtEvent> listener){ ART.add(listener); }
+    public static void onPreBeastArt(@Nonnull Consumer<PreBeastArtEvent> listener){ PRE_ART.add(listener); }
+    public static void onBeastEvolve(@Nonnull Consumer<BeastEvolveEvent> listener){ EVOLVE.add(listener); }
+    public static void onPreBeastEvolve(@Nonnull Consumer<PreBeastEvolveEvent> listener){ PRE_EVOLVE.add(listener); }
+    public static void onBeastMount(@Nonnull Consumer<BeastMountEvent> listener){ MOUNT.add(listener); }
+    public static void onPreBeastMount(@Nonnull Consumer<PreBeastMountEvent> listener){ PRE_MOUNT.add(listener); }
 
     // --- Internal dispatch (called by this mod's own systems; not API) ---
 
@@ -227,4 +337,10 @@ public final class BeastEvents {
     public static boolean firePreBeastXpGain(@Nonnull PreBeastXpGainEvent event){ return EventBus.fire(PRE_XP_GAIN, event, "PreBeastXpGainEvent"); }
     public static void fireBeastAdvance(@Nonnull BeastAdvanceEvent event){ EventBus.dispatch(ADVANCE, event, "BeastAdvanceEvent"); }
     public static boolean firePreBeastAdvance(@Nonnull PreBeastAdvanceEvent event){ return EventBus.fire(PRE_ADVANCE, event, "PreBeastAdvanceEvent"); }
+    public static void fireBeastArt(@Nonnull BeastArtEvent event){ EventBus.dispatch(ART, event, "BeastArtEvent"); }
+    public static boolean firePreBeastArt(@Nonnull PreBeastArtEvent event){ return EventBus.fire(PRE_ART, event, "PreBeastArtEvent"); }
+    public static void fireBeastEvolve(@Nonnull BeastEvolveEvent event){ EventBus.dispatch(EVOLVE, event, "BeastEvolveEvent"); }
+    public static boolean firePreBeastEvolve(@Nonnull PreBeastEvolveEvent event){ return EventBus.fire(PRE_EVOLVE, event, "PreBeastEvolveEvent"); }
+    public static void fireBeastMount(@Nonnull BeastMountEvent event){ EventBus.dispatch(MOUNT, event, "BeastMountEvent"); }
+    public static boolean firePreBeastMount(@Nonnull PreBeastMountEvent event){ return EventBus.fire(PRE_MOUNT, event, "PreBeastMountEvent"); }
 }

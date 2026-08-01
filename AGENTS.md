@@ -33,7 +33,7 @@ cover it, because nearly every mechanic is re-tunable there.
 1. **`docs/pitfalls.md`** — the mistakes that crash servers. Read this first.
 2. `docs/getting-started.md` — dependency wiring and `setup()`.
 3. The guide for whatever the user is doing (see `README.md`'s table).
-4. `docs/events-reference.md` — all 148 listeners with their payloads. Generated
+4. `docs/events-reference.md` — all 156 listeners with their payloads. Generated
    from source, so it is accurate; it is long, so search it rather than reading
    it end to end.
 
@@ -252,6 +252,13 @@ TechniqueRule newTechniqueRule(String id, boolean enabled, boolean daoSpecific,
 boolean performTechnique(ComponentAccessor<EntityStore>, Ref<EntityStore>, PlayerRef, Technique)
 void    registerQiAbsorptionItemModifier(String itemId, float multiplier)
 
+BeastArt registerBeastArt(String id, String displayName, @Nullable String nameKey,
+                          @Nullable String descriptionKey, BeastArtRule defaultRule,
+                          BeastArtEffect effect)          // then list the id in the SPECIES' Arts
+boolean  registerMasteryStage(MasteryStageRule)           // false = ladder already at 5 rungs
+void     registerSectBuildingType(SectBuildingType)       // last ctor arg = does its ground carry the sect Dao
+void     registerLifeBoundTrait(LifeBoundTrait)           // enters the weighted roll immediately
+
 void registerMenuPage(CultivationMenuPage)          // + unregisterMenuPage(String)
 void registerCodexEntry(CodexEntry)                 // + unregisterCodexEntry(String)
 void registerCodexCategory(CodexCategory)           // + unregisterCodexCategory(String)
@@ -294,7 +301,8 @@ void buildMenuNav(UICommandBuilder, UIEventBuilder, PlayerRef, String pageKey)  
 **Events** — one class per subsystem, all in `plugin.siren.API`:
 
 `CultivationEvents`, `DaoEvents`, `TechniqueEvents`, `ItemEvents`, `BeastEvents`,
-`SectEvents`, `WarEvents`, `DuelEvents`, `FormationEvents`, `DwellingEvents`.
+`SectEvents`, `WarEvents`, `DuelEvents`, `FormationEvents`, `DwellingEvents`,
+`BodyTemperingEvents`, `ProfileEvents`.
 
 Every listener is `ClassName.onSomething(Consumer<SomethingEvent>)`, and nearly
 every mechanic has both `onX` (post, notification) and `onPreX` (pre, cancellable

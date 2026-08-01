@@ -192,3 +192,53 @@ wants its own passive regen to respect the same ground.
 `getYinPercent` returns `50` (perfectly balanced) rather than 0 when a cultivator
 has no Dao component, since 0 would mean "wholly Yang" and that is a claim about
 them you do not have.
+
+## Practice, and what practice advances
+
+Three subsystems progress by *doing the thing* rather than by banking Qi, and each
+has one call that puts an addon's own activity on the same footing as the mod's:
+
+```java
+CultivationAPI.addTechniqueMasteryXp(accessor, ref, playerRef, technique);
+CultivationAPI.performBeastArt(accessor, ref, art, playerRef);
+int levelsGained = CultivationAPI.addSectProgressXp(memberUuid, breakthrough);
+```
+
+`addTechniqueMasteryXp` banks one successful use of an art, and promotes it if
+that use was the last requirement outstanding — announcing the promotion to the
+player exactly as the mod's own path does. Use it when your addon fires a
+technique through some route of its own, so a player practising your way climbs
+the ladder like everyone else.
+
+Mastery is worth understanding before you tune anything through
+`PreTechniquePerformEvent`, because it moved where an art's strength comes from.
+A technique's damage is no longer a function of realm alone: it passes through
+its own mastery multiplier, and two cultivators of identical realm can be far
+apart on the same art. If you are computing an art's output outside the mod, ask
+`getTechniqueMasteryMultiplier` and apply it — otherwise you will be describing a
+weaker technique than the player actually has.
+
+`addSectProgressXp` credits one member's advancement to their sect, which is
+shared: it is how a sect levels, and levelling is what raises how many buildings
+it may hold. Pass `breakthrough = true` for a realm breakthrough and `false` for a
+lesser advancement; the return value is how many sect levels that credit
+triggered, usually 0.
+
+## Ground with an element of its own
+
+Two things now decide what element the ground presses a meditating cultivator
+toward, and both can be read directly:
+
+```java
+DaoElement terrain = CultivationAPI.getTerrainElement(biomeName);
+DaoElement ground  = CultivationAPI.getGroundDao(world, chunkX, chunkZ);
+```
+
+Terrain affinity works the way weather already did — meditating in a place drifts
+your element toward it over time. Sect ground is stronger and deliberate: inside a
+sect's holdings, Qi absorbed comes mainly as the sect's chosen Dao.
+
+`getGroundDao` returning `null` is not a failure. It is the answer for unclaimed
+ground, for a sect that has named no Dao, and for a sect building whose Dao switch
+was turned off — that last case being how a sect takes in a member who walks a
+different element without bending them toward its own.

@@ -182,6 +182,36 @@ public final class TechniqueEvents {
         public void setMagnitude(float magnitude){ this.magnitude = magnitude; }
     }
 
+    /** An art's mastery rose a rung. */
+    public record TechniqueMasteryAdvanceEvent(@Nonnull Ref<EntityStore> ref, @Nullable PlayerRef player,
+                                               @Nonnull String techniqueId, int stage) {}
+
+    /**
+     * An art is about to rise a rung. Cancel to hold it where it is - the XP and
+     * the studied manuals stay banked, so it simply tries again the next time
+     * anything about it changes.
+     */
+    public static final class PreTechniqueMasteryAdvanceEvent extends CancellableEvent {
+        private final Ref<EntityStore> ref;
+        private final PlayerRef player;
+        private final String techniqueId;
+        private final int stage;
+
+        public PreTechniqueMasteryAdvanceEvent(@Nonnull Ref<EntityStore> ref, @Nullable PlayerRef player,
+                                               @Nonnull String techniqueId, int stage){
+            this.ref = ref;
+            this.player = player;
+            this.techniqueId = techniqueId;
+            this.stage = stage;
+        }
+
+        @Nonnull public Ref<EntityStore> ref(){ return this.ref; }
+        @Nullable public PlayerRef player(){ return this.player; }
+        @Nonnull public String techniqueId(){ return this.techniqueId; }
+        /** The rung it is about to reach, 0-based. */
+        public int stage(){ return this.stage; }
+    }
+
     // --- Listener registration ---
 
     private static final List<Consumer<TechniquePerformEvent>> PERFORM = EventBus.newListenerList();
@@ -195,6 +225,8 @@ public final class TechniqueEvents {
     private static final List<Consumer<TechniqueBuffApplyEvent>> BUFF_APPLY = EventBus.newListenerList();
     private static final List<Consumer<PreTechniqueBuffApplyEvent>> PRE_BUFF_APPLY = EventBus.newListenerList();
     private static final List<Consumer<TechniqueBuffExpireEvent>> BUFF_EXPIRE = EventBus.newListenerList();
+    private static final List<Consumer<TechniqueMasteryAdvanceEvent>> MASTERY_ADVANCE = EventBus.newListenerList();
+    private static final List<Consumer<PreTechniqueMasteryAdvanceEvent>> PRE_MASTERY_ADVANCE = EventBus.newListenerList();
 
     public static void onTechniquePerform(@Nonnull Consumer<TechniquePerformEvent> listener){ PERFORM.add(listener); }
     public static void onPreTechniquePerform(@Nonnull Consumer<PreTechniquePerformEvent> listener){ PRE_PERFORM.add(listener); }
@@ -221,4 +253,10 @@ public final class TechniqueEvents {
     public static void fireTechniqueBuffApply(@Nonnull TechniqueBuffApplyEvent event){ EventBus.dispatch(BUFF_APPLY, event, "TechniqueBuffApplyEvent"); }
     public static boolean firePreTechniqueBuffApply(@Nonnull PreTechniqueBuffApplyEvent event){ return EventBus.fire(PRE_BUFF_APPLY, event, "PreTechniqueBuffApplyEvent"); }
     public static void fireTechniqueBuffExpire(@Nonnull TechniqueBuffExpireEvent event){ EventBus.dispatch(BUFF_EXPIRE, event, "TechniqueBuffExpireEvent"); }
+
+    public static void onTechniqueMasteryAdvance(@Nonnull Consumer<TechniqueMasteryAdvanceEvent> listener){ MASTERY_ADVANCE.add(listener); }
+    public static void onPreTechniqueMasteryAdvance(@Nonnull Consumer<PreTechniqueMasteryAdvanceEvent> listener){ PRE_MASTERY_ADVANCE.add(listener); }
+
+    public static void fireTechniqueMasteryAdvance(@Nonnull TechniqueMasteryAdvanceEvent event){ EventBus.dispatch(MASTERY_ADVANCE, event, "TechniqueMasteryAdvanceEvent"); }
+    public static boolean firePreTechniqueMasteryAdvance(@Nonnull PreTechniqueMasteryAdvanceEvent event){ return EventBus.fire(PRE_MASTERY_ADVANCE, event, "PreTechniqueMasteryAdvanceEvent"); }
 }

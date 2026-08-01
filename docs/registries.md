@@ -274,3 +274,111 @@ and be aware that gating features on it mostly punishes honest servers.
 It also fails open. A version absent from `builds` leaves an install `UNKNOWN`
 rather than condemning it, which is what makes forgetting to publish a digest
 harmless rather than an incident.
+
+## Beast arts
+
+A beast art is the companion-side twin of a technique: the thing a bound spirit
+beast *does* in a fight. The registry is open for the same reason the technique
+one is — a Java enum cannot gain constants at runtime.
+
+```java
+BeastArt frostFang = CultivationAPI.registerBeastArt(
+        "mymod:frost_fang",
+        "Frost Fang",
+        "mymod.beast.art.frost_fang.name",         // or null for raw display text
+        "mymod.beast.art.frost_fang.description",
+        new BeastArtRule("mymod:frost_fang", true, "FOUNDATION_ESTABLISHMENT", 12f, "Ice",
+                new TechniqueParam[]{
+                        new TechniqueParam("Radius", 4f),
+                        new TechniqueParam("BaseDamage", 8f),
+                        new TechniqueParam("DamagePerLevel", 0.7f)
+                }),
+        context -> {
+            // context carries BOTH ends of the bond: getBeastRef() is where the
+            // art comes from, getOwnerRef() is who it serves.
+            context.sendMessage(Text.of("mymod.beast.art.frost_fang.playerMsg.hit"));
+        });
+```
+
+**Registering an art gives it to nobody.** An art belongs to a *species*: its id
+has to appear in that species' `Arts` list in `BeastConfig.json` before any beast
+can grow into it. That is deliberate — it lets you ship arts and leave the server
+owner to decide which creatures learn them.
+
+Each art also has its own `UnlockRealm`, and that realm is the **beast's**, not
+its owner's. A cultivator cannot lend their companion their own cultivation.
+
+Reading and driving them:
+
+```java
+List<BeastArt> known = CultivationAPI.getKnownBeastArts(accessor, ref);
+BeastArtRule rule    = CultivationAPI.getBeastArtRule(frostFang);   // config entry, else your default
+boolean fired        = CultivationAPI.performBeastArt(accessor, ref, frostFang, playerRef);
+```
+
+`performBeastArt` runs every gate the mod's own callers run — feature enabled,
+beast summoned, art known and off cooldown, no addon veto — so you never have to
+reproduce them.
+
+## Sect building types
+
+Sect buildings are the holdings a sect raises beyond its hall. Each carries one
+switch that matters more than the rest: whether the sect's Dao presses on
+cultivators inside it.
+
+```java
+CultivationAPI.registerSectBuildingType(
+        new SectBuildingType("mymod:frost_terrace", 1.12f, 2, false));
+//                            id                   medMult  level  daoActiveByDefault
+```
+
+The last argument is the one to think about. `false` makes it **neutral ground** —
+a disciple of any element can cultivate there without being turned toward the
+sect's Dao. That is how a sect takes in a friend who walks a different element,
+so a type meant as a guest hall should default to `false`.
+
+Registering a kind only makes it *known*; a server owner still decides whether
+their sects may raise it. Your entry never overrides a config entry with the same
+id — the owner's always wins.
+
+## Life-Bound traits
+
+A trait is the nature a bound treasure turns out to have. It is rolled **once**,
+at binding, and never re-rolled.
+
+```java
+CultivationAPI.registerLifeBoundTrait(
+        new LifeBoundTrait("mymod:frostbite", LifeBoundTrait.Slot.WEAPON,
+                           1f, 0.5f, 25f, 1.2f)      // base, perLevel, max, roll weight
+                .unlocks("frozen_domain", 9));       // an art it lends while held, from level 9
+```
+
+Two consequences worth planning around. Your trait enters the weighted roll
+immediately, so it changes what *future* bindings can produce — treasures already
+bound keep whatever they rolled, and there is no re-roll. And `Slot` is a real
+restriction: a `WEAPON` trait never lands on a breastplate, which is what stops
+the roll from disappointing half the time.
+
+Reading one:
+
+```java
+float lifesteal = CultivationAPI.getLifeBoundTraitAmount(stack, "lifesteal");
+String art      = CultivationAPI.getLifeBoundGrantedTechnique(stack);   // null if none, or not yet
+```
+
+`getLifeBoundTraitAmount` returns 0 when the treasure is of a different nature,
+so it is safe to ask about any trait on any item.
+
+## Mastery rungs
+
+The mastery ladder is normally the server's five configured rungs. An addon may
+append one:
+
+```java
+boolean added = CultivationAPI.registerMasteryStage(
+        new MasteryStageRule("Transcendent", "SOUL_FORMATION", 2500f, 8, 2.6f, 0.7f, 0.65f));
+```
+
+It returns **false** if the ladder is already full rather than silently ignoring
+you, because the ladder is capped at five and the UI and lang keys only cover
+that many. Check the return value.

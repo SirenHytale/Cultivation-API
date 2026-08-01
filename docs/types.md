@@ -177,9 +177,44 @@ Domain objects carried by their subsystems' event payloads:
 | `FormationType` | `plugin.siren.ECS.Formation` | `FormationEvents` |
 | `Dwelling` | `plugin.siren.Utils.Dwelling` | `DwellingEvents` |
 | `BeastSpecies` | `plugin.siren.Utils.Config` | `BeastEvents` |
+| `SectBuilding` | `plugin.siren.Utils.Sect` | `SectEvents` |
 
 These are the least stable types in this list. Read what you need off them inside
 a listener; do not build long-lived state around their shape.
+
+### Rule types
+
+Five plain data classes describe *what the server has configured*, as opposed to
+*what a player has done*. Each is a config entry with a public constructor, so an
+addon can build one and hand it to the matching registry in
+[`registries.md`](registries.md):
+
+| Type | Package | Describes |
+| --- | --- | --- |
+| `BeastArtRule` | `plugin.siren.Utils.Config` | one beast art's cost, cooldown, unlock realm and damage type |
+| `MasteryStageRule` | `plugin.siren.Utils.Config` | one rung of the technique mastery ladder |
+| `SectBuildingType` | `plugin.siren.Utils.Config` | a kind of sect building, and whether its ground carries the sect's Dao |
+| `LifeBoundTrait` | `plugin.siren.Utils.Config` | a nature a bound treasure can roll, and the art it may unlock |
+| `TechniqueParam` | `plugin.siren.Utils.Config` | one named number inside a rule (`Radius`, `BaseDamage`, …) |
+
+A rule's `damageType` names a **DamageCause asset**, not a `DaoElement`. Vanilla
+ships `Fire`, `Ice`, `Poison`, `Physical` and friends; Cultivation adds one per
+element (`Cultivation_Fire`, `Cultivation_Void`, …), and
+`DaoElement.getDamageCauseId()` gives you the right string for an element. A name
+that resolves to nothing **silently falls back to physical damage** rather than
+erroring, so a typo here costs you the element without a log line.
+
+### `BeastArt` and `BeastArtEffect`
+
+`plugin.siren.ECS.Beast.BeastArt` is the beast-side counterpart of `Technique`,
+and works identically: singleton instances from an open registry, safe to compare
+with `==`, with `BeastArtEffect` as the one-method callback that runs the art.
+`BeastArtContext` hands the callback **both** ends of the bond — `getBeastRef()`
+for the creature performing the art and `getOwnerRef()` for the cultivator it
+serves.
+
+> `Ref` has no `equals()`. When an art has to skip its owner, or tell one
+> entity from another, compare `getIndex()`.
 
 ---
 

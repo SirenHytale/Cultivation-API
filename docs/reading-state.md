@@ -154,3 +154,42 @@ That re-applies their max-health modifier, refreshes the HUD, updates the
 cross-player rankings, and re-reads the realm every gate in the mod tests against.
 It is a no-op for an entity with no `CultivationComponent`, and safe from a
 system, a command or an interaction.
+
+## Mastery, terrain and sect ground
+
+Technique mastery is per-art and independent of the cultivator's realm, so
+reading a realm tells you nothing about how strong their arts are:
+
+```java
+int rung   = CultivationAPI.getTechniqueMasteryStage(accessor, ref, "sword_qi_slash");
+float mult = CultivationAPI.getTechniqueMasteryMultiplier(accessor, ref, "sword_qi_slash");
+MasteryStageRule[] ladder = CultivationAPI.getMasteryStages();
+```
+
+`getTechniqueMasteryMultiplier` is the number every damage, heal and buff figure
+of that art passes through — apply it yourself if you are computing an art's
+output outside the mod.
+
+Ground has an element of its own, from two independent sources:
+
+```java
+DaoElement terrain = CultivationAPI.getTerrainElement(biomeName);       // biome name -> element
+DaoElement ground  = CultivationAPI.getGroundDao(world, chunkX, chunkZ); // sect hall/building
+```
+
+`getGroundDao` returns `null` for three different situations that all mean "this
+ground presses toward nothing": unclaimed land, a sect that has named no Dao, and
+a sect building whose Dao switch was deliberately turned off. If you need to tell
+them apart, ask `getSectHolding` as well.
+
+## Spirit beast growth
+
+```java
+BeastSpecies next = CultivationAPI.getNextBeastForm(species);              // null at a terminal form
+String blocked    = CultivationAPI.getBeastEvolutionBlockReason(accessor, ref); // lang key, or null
+boolean rideable  = CultivationAPI.canBeastBeRidden(accessor, ref);
+```
+
+`getBeastEvolutionBlockReason` hands back the same lang key the mod's own command
+shows, so an addon UI can explain a refusal in the player's language without
+restating the rules.

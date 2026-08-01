@@ -5,12 +5,12 @@ progression mod for Hytale servers — realms and Qi, daos, sects, techniques, s
 beasts, formations, cave abodes, duels and alchemy.
 
 This repository is for **mod developers**. It contains the API's Java sources,
-a complete reference for all **148 events**, and worked examples. Everything here
+a complete reference for all **156 events**, and worked examples. Everything here
 is the real code the mod ships — nothing is a summary written after the fact.
 
 | | |
 | --- | --- |
-| **Artifact** | `plugin.siren:Cultivation:0.7.0` |
+| **Artifact** | `plugin.siren:Cultivation:0.7.2` |
 | **Package** | `plugin.siren.API` |
 | **Plugin id** | `Siren:Cultivation` |
 | **Hytale server** | `0.5.x` (built against `com.hypixel.hytale:Server:0.5.7`) |
@@ -26,8 +26,8 @@ internals to change how it behaves. Every one of these is a supported hook:
 | I want to… | Use | Guide |
 | --- | --- | --- |
 | Read a player's realm, level, Qi, race, skill nodes | `CultivationAPI` getters | [Reading player state](docs/reading-state.md) |
-| React when something happens (breakthrough, tame, siege…) | 76 post-events | [Events](docs/events.md) |
-| Veto something, or re-tune its numbers | 68 cancellable pre-events | [Events](docs/events.md) |
+| React when something happens (breakthrough, tame, siege…) | 82 post-events | [Events](docs/events.md) |
+| Veto something, or re-tune its numbers | 74 cancellable pre-events | [Events](docs/events.md) |
 | Keep your own progression in step with a player's saves | `ProfileEvents` | [Profiles](docs/profiles.md) |
 | Grant Qi, force a breakthrough, hand out a skill node | `addQi`, `completeBreakthrough`, `grantSkillNode` | [Driving progression](docs/driving-progression.md) |
 | Read or drain a chunk's spirit vein | `readSpiritVein`, `drainSpiritVein` | [Driving progression](docs/driving-progression.md) |
@@ -46,6 +46,11 @@ internals to change how it behaves. Every one of these is a supported hook:
 | Put my mod on the Info page, and tell admins when it is out of date | `registerUpdateCheck` | [Registries](docs/registries.md) |
 | Tell whether my jar is the build that was published | `registerBuildCheck` | [Registries](docs/registries.md) |
 | React to a cultivator's body tempering, or scale the XP it earns | `BodyTemperingEvents` | [Event reference](docs/events-reference.md) |
+| Give a spirit beast an art of my own | `registerBeastArt` | [Registries](docs/registries.md) |
+| Ask how far a player has mastered an art | `getTechniqueMasteryStage`, `getTechniqueMasteryMultiplier` | [Reading player state](docs/reading-state.md) |
+| Add a kind of sect building | `registerSectBuildingType` | [Registries](docs/registries.md) |
+| Add a nature a Life-Bound treasure can roll | `registerLifeBoundTrait` | [Registries](docs/registries.md) |
+| Ask what element the ground or a biome pushes toward | `getGroundDao`, `getTerrainElement` | [Driving progression](docs/driving-progression.md) |
 
 The last three are the big ones — and the last two are easy to confuse, so:
 `CultivationTheme` changes the **words**, `CultivationPalette` changes the
@@ -64,10 +69,10 @@ your local repository once:
 
 ```bash
 mvn install:install-file \
-  -Dfile=Cultivation-0.7.0.jar \
+  -Dfile=Cultivation-0.7.2.jar \
   -DgroupId=plugin.siren \
   -DartifactId=Cultivation \
-  -Dversion=0.7.0 \
+  -Dversion=0.7.2 \
   -Dpackaging=jar
 ```
 
@@ -77,7 +82,7 @@ Then depend on it in `provided` scope:
 <dependency>
     <groupId>plugin.siren</groupId>
     <artifactId>Cultivation</artifactId>
-    <version>0.7.0</version>
+    <version>0.7.2</version>
     <scope>provided</scope>
 </dependency>
 ```
@@ -92,7 +97,7 @@ resolves Cultivation's classes for you:
 
 ```json
 "Dependencies": {
-  "Siren:Cultivation": ">=0.7.0"
+  "Siren:Cultivation": ">=0.7.2"
 }
 ```
 
@@ -153,7 +158,7 @@ float qi = CultivationAPI.getQi(accessor, ref);
 | **[Driving progression](docs/driving-progression.md)** | Granting Qi, ranking up, meditation, spirit veins, and the rest of the world |
 | **[Config access](docs/config-access.md)** | Reading and writing Cultivation's own settings, and when not to |
 | **[Events](docs/events.md)** | Pre vs post, cancelling, re-tuning, threading, error handling |
-| **[Event reference](docs/events-reference.md)** | All 148 listeners with their payloads — generated from source |
+| **[Event reference](docs/events-reference.md)** | All 156 listeners with their payloads — generated from source |
 | **[Registries](docs/registries.md)** | Races, techniques, Qi-absorption items |
 | **[Profiles](docs/profiles.md)** | Keeping your own progression in step with a player's separate saves |
 | **[UI integration](docs/ui.md)** | Menu pages, Codex articles, admin config sections |

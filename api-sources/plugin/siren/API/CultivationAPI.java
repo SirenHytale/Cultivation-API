@@ -66,6 +66,21 @@ import java.util.function.Consumer;
 import java.util.function.DoubleConsumer;
 import java.util.function.DoubleSupplier;
 import java.util.function.Supplier;
+import plugin.siren.ECS.Beast.BeastArt;
+import plugin.siren.ECS.Beast.BeastArtEffect;
+import plugin.siren.Utils.Beast.BeastArtManager;
+import plugin.siren.Utils.Beast.BeastEvolutionManager;
+import plugin.siren.Utils.Beast.BeastManager;
+import plugin.siren.Utils.Beast.BeastMountManager;
+import plugin.siren.Utils.Config.BeastArtRule;
+import plugin.siren.Utils.Config.BeastSpecies;
+import plugin.siren.Utils.Config.LifeBoundTrait;
+import plugin.siren.Utils.Config.MasteryStageRule;
+import plugin.siren.Utils.Config.SectBuildingType;
+import plugin.siren.Utils.LifeBound.LifeBoundTraits;
+import plugin.siren.Utils.TechniqueMasteryManager;
+import com.hypixel.hytale.server.core.inventory.ItemStack;
+import java.util.Collection;
 
 /**
  * Public integration surface for other Hytale mods that want to read or
@@ -2303,5 +2318,229 @@ public class CultivationAPI {
      */
     public static boolean isPlaceholderApiRegistered(){
         return Cultivation.ifPlaceholderAPI();
+    }
+
+    // ==================== Spirit beast arts, evolution and mounts ====================
+
+    /**
+     * Registers a beast art, or returns the already-registered instance if that
+     * id is taken.
+     *
+     * <p>An art belongs to a SPECIES, not to a beast: list its id in that
+     * species' {@code Arts} in BeastConfig and every beast of that kind grows
+     * into it at the art's own unlock realm. Registering the art alone gives it
+     * to nobody, which is deliberate - it lets an addon ship arts a server owner
+     * then decides which creatures may learn.</p>
+     *
+     * <p>Safe from your plugin's {@code setup()} in any load order, like every
+     * other registry here.</p>
+     */
+    @Nonnull
+    public static BeastArt registerBeastArt(@Nonnull String id, @Nonnull String displayName, @Nullable String nameKey,
+                                            @Nullable String descriptionKey, @Nonnull BeastArtRule defaultRule,
+                                            @Nonnull BeastArtEffect effect){
+        return BeastArt.register(id, displayName, nameKey, descriptionKey, defaultRule, effect);
+    }
+
+    /** @return every registered beast art, built-ins first then addons in registration order. */
+    @Nonnull
+    public static Collection<BeastArt> getBeastArts(){
+        return BeastArt.all();
+    }
+
+    /** @return the art with this id (matched leniently on id or display name), or null. */
+    @Nullable
+    public static BeastArt getBeastArt(@Nullable String id){
+        return BeastArt.fromId(id);
+    }
+
+    /** @return the server's effective rule for an art - its config entry, else its registered default. */
+    @Nonnull
+    public static BeastArtRule getBeastArtRule(@Nonnull BeastArt art){
+        return BeastArtManager.getRule(art);
+    }
+
+    /** @return the arts this cultivator's bound beast has actually grown into. */
+    @Nonnull
+    public static List<BeastArt> getKnownBeastArts(@Nonnull ComponentAccessor<EntityStore> accessor,
+                                                   @Nonnull Ref<EntityStore> ref){
+        SpiritBeastComponent beast = accessor.getComponent(ref, SpiritBeastComponent.getComponentType());
+        if(beast == null || !beast.hasBeast()){
+            return List.of();
+        }
+        return BeastArtManager.getKnownArts(beast, BeastManager.getSpecies(beast));
+    }
+
+    /**
+     * Performs one of the bound beast's arts on its owner's behalf, running every
+     * gate the mod's own callers run (feature enabled, beast summoned, art known
+     * and off cooldown, no addon veto).
+     *
+     * @return true if the art actually fired.
+     */
+    public static boolean performBeastArt(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref,
+                                          @Nonnull BeastArt art, @Nullable PlayerRef playerRef){
+        SpiritBeastComponent beast = accessor.getComponent(ref, SpiritBeastComponent.getComponentType());
+        if(beast == null){
+            return false;
+        }
+        return BeastArtManager.perform(accessor, ref, beast, art, playerRef, true);
+    }
+
+    /** @return the species this beast would become next, or null if it is a terminal form. */
+    @Nullable
+    public static BeastSpecies getNextBeastForm(@Nullable BeastSpecies species){
+        return BeastEvolutionManager.getNextForm(species);
+    }
+
+    /** @return why this cultivator's beast cannot evolve right now, as a lang key, or null when it can. */
+    @Nullable
+    public static String getBeastEvolutionBlockReason(@Nonnull ComponentAccessor<EntityStore> accessor,
+                                                      @Nonnull Ref<EntityStore> ref){
+        SpiritBeastComponent beast = accessor.getComponent(ref, SpiritBeastComponent.getComponentType());
+        if(beast == null){
+            return "server.cultivation.beast.playerMsg.none";
+        }
+        return BeastEvolutionManager.getBlockReason(beast, BeastManager.getSpecies(beast));
+    }
+
+    /** @return true if this cultivator's beast could carry a rider if summoned now. */
+    public static boolean canBeastBeRidden(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref){
+        SpiritBeastComponent beast = accessor.getComponent(ref, SpiritBeastComponent.getComponentType());
+        if(beast == null){
+            return false;
+        }
+        return BeastMountManager.canBeRidden(beast, BeastManager.getSpecies(beast));
+    }
+
+    // ==================== Technique mastery ====================
+
+    /**
+     * Registers an extra mastery rung, appended after the configured ladder.
+     *
+     * <p>The ladder is capped at {@link TechniqueMasteryManager#MAX_STAGES}, so a
+     * rung past that is refused rather than accepted-and-ignored - an addon
+     * cannot silently lengthen the ladder past what the UI and lang keys cover,
+     * and it can tell that it didn't. Check the return value.</p>
+     *
+     * @return true if the rung was added, false if the ladder is already full.
+     */
+    public static boolean registerMasteryStage(@Nonnull MasteryStageRule stage){
+        return TechniqueMasteryManager.registerStage(stage);
+    }
+
+    /** @return the five-rung ladder as the server has it configured. */
+    @Nonnull
+    public static MasteryStageRule[] getMasteryStages(){
+        return TechniqueMasteryManager.getStages();
+    }
+
+    /** @return the rung (0-based) this cultivator has taken an art to. */
+    public static int getTechniqueMasteryStage(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref,
+                                               @Nonnull String techniqueId){
+        return TechniqueMasteryManager.getStageIndex(accessor, ref, techniqueId);
+    }
+
+    /** @return the multiplier this cultivator's mastery of an art applies to its magnitude. */
+    public static float getTechniqueMasteryMultiplier(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref,
+                                                      @Nonnull String techniqueId){
+        return TechniqueMasteryManager.getPowerMultiplier(accessor, ref, techniqueId);
+    }
+
+    /**
+     * Banks mastery practice for an art, promoting it if that was the last
+     * requirement outstanding - the same path a real performance takes.
+     */
+    public static void addTechniqueMasteryXp(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref,
+                                             @Nullable PlayerRef playerRef, @Nonnull Technique technique){
+        TechniqueMasteryManager.onTechniqueUsed(accessor, ref, playerRef, technique, TechniqueManager.getRule(technique));
+    }
+
+    // ==================== Terrain and sect Dao ====================
+
+    /** @return the element a biome's name resolves to, or null if it maps to none. */
+    @Nullable
+    public static DaoElement getTerrainElement(@Nullable String biomeName){
+        return DaoManager.elementForTerrain(biomeName);
+    }
+
+    /**
+     * @return the element the ground in this chunk presses cultivators toward, or
+     * null - which covers unclaimed ground, a sect with no Dao, and a sect
+     * building whose Dao switch is deliberately off.
+     */
+    @Nullable
+    public static DaoElement getGroundDao(@Nullable String world, int chunkX, int chunkZ){
+        return SectManager.getGroundDao(world, chunkX, chunkZ);
+    }
+
+    // ==================== Sect progression and buildings ====================
+
+    /**
+     * Registers a kind of sect building. Server owners still choose whether any
+     * sect may raise it by listing it in SectConfig; this only makes the kind
+     * known to the mod.
+     */
+    public static void registerSectBuildingType(@Nonnull SectBuildingType type){
+        SectManager.registerBuildingType(type);
+    }
+
+    /** @return the configured kind for an id, or null if a server removed it. */
+    @Nullable
+    public static SectBuildingType getSectBuildingType(@Nullable String typeId){
+        return SectManager.getBuildingType(typeId);
+    }
+
+    /** @return the sect whose hall or building stands in this chunk, or null. */
+    @Nullable
+    public static Sect getSectHolding(@Nullable String world, int chunkX, int chunkZ){
+        return SectManager.getSectHolding(world, chunkX, chunkZ);
+    }
+
+    /** @return how many buildings this sect may hold at its current level. */
+    public static int getSectBuildingAllowance(@Nonnull Sect sect){
+        return SectManager.getBuildingAllowance(sect);
+    }
+
+    /**
+     * Banks shared sect progression for a member, exactly as their own
+     * advancement does.
+     *
+     * @return how many levels the sect gained.
+     */
+    public static int addSectProgressXp(@Nonnull UUID member, boolean breakthrough){
+        return SectManager.addMemberProgressXp(member, breakthrough);
+    }
+
+    // ==================== Life-Bound traits ====================
+
+    /**
+     * Registers a nature a bound treasure can reveal. It enters the weighted roll
+     * immediately, so an addon adding one changes what future bindings can
+     * produce - existing treasures keep whatever they already rolled.
+     */
+    public static void registerLifeBoundTrait(@Nonnull LifeBoundTrait trait){
+        LifeBoundTraits.registerTrait(trait);
+    }
+
+    /** @return the trait with this id, or null. */
+    @Nullable
+    public static LifeBoundTrait getLifeBoundTrait(@Nullable String traitId){
+        return LifeBoundTraits.byId(traitId);
+    }
+
+    /**
+     * The magnitude of a named trait on a specific item, or 0 when that treasure
+     * is of a different nature. The one call an addon needs to ask "does this
+     * thing lifesteal, and by how much?".
+     */
+    public static float getLifeBoundTraitAmount(@Nullable ItemStack stack, @Nonnull String traitId){
+        return LifeBoundTraits.amountOf(stack, traitId);
+    }
+
+    /** @return the technique id this held treasure lends its owner right now, or null. */
+    @Nullable
+    public static String getLifeBoundGrantedTechnique(@Nullable ItemStack stack){
+        return LifeBoundTraits.getGrantedTechnique(stack);
     }
 }

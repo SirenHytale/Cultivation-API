@@ -1,7 +1,7 @@
 # Event reference
 
 Every event Cultivation fires, grouped by the class that declares it.
-**148 listener hooks** across 12 subsystems.
+**156 listener hooks** across 12 subsystems.
 
 > Generated from `api-sources/` by `tools/gen_events_reference.py`. Do not edit
 > by hand — re-run the script instead. The prose in each entry is the javadoc on
@@ -801,6 +801,21 @@ Cloud Step's speed multiplier was reverted, either on expiry or on cleanup.
 | `player()` | `PlayerRef` |
 | `type()` | `BuffType` |
 
+### `TechniqueMasteryAdvanceEvent`
+
+```java
+TechniqueEvents.onTechniqueMasteryAdvance(event -> { /* ... */ });
+```
+
+An art's mastery rose a rung.
+
+| Accessor | Type |
+| --- | --- |
+| `ref()` | `Ref<EntityStore>` |
+| `player()` | `PlayerRef` |
+| `techniqueId()` | `String` |
+| `stage()` | `int` |
+
 **Pre-events** — fired before the change; `setCancelled(true)` vetoes it, and any setter below re-tunes the numbers the mod then uses.
 
 ### `PreTechniquePerformEvent`
@@ -883,6 +898,21 @@ A timed technique buff is about to be applied. Cancel to deny it; the setters re
 | `magnitude()` | `float` | read |
 | `setDurationSeconds(float)` | `void` | re-tune |
 | `setMagnitude(float)` | `void` | re-tune |
+
+### `PreTechniqueMasteryAdvanceEvent`
+
+```java
+TechniqueEvents.onPreTechniqueMasteryAdvance(event -> { /* ... */ });
+```
+
+An art is about to rise a rung. Cancel to hold it where it is - the XP and the studied manuals stay banked, so it simply tries again the next time anything about it changes.
+
+| Member | Type | |
+| --- | --- | --- |
+| `ref()` | `Ref<EntityStore>` | read |
+| `player()` | `PlayerRef` | read (may be null) |
+| `techniqueId()` | `String` | read |
+| `stage()` | `int` | read |
 
 
 ---
@@ -1190,6 +1220,54 @@ A companion advanced a stage (or rolled into the next realm). Fires once per sta
 | `realm()` | `CultivationRealm` |
 | `stage()` | `CultivationStage` |
 
+### `BeastArtEvent`
+
+```java
+BeastEvents.onBeastArt(event -> { /* ... */ });
+```
+
+A companion performed one of its arts.
+
+| Accessor | Type |
+| --- | --- |
+| `owner()` | `Ref<EntityStore>` |
+| `player()` | `PlayerRef` |
+| `beast()` | `SpiritBeastComponent` |
+| `art()` | `BeastArt` |
+| `commanded()` | `boolean` |
+
+### `BeastEvolveEvent`
+
+```java
+BeastEvents.onBeastEvolve(event -> { /* ... */ });
+```
+
+A companion's evolution ritual resolved - `succeeded` says which way, and `to` is null on failure.
+
+| Accessor | Type |
+| --- | --- |
+| `owner()` | `Ref<EntityStore>` |
+| `player()` | `PlayerRef` |
+| `beast()` | `SpiritBeastComponent` |
+| `from()` | `BeastSpecies` |
+| `to()` | `BeastSpecies` |
+| `succeeded()` | `boolean` |
+
+### `BeastMountEvent`
+
+```java
+BeastEvents.onBeastMount(event -> { /* ... */ });
+```
+
+A companion was summoned in its rideable body.
+
+| Accessor | Type |
+| --- | --- |
+| `owner()` | `Ref<EntityStore>` |
+| `player()` | `PlayerRef` |
+| `beast()` | `SpiritBeastComponent` |
+| `species()` | `BeastSpecies` |
+
 **Pre-events** — fired before the change; `setCancelled(true)` vetoes it, and any setter below re-tunes the numbers the mod then uses.
 
 ### `PreBeastTameAttemptEvent`
@@ -1281,6 +1359,55 @@ A companion is about to advance a stage. Cancel to hold it where it is - the XP 
 | `player()` | `PlayerRef` | read (may be null) |
 | `fromRealm()` | `CultivationRealm` | read |
 | `fromStage()` | `CultivationStage` | read |
+
+### `PreBeastArtEvent`
+
+```java
+BeastEvents.onPreBeastArt(event -> { /* ... */ });
+```
+
+A companion is about to perform an art. Cancel to stop it - the cooldown is only stamped once the effect has actually run, so a vetoed art costs the beast nothing and it will try again on its next opening.
+
+| Member | Type | |
+| --- | --- | --- |
+| `owner()` | `Ref<EntityStore>` | read |
+| `player()` | `PlayerRef` | read (may be null) |
+| `beast()` | `SpiritBeastComponent` | read |
+| `art()` | `BeastArt` | read |
+| `commanded()` | `boolean` | read |
+
+### `PreBeastEvolveEvent`
+
+```java
+BeastEvents.onPreBeastEvolve(event -> { /* ... */ });
+```
+
+A companion is about to be put through the evolution ritual. Cancel to refuse it - the Qi has NOT been taken at this point, so a veto here costs the cultivator nothing.
+
+| Member | Type | |
+| --- | --- | --- |
+| `owner()` | `Ref<EntityStore>` | read |
+| `player()` | `PlayerRef` | read (may be null) |
+| `beast()` | `SpiritBeastComponent` | read |
+| `from()` | `BeastSpecies` | read |
+| `to()` | `BeastSpecies` | read |
+| `successChance()` | `float` | read |
+| `setSuccessChance(float)` | `void` | re-tune |
+
+### `PreBeastMountEvent`
+
+```java
+BeastEvents.onPreBeastMount(event -> { /* ... */ });
+```
+
+A companion is about to be summoned in its rideable body. Cancel to refuse the mount.
+
+| Member | Type | |
+| --- | --- | --- |
+| `owner()` | `Ref<EntityStore>` | read |
+| `player()` | `PlayerRef` | read (may be null) |
+| `beast()` | `SpiritBeastComponent` | read |
+| `species()` | `BeastSpecies` | read |
 
 
 ---

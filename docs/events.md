@@ -1,6 +1,6 @@
 # Events
 
-Cultivation exposes **148 listener hooks** across twelve subsystems. This page covers
+Cultivation exposes **156 listener hooks** across twelve subsystems. This page covers
 the rules that apply to all of them. For the full catalogue — every event, its
 payload, and what each field means — see
 **[the event reference](events-reference.md)**.
@@ -9,14 +9,16 @@ payload, and what each field means — see
 | --- | --- |
 | `CultivationEvents` | Qi, meditation, rituals, breakthroughs, advancements, demotions, tribulations, the Heart-Devil Trial, Qi Deviation, races, skill tree, respecs |
 | `DaoEvents` | Elements, affinity drift, Yin-Yang alignment, moral paths, karma, Devil harvest |
-| `TechniqueEvents` | Performing and learning arts, Sword Flying, timed combat buffs |
-| `ItemEvents` | Loot drops, pills, spirit cores, manuals, weapon refinement |
-| `BeastEvents` | Taming, hatching, binding, summoning, companion growth |
-| `SectEvents` | Founding, membership, ranks, halls, inscriptions |
+| `TechniqueEvents` | Performing and learning arts, mastery advancement, Sword Flying, timed combat buffs |
+| `ItemEvents` | Loot drops, pills, spirit cores, manuals, weapon refinement, Life-Bound treasures |
+| `BeastEvents` | Taming, hatching, binding, summoning, companion growth, beast arts, evolution, mounts |
+| `SectEvents` | Founding, membership, ranks, halls, inscriptions, the sect Dao, shared progression, buildings |
 | `WarEvents` | Declaring sieges and how they resolve |
 | `DuelEvents` | Challenges, duels, wager payouts |
 | `FormationEvents` | Laying and dispersing spirit arrays, trap strikes |
 | `DwellingEvents` | Cave Abodes, Spirit Springs, upkeep, seclusion |
+| `BodyTemperingEvents` | Tempering sessions and the thresholds they cross |
+| `ProfileEvents` | Switching between a player's cultivation profiles |
 
 ## Pre vs post
 
