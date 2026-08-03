@@ -33,7 +33,7 @@ cover it, because nearly every mechanic is re-tunable there.
 1. **`docs/pitfalls.md`** — the mistakes that crash servers. Read this first.
 2. `docs/getting-started.md` — dependency wiring and `setup()`.
 3. The guide for whatever the user is doing (see `README.md`'s table).
-4. `docs/events-reference.md` — all 156 listeners with their payloads. Generated
+4. `docs/events-reference.md` — all 160 listeners with their payloads. Generated
    from source, so it is accurate; it is long, so search it rather than reading
    it end to end.
 
@@ -146,6 +146,21 @@ documents plus the nine skill-tree halo hues. If the user asks to "theme" or
 "reskin" Cultivation, work out which they mean before writing anything; they
 compose freely, and a mod may register both.
 
+### 11. A technique you register is LOCKED by default (0.7.4)
+
+`Requires-Unlock` on a technique rule **defaults to `true`**, so an art you
+register cannot be performed until the player comes by it — via a manual,
+enlightenment while meditating, a breakthrough, or a sect hall's inscription.
+
+Before 0.7.4 the equivalent flag was `Requires-Manual` and defaulted to *off*, so
+a registered art fired the moment its realm gate passed. If you are updating an
+addon written against an older version, this is the one behavior change to
+re-test: the symptom is an art that silently never fires for a player who by
+every visible measure should have it.
+
+Call `.freelyAvailable()` on the rule to keep the old behavior. Either way a
+server owner can override it per art in `Arts/TechniqueConfig.json`.
+
 ## Conventions to follow
 
 - **Suppliers, not snapshots.** Where the API takes a `Supplier<RaceConfig>` or a
@@ -248,6 +263,10 @@ TechniqueRule newTechniqueRule(String id, boolean enabled, boolean daoSpecific,
                                @Nullable String requiredElement, @Nullable String elements,
                                @Nullable String damageType, String unlockRealm,
                                float qiCost, float cooldownSeconds, Object... params)
+    // Fluent config-DEFAULTS on the returned rule (0.7.4):
+    //   .freelyAvailable()  no unlock needed - see the warning below
+    //   .charged()          press once to gather, again to loose
+    //   .unarmedOnly()      refuses while a weapon is in hand
 
 boolean performTechnique(ComponentAccessor<EntityStore>, Ref<EntityStore>, PlayerRef, Technique)
 void    registerQiAbsorptionItemModifier(String itemId, float multiplier)
@@ -302,7 +321,7 @@ void buildMenuNav(UICommandBuilder, UIEventBuilder, PlayerRef, String pageKey)  
 
 `CultivationEvents`, `DaoEvents`, `TechniqueEvents`, `ItemEvents`, `BeastEvents`,
 `SectEvents`, `WarEvents`, `DuelEvents`, `FormationEvents`, `DwellingEvents`,
-`BodyTemperingEvents`, `ProfileEvents`.
+`BodyTemperingEvents`, `FistEvents`, `ProfileEvents`.
 
 Every listener is `ClassName.onSomething(Consumer<SomethingEvent>)`, and nearly
 every mechanic has both `onX` (post, notification) and `onPreX` (pre, cancellable

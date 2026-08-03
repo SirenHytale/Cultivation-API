@@ -31,7 +31,9 @@ import plugin.siren.ECS.Realms.CultivationRealm;
 import plugin.siren.ECS.Realms.CultivationStage;
 import plugin.siren.ECS.Technique.Technique;
 import plugin.siren.ECS.Technique.TechniqueEffect;
+import plugin.siren.ECS.SkillTree.SkillTreeStat;
 import plugin.siren.Utils.BodyTemperingManager;
+import plugin.siren.Utils.CultivationModifiers;
 import plugin.siren.Utils.CultivationManager;
 import plugin.siren.Utils.DaoManager;
 import plugin.siren.Utils.QiAbsorptionItemRegistry;
@@ -48,6 +50,7 @@ import plugin.siren.Utils.Sect.Sect;
 import plugin.siren.Utils.Sect.SectManager;
 import plugin.siren.Utils.UI.CultivationNav;
 import plugin.siren.Utils.Update.BuildIntegrity;
+import plugin.siren.Utils.Update.CompatChecker;
 import plugin.siren.Utils.Update.UpdateChecker;
 import com.hypixel.hytale.server.core.modules.entity.component.TransformComponent;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
@@ -1011,6 +1014,72 @@ public class CultivationAPI {
     }
 
     /**
+     * Registers an addon in the compatibility check: which Cultivation versions
+     * its installed version is published as working against.
+     *
+     * <p><strong>Declare a real range in your manifest first.</strong> A
+     * manifest's {@code Dependencies} entry accepts a full semver range - it is
+     * not limited to a floor - so {@code "Siren:Cultivation": ">=0.7.4 <0.8.0"}
+     * makes the engine refuse to load your addon against a Cultivation outside
+     * that band, before a line of your code runs and with no network involved.
+     * That is the gate. This check is the part a shipped jar cannot do: telling
+     * a server about a pairing that only turned out to be broken <em>after</em>
+     * both were released, from a file that can be edited without a release.</p>
+     *
+     * <p>Act on {@link CompatStatus#INCOMPATIBLE} by withdrawing what you
+     * registered and saying so in the log - not by throwing. A plugin that
+     * throws out of {@code setup()} at boot takes the entire server down with
+     * it, and by the time a verdict lands you have been running for half a
+     * minute anyway.</p>
+     *
+     * @param modId       a stable id unique across registered mods; your plugin's name.
+     * @param displayName how the mod is named in the log line - plain text.
+     * @param version     your installed version, the key looked up in the published matrix.
+     * @param manifestUrl the JSON file naming which Cultivation versions each of your versions wants.
+     * @param onVerdict   run once, on the check's own daemon thread, as soon as this
+     *                    pairing resolves to anything other than UNKNOWN - or null to
+     *                    poll {@link #getCompatStatus} yourself. It is not on a world
+     *                    thread: touch registries and the log, never entity state.
+     * @return the registration, should you want to read the verdict yourself.
+     */
+    @Nonnull
+    public static CompatCheck registerCompatCheck(@Nonnull String modId, @Nonnull String displayName,
+                                                  @Nonnull String version, @Nonnull String manifestUrl,
+                                                  @Nullable java.util.function.Consumer<CompatCheck> onVerdict){
+        return CompatChecker.register(modId, displayName, version, manifestUrl, onVerdict);
+    }
+
+    /** As above, with nothing to run on a verdict - poll {@link #getCompatStatus} instead. */
+    @Nonnull
+    public static CompatCheck registerCompatCheck(@Nonnull String modId, @Nonnull String displayName,
+                                                  @Nonnull String version, @Nonnull String manifestUrl){
+        return CompatChecker.register(modId, displayName, version, manifestUrl, null);
+    }
+
+    /** Removes a previously registered addon from the compatibility check - for a plugin unloading cleanly. */
+    public static void unregisterCompatCheck(@Nonnull String modId){
+        CompatChecker.unregister(modId);
+    }
+
+    /** @return every registered addon's compatibility check, in registration order. A fresh list, safe to hold. */
+    @Nonnull
+    public static List<CompatCheck> getCompatChecks(){
+        return CompatChecker.getChecks();
+    }
+
+    /**
+     * @return what the compatibility check concluded about one registered addon,
+     * or {@link CompatStatus#UNKNOWN} if nothing is registered under that id -
+     * which is also the answer before the first check lands, and the answer on
+     * any server that could not reach the network.
+     */
+    @Nonnull
+    public static CompatStatus getCompatStatus(@Nonnull String modId){
+        CompatCheck check = CompatChecker.getCheck(modId);
+        return check == null ? CompatStatus.UNKNOWN : check.getStatus();
+    }
+
+    /**
      * Wraps a section so it appears on the admin page only, not on the
      * Cultivation settings menu.
      *
@@ -1100,6 +1169,92 @@ public class CultivationAPI {
     /** Removes a previously registered page - for a plugin unloading cleanly. */
     public static void unregisterMenuPage(@Nonnull String pageKey){
         MENU_PAGES.removeIf(existing -> existing.getKey().equals(pageKey));
+    }
+
+    // ==================== Standing modifiers ====================
+
+    /**
+     * Registers a standing, per-player modifier over Cultivation's own systems -
+     * the hook for anything that changes what a cultivator IS rather than what
+     * they do: a bloodline, a constitution, a physique.
+     *
+     * <p>See {@link CultivationModifierSource} for the channels and how they
+     * combine. Implement only the ones you need; every method has a default
+     * meaning "no opinion". Registering the same key twice replaces the first,
+     * so this is safe to call on a config reload.</p>
+     *
+     * <p>Withdraw it from your {@code shutdown()} with
+     * {@link #unregisterModifierSource}, or a reload leaves a source behind
+     * pointing at classes that are gone.</p>
+     *
+     * @param key    an id unique to your mod - namespace it ("myMod:bloodlines").
+     * @param source what to ask. Called on the world thread, sometimes from
+     *               inside the damage pipeline; keep it cheap.
+     */
+    public static void registerModifierSource(@Nonnull String key, @Nonnull CultivationModifierSource source){
+        CultivationModifiers.register(key, source);
+    }
+
+    /** Withdraws a modifier source - for a plugin unloading cleanly. */
+    public static void unregisterModifierSource(@Nonnull String key){
+        CultivationModifiers.unregister(key);
+    }
+
+    /**
+     * Builds one Overview bonus row, for returning from
+     * {@link CultivationModifierSource#bonuses}.
+     *
+     * @param sourceKey a server.lang key naming what granted it.
+     * @param statKey   a server.lang key naming the stat. Reuse one of
+     *                  Cultivation's own where it fits, so your row sums with
+     *                  the mod's rather than printing a second, differently
+     *                  worded line for the same stat.
+     * @param amount    the size, in the unit {@code percent} describes.
+     * @param percent   true when {@code amount} is a percentage.
+     */
+    @Nonnull
+    public static CultivationBonus newBonus(@Nonnull String sourceKey, @Nonnull String statKey,
+                                            float amount, boolean percent){
+        return new CultivationBonus(sourceKey, statKey, amount, percent);
+    }
+
+    /**
+     * The stat keys Cultivation's own Overview rows use, so an addon's bonus can
+     * sum with them instead of sitting on a line of its own.
+     *
+     * <p>These are the {@code statKey} values to pass to {@link #newBonus}.
+     * Anything else is legal and simply prints under its own name.</p>
+     */
+    public static final class BonusStats {
+        private BonusStats(){}
+
+        public static final String HEALTH = SkillTreeStat.HEALTH.getTranslationKey();
+        public static final String DAMAGE_PERCENT = SkillTreeStat.DAMAGE_PERCENT.getTranslationKey();
+        public static final String DAMAGE_REDUCTION_PERCENT = SkillTreeStat.DAMAGE_REDUCTION_PERCENT.getTranslationKey();
+        public static final String QI_GAIN_PERCENT = SkillTreeStat.QI_GAIN_PERCENT.getTranslationKey();
+        public static final String STAMINA = SkillTreeStat.STAMINA.getTranslationKey();
+        public static final String MANA = SkillTreeStat.MANA.getTranslationKey();
+        public static final String MOVE_SPEED_PERCENT = SkillTreeStat.MOVE_SPEED_PERCENT.getTranslationKey();
+        public static final String RITUAL_SPEED_PERCENT = SkillTreeStat.RITUAL_SPEED_PERCENT.getTranslationKey();
+        public static final String QI_COST_REDUCTION_PERCENT = SkillTreeStat.QI_COST_REDUCTION_PERCENT.getTranslationKey();
+    }
+
+    /**
+     * Applies a keyed flat bonus to one of a player's engine stats - the same
+     * mechanism the skill tree uses for its own Health/Mana/Stamina rewards.
+     *
+     * <p>Keyed rather than additive: calling this again with the same key
+     * REPLACES that key's contribution rather than stacking with it, so an addon
+     * can recompute a bonus whenever its own state changes without having to
+     * track and subtract what it granted last time. Pass 0 to withdraw it.</p>
+     *
+     * @param statIndex one of {@code DefaultEntityStatTypes.getHealth()},
+     *                  {@code getStamina()}, {@code getMana()}, {@code getOxygen()}.
+     * @param key       a modifier key unique to your mod and this bonus.
+     */
+    public static void applyStatBonus(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref,
+                                      int statIndex, @Nonnull String key, float amount){
+        SkillTreeManager.applyKeyedStatBonus(accessor, ref, statIndex, key, amount);
     }
 
     /**

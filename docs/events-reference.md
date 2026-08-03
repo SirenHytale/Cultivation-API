@@ -1,7 +1,7 @@
 # Event reference
 
 Every event Cultivation fires, grouped by the class that declares it.
-**156 listener hooks** across 12 subsystems.
+**160 listener hooks** across 13 subsystems.
 
 > Generated from `api-sources/` by `tools/gen_events_reference.py`. Do not edit
 > by hand — re-run the script instead. The prose in each entry is the javadoc on
@@ -2430,6 +2430,78 @@ BodyTemperingEvents.onPreLevelUp(event -> { /* ... */ });
 ```
 
 About to gain a level. Cancelling holds the body where it is; the XP stays banked.
+
+| Member | Type | |
+| --- | --- | --- |
+| `ref()` | `Ref<EntityStore>` | read |
+| `player()` | `PlayerRef` | read (may be null) |
+| `fromLevel()` | `int` | read |
+| `toLevel()` | `int` | read |
+
+
+---
+
+## Fist arts
+
+`plugin.siren.API.FistEvents` — The third ladder, climbed by landing blows bare-handed - the mirror of body tempering, whose income is damage received. XP is measured by the damage that actually got through, so a punch a shield ate whole teaches nothing. The pre-XP event carries a MUTABLE amount, so a listener can scale the reward rather than only allow or forbid it.
+
+**Post-events** — fired once the change is committed; cannot be cancelled.
+
+### `XpGainEvent`
+
+```java
+FistEvents.onXpGain(event -> { /* ... */ });
+```
+
+XP was banked. `amount` is what was actually granted, after any pre-event scaling.
+
+| Accessor | Type |
+| --- | --- |
+| `ref()` | `Ref<EntityStore>` |
+| `player()` | `PlayerRef` |
+| `level()` | `int` |
+| `amount()` | `float` |
+
+### `LevelUpEvent`
+
+```java
+FistEvents.onLevelUp(event -> { /* ... */ });
+```
+
+A cultivator's fists gained a level. Fires once per level when one blow crosses several.
+
+| Accessor | Type |
+| --- | --- |
+| `ref()` | `Ref<EntityStore>` |
+| `player()` | `PlayerRef` |
+| `fromLevel()` | `int` |
+| `toLevel()` | `int` |
+
+**Pre-events** — fired before the change; `setCancelled(true)` vetoes it, and any setter below re-tunes the numbers the mod then uses.
+
+### `PreXpGainEvent`
+
+```java
+FistEvents.onPreXpGain(event -> { /* ... */ });
+```
+
+About to bank XP for a bare-handed blow. Like the tempering equivalent this is not merely cancellable - it carries a mutable amount, so a listener can scale the reward rather than being limited to allowing or forbidding it. Setting the amount to 0 or below cancels the gain outright.
+
+| Member | Type | |
+| --- | --- | --- |
+| `ref()` | `Ref<EntityStore>` | read |
+| `player()` | `PlayerRef` | read (may be null) |
+| `level()` | `int` | read |
+| `amount()` | `float` | read |
+| `setAmount(float)` | `void` | re-tune |
+
+### `PreLevelUpEvent`
+
+```java
+FistEvents.onPreLevelUp(event -> { /* ... */ });
+```
+
+About to gain a level. Cancelling holds the cultivator where they are; the XP stays banked.
 
 | Member | Type | |
 | --- | --- | --- |

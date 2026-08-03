@@ -5,12 +5,12 @@ progression mod for Hytale servers — realms and Qi, daos, sects, techniques, s
 beasts, formations, cave abodes, duels and alchemy.
 
 This repository is for **mod developers**. It contains the API's Java sources,
-a complete reference for all **156 events**, and worked examples. Everything here
+a complete reference for all **160 events**, and worked examples. Everything here
 is the real code the mod ships — nothing is a summary written after the fact.
 
 | | |
 | --- | --- |
-| **Artifact** | `plugin.siren:Cultivation:0.7.2` |
+| **Artifact** | `plugin.siren:Cultivation:0.7.4` |
 | **Package** | `plugin.siren.API` |
 | **Plugin id** | `Siren:Cultivation` |
 | **Hytale server** | `0.5.x` (built against `com.hypixel.hytale:Server:0.5.7`) |
@@ -26,8 +26,8 @@ internals to change how it behaves. Every one of these is a supported hook:
 | I want to… | Use | Guide |
 | --- | --- | --- |
 | Read a player's realm, level, Qi, race, skill nodes | `CultivationAPI` getters | [Reading player state](docs/reading-state.md) |
-| React when something happens (breakthrough, tame, siege…) | 82 post-events | [Events](docs/events.md) |
-| Veto something, or re-tune its numbers | 74 cancellable pre-events | [Events](docs/events.md) |
+| React when something happens (breakthrough, tame, siege…) | 84 post-events | [Events](docs/events.md) |
+| Veto something, or re-tune its numbers | 76 cancellable pre-events | [Events](docs/events.md) |
 | Keep your own progression in step with a player's saves | `ProfileEvents` | [Profiles](docs/profiles.md) |
 | Grant Qi, force a breakthrough, hand out a skill node | `addQi`, `completeBreakthrough`, `grantSkillNode` | [Driving progression](docs/driving-progression.md) |
 | Read or drain a chunk's spirit vein | `readSpiritVein`, `drainSpiritVein` | [Driving progression](docs/driving-progression.md) |
@@ -45,7 +45,12 @@ internals to change how it behaves. Every one of these is a supported hook:
 | Re-**color** the menus, HUD and skill tree | `registerPalette` | [Palettes](docs/palettes.md) |
 | Put my mod on the Info page, and tell admins when it is out of date | `registerUpdateCheck` | [Registries](docs/registries.md) |
 | Tell whether my jar is the build that was published | `registerBuildCheck` | [Registries](docs/registries.md) |
+| Retract a pairing that turned out to be broken after both shipped | `registerCompatCheck` | [Registries](docs/registries.md) |
 | React to a cultivator's body tempering, or scale the XP it earns | `BodyTemperingEvents` | [Event reference](docs/events-reference.md) |
+| React to a cultivator's fist art, or scale the XP it earns | `FistEvents` | [Event reference](docs/events-reference.md) |
+| Change what a cultivator IS - a bloodline, a constitution, a physique | `registerModifierSource` | [Registries](docs/registries.md) |
+| Add a row to the Overview page's bonus list | `newBonus`, `BonusStats` | [Registries](docs/registries.md) |
+| Raise a player's Health, Stamina, Mana or Oxygen from my own mod | `applyStatBonus` | [Registries](docs/registries.md) |
 | Give a spirit beast an art of my own | `registerBeastArt` | [Registries](docs/registries.md) |
 | Ask how far a player has mastered an art | `getTechniqueMasteryStage`, `getTechniqueMasteryMultiplier` | [Reading player state](docs/reading-state.md) |
 | Add a kind of sect building | `registerSectBuildingType` | [Registries](docs/registries.md) |
@@ -69,10 +74,10 @@ your local repository once:
 
 ```bash
 mvn install:install-file \
-  -Dfile=Cultivation-0.7.2.jar \
+  -Dfile=Cultivation-0.7.4.jar \
   -DgroupId=plugin.siren \
   -DartifactId=Cultivation \
-  -Dversion=0.7.2 \
+  -Dversion=0.7.4 \
   -Dpackaging=jar
 ```
 
@@ -82,7 +87,7 @@ Then depend on it in `provided` scope:
 <dependency>
     <groupId>plugin.siren</groupId>
     <artifactId>Cultivation</artifactId>
-    <version>0.7.2</version>
+    <version>0.7.4</version>
     <scope>provided</scope>
 </dependency>
 ```
@@ -97,7 +102,7 @@ resolves Cultivation's classes for you:
 
 ```json
 "Dependencies": {
-  "Siren:Cultivation": ">=0.7.2"
+  "Siren:Cultivation": ">=0.7.4"
 }
 ```
 
@@ -158,7 +163,7 @@ float qi = CultivationAPI.getQi(accessor, ref);
 | **[Driving progression](docs/driving-progression.md)** | Granting Qi, ranking up, meditation, spirit veins, and the rest of the world |
 | **[Config access](docs/config-access.md)** | Reading and writing Cultivation's own settings, and when not to |
 | **[Events](docs/events.md)** | Pre vs post, cancelling, re-tuning, threading, error handling |
-| **[Event reference](docs/events-reference.md)** | All 156 listeners with their payloads — generated from source |
+| **[Event reference](docs/events-reference.md)** | All 160 listeners with their payloads — generated from source |
 | **[Registries](docs/registries.md)** | Races, techniques, Qi-absorption items |
 | **[Profiles](docs/profiles.md)** | Keeping your own progression in step with a player's separate saves |
 | **[UI integration](docs/ui.md)** | Menu pages, Codex articles, admin config sections |

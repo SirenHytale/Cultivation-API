@@ -166,13 +166,70 @@ Qi cost, cooldown), and on success deducts Qi, stamps the cooldown and runs the
 effect. The player is messaged either way — the effect's own success message, or
 the failure reason. `false` means a gate blocked it.
 
-### Manual-gated techniques
+### Unlock-gated techniques
 
-Cultivation can require a player to have *learned* a technique from a lootable
-manual before using it (`Requires-Manual` on the rule). `newTechniqueRule` does
-not set that flag, so techniques you register are usable as soon as their realm
-gate passes. Listen to `TechniqueEvents.onTechniqueLearn` if you want to track
-learning yourself.
+**Changed in 0.7.4, and it changes the default for techniques you register.**
+
+Meeting an art's realm, Dao and race gate now makes a player *able to hold* it,
+not entitled to use it. Coming by it is a separate event, and the flag that says
+so — `Requires-Unlock` on the rule — **defaults to `true`**.
+
+`newTechniqueRule` deliberately does not take the flag, so a technique you
+register is **locked until the player comes by it**, including one registered by
+a mod written before this existed. Before 0.7.4 the equivalent flag was
+`Requires-Manual` and it defaulted to off, so an art you registered fired the
+moment its realm gate passed. If your addon assumed that, it is the one thing
+here worth re-testing: the symptom is an art that silently never fires for a
+player who should have it.
+
+To keep the old behavior, say so on the rule:
+
+```java
+TechniqueRule rule = CultivationAPI
+        .newTechniqueRule("MyMod:flame_step", true, false, null, "FIRE", null,
+                          "QI_CONDENSATION", 30f, 8f)
+        .freelyAvailable();   // no unlock needed - realm gate is the only gate
+```
+
+`freelyAvailable()`, `charged()` and `unarmedOnly()` are fluent config-*defaults*
+— they set what the rule starts as, and a server owner still overrides any of
+them per art in `Arts/TechniqueConfig.json`.
+
+There are four routes a player can come by an art (a manual, enlightenment while
+meditating, a breakthrough, or a sect hall's inscription), and **all four go
+through one code path**, so you do not have to care which one fired:
+
+```java
+// Veto an unlock, whatever produced it.
+TechniqueEvents.onPreTechniqueLearn(event -> {
+    if(isForbiddenOnThisServer(event.techniqueId())){
+        event.setCancelled(true);
+    }
+});
+
+// Observe one that went through.
+TechniqueEvents.onTechniqueLearn(event -> { /* event.techniqueId() */ });
+```
+
+Note the rename is deliberate and is *itself* the migration. A config written
+before 0.7.4 carries `"Requires-Manual": false` on every entry; had the key kept
+its name, that stale `false` would have outvoted the new default forever and left
+every existing server with the gate silently switched off. An absent key takes
+the Java default instead, and the orphaned `Requires-Manual` is read as an
+unknown key and ignored rather than erroring.
+
+### Charged and unarmed techniques
+
+Two more rule flags arrived with 0.7.4, both off unless set:
+
+- **`charged()`** — the art is pressed once to begin gathering and again to
+  loose it, growing stronger the longer it is held. The numbers ride along as
+  ordinary `Charge*` params, so a server owner retunes a charge exactly as they
+  retune anything else.
+- **`unarmedOnly()`** — the art refuses while a weapon is in hand. What counts as
+  a free hand is Cultivation's call and a server owner can tighten it to a
+  strictly empty hand, so test against the flag rather than inspecting the
+  player's held item yourself.
 
 ---
 
@@ -274,6 +331,91 @@ and be aware that gating features on it mostly punishes honest servers.
 It also fails open. A version absent from `builds` leaves an install `UNKNOWN`
 rather than condemning it, which is what makes forgetting to publish a digest
 harmless rather than an incident.
+
+## Compatibility checks
+
+**New in 0.7.4.** Answers a third question: **is this pairing of your version and
+this Cultivation version known to be broken?**
+
+```java
+CultivationAPI.registerCompatCheck(
+        "MyMod",
+        "My Mod",
+        this.getManifest().getVersion().toString(),
+        "https://example.com/api/compat/MyMod.json",
+        check -> {
+            if(check.getStatus() == CompatStatus.INCOMPATIBLE){
+                standDown(check.getRequiredRange());   // e.g. ">=0.7.4 <0.8.0"
+            }
+        });
+```
+
+The matrix is keyed by **your** version, and each entry describes which
+Cultivation versions that build of yours works against:
+
+```json
+{
+  "compatible": {
+    "1.2.0": { "min": "0.7.4", "below": "0.8.0", "blocked": [] },
+    "1.1.0": { "min": "0.7.0", "below": "0.7.4", "blocked": ["0.7.2"] },
+    "default": { "min": "0.7.4", "below": "0.8.0", "blocked": [] }
+  }
+}
+```
+
+- `min` — the lowest Cultivation this build accepts, inclusive.
+- `below` — the first Cultivation it does **not** accept, exclusive.
+- `blocked` — exact versions to reject inside that band, for a single release
+  that turned out to be broken.
+
+Every field is optional: an entry with neither `min` nor `below` means any
+version. `default` is used for any of your versions with no entry of its own,
+which is what keeps an old build from silently going `UNKNOWN` after you stop
+listing it.
+
+`getRequiredRange()` hands the band back already formatted for a log line
+(`">=0.7.4 <0.8.0"`, or `"any version"`), so you do not have to reassemble it.
+
+### Declare a real range in your manifest first
+
+This registry is **not** the gate, and reaching for it instead of a manifest
+range is the mistake worth naming. A manifest `Dependencies` entry accepts a full
+semver range — it is not limited to a floor:
+
+```json
+"Dependencies": { "Siren:Cultivation": ">=0.7.4 <0.8.0" }
+```
+
+That makes the engine refuse to load your addon against a Cultivation outside the
+band, before a line of your code runs and with no network involved. It is
+absolute, offline, and cannot be got wrong at runtime.
+
+What a manifest range *cannot* do is describe a pairing that turned out to be
+broken **after** both jars shipped. That is this check's entire job: the matrix is
+a file you can edit without cutting a release, so a bad pairing can be corrected
+for everyone who already has both installed. Think of it as the retractable
+second layer over a fixed first one.
+
+### Stand down; never throw
+
+Act on `INCOMPATIBLE` by withdrawing what you registered and saying so plainly in
+the log.
+
+**Do not throw out of `setup()` to refuse a pairing** — a plugin that throws at
+boot takes the whole server down with it, and by the time a verdict lands you
+have been running for half a minute anyway. The verdict arrives on the check's
+own daemon thread, not a world thread: touch registries and the log from it,
+never entity state.
+
+| Status | Means |
+| --- | --- |
+| `COMPATIBLE` | The published matrix says this pairing is fine. |
+| `INCOMPATIBLE` | The matrix names this pairing as broken; `getRequiredRange()` says what it wanted. |
+| `UNKNOWN` | Nobody could tell — not checked yet, no network, or no entry for your version. |
+
+Like the other two, it fails open in every direction. An unreachable site, a
+malformed matrix, or a version nobody has written an entry for all leave your mod
+running untouched, so an offline server is never told its mods disagree.
 
 ## Beast arts
 
@@ -382,3 +524,111 @@ boolean added = CultivationAPI.registerMasteryStage(
 It returns **false** if the ladder is already full rather than silently ignoring
 you, because the ladder is capped at five and the UI and lang keys only cover
 that many. Check the return value.
+
+## Standing modifiers
+
+The hook for anything that changes what a cultivator **is** rather than what they
+do — a bloodline, a constitution, a physique. One registration answers a set of
+typed channels, and Cultivation asks them at each of its own chokepoints.
+
+```java
+CultivationAPI.registerModifierSource("myMod:bloodlines", new CultivationModifierSource(){
+    @Override
+    public float qiGainMultiplier(ComponentAccessor<EntityStore> accessor, Ref<EntityStore> ref){
+        return Bloodline.of(accessor, ref) == Bloodline.DRAGON ? 1.15f : 1f;
+    }
+
+    @Override
+    public float damageTakenMultiplier(ComponentAccessor<EntityStore> accessor, Ref<EntityStore> ref){
+        return Bloodline.of(accessor, ref) == Bloodline.DRAGON ? 0.95f : 1f;
+    }
+});
+```
+
+Every method has a default meaning "no opinion", so implement only the channels
+you care about. Withdraw it from `shutdown()` with `unregisterModifierSource`.
+
+### Why this and not events
+
+Events are the right tool for reacting to a *moment*. This is for a standing
+*fact* about a player that re-prices a dozen unrelated systems at once — doing
+that with events would mean a listener on every one of them, each re-deriving
+the same fact.
+
+### The channels
+
+| Channel | What it scales |
+| --- | --- |
+| `qiGainMultiplier` | Every point of Qi gained, from any source |
+| `meditationQiMultiplier` | Qi drawn by meditating; carries an `inLava` flag |
+| `damageDealtMultiplier` | All damage dealt |
+| `unarmedDamageMultiplier` | Bare-handed damage, **on top of** the above |
+| `damageTakenMultiplier` | Damage received — above 1 is fragility |
+| `isImmuneToDamageCause` | Cancels a damage cause outright |
+| `chargeSecondsMultiplier` | How long a charged art must be gathered for |
+| `ignoresDaoElementLock` | Lifts the dao lock on elemental arts entirely |
+| `daoAffinityMultiplier` | Affinity gained toward one element |
+| `alignmentShiftMultiplier` | How far a Yin or Yang shift moves them |
+| `yinYangBalanceToleranceMultiplier` | Widens the band counting as balanced |
+| `ritualDifficultyMultiplier` | Ritual length **and** tribulation damage |
+| `canMeditateInLava` | Whether lava is a legal meditation seat |
+| `auraScaleMultiplier` | Realm aura size — cosmetic |
+| `bonuses` | Rows for the Overview's bonus list |
+| `traits` | Named lines for the Overview's Constitution section |
+
+### How they combine
+
+Multipliers **multiply** across every registered source; the neutral value is
+`1`. Booleans **OR** — one source saying yes is enough. Two addons each granting
++10% produce ×1.21, not ×1.20, which is the same way Cultivation's own internal
+multipliers already stack.
+
+A source that throws is caught, logged once, and thereafter ignored, so a broken
+addon cannot take the damage pipeline down with it.
+
+### Cost
+
+Every channel returns its neutral value immediately when nothing is registered,
+so a server without such an addon pays one emptiness check per chokepoint. Your
+own methods are called on the world thread, sometimes from inside the damage
+pipeline — keep them to a component read and some arithmetic.
+
+### A worked example
+
+**Cultivation: Sacred Bodies** is built entirely on this registry and nothing
+else — sixteen sacred bodies and eight stackable physiques, each re-pricing Qi,
+damage, charge time, rituals and the aura, all through one registered source.
+
+It is worth reading as a shape to copy on two counts. It answers every channel
+from a *single component read* rather than one per channel, which is what keeps a
+source this broad cheap enough to sit in the damage pipeline. And it contributes
+its own `traits` lines, so a constitution shows up on the Overview page as
+readable text rather than as an unexplained change in the player's numbers — a
+standing modifier the player cannot see is a bug report waiting to happen.
+
+## Overview rows and stat bonuses
+
+`bonuses` returns `CultivationBonus` rows built with `newBonus`. Reuse a key from
+`CultivationAPI.BonusStats` and your row **sums** with Cultivation's own rather
+than printing a second, differently-worded line for the same stat:
+
+```java
+CultivationAPI.newBonus("mymod.source.bloodline",
+        CultivationAPI.BonusStats.QI_GAIN_PERCENT, 15f, true);
+```
+
+Available keys: `HEALTH`, `DAMAGE_PERCENT`, `DAMAGE_REDUCTION_PERCENT`,
+`QI_GAIN_PERCENT`, `STAMINA`, `MANA`, `MOVE_SPEED_PERCENT`,
+`RITUAL_SPEED_PERCENT`, `QI_COST_REDUCTION_PERCENT`. Anything else is legal and
+prints under its own name.
+
+For a real engine stat rather than a display row, use `applyStatBonus`:
+
+```java
+CultivationAPI.applyStatBonus(accessor, ref,
+        DefaultEntityStatTypes.getStamina(), "MyMod_Stamina", 25f);
+```
+
+It is **keyed**: calling it again with the same key replaces that key's
+contribution rather than stacking with it, so you can recompute freely without
+tracking what you granted last time. Pass `0` to withdraw it.

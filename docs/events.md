@@ -1,6 +1,6 @@
 # Events
 
-Cultivation exposes **156 listener hooks** across twelve subsystems. This page covers
+Cultivation exposes **160 listener hooks** across thirteen subsystems. This page covers
 the rules that apply to all of them. For the full catalogue — every event, its
 payload, and what each field means — see
 **[the event reference](events-reference.md)**.
@@ -18,6 +18,7 @@ payload, and what each field means — see
 | `FormationEvents` | Laying and dispersing spirit arrays, trap strikes |
 | `DwellingEvents` | Cave Abodes, Spirit Springs, upkeep, seclusion |
 | `BodyTemperingEvents` | Tempering sessions and the thresholds they cross |
+| `FistEvents` | Fist-art levels earned by landing blows bare-handed |
 | `ProfileEvents` | Switching between a player's cultivation profiles |
 
 ## Pre vs post

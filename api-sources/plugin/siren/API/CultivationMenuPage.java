@@ -39,8 +39,21 @@ import java.util.function.Supplier;
  * built-in entry (point Cultivation's {@code "race"} button at its own page, say)
  * rather than adding beside it. Cultivation's own ids are the bare words
  * {@code overview}, {@code settings}, {@code race}, {@code skilltree},
- * {@code bonuses}, {@code dao}, {@code keybinds}, {@code rankings},
- * {@code codex} and {@code admin}.</p>
+ * {@code dao}, {@code rankings}, {@code codex}, {@code sense}, {@code admin}
+ * and {@code info}.</p>
+ *
+ * <h2>Ids without a button</h2>
+ *
+ * <p>Four more ids exist and open real pages, but Cultivation no longer puts
+ * them on the bar - {@code bonuses} was folded into {@code overview},
+ * {@code titles} into {@code race} (which is why that button now reads
+ * "Identity"), and {@code profiles} and {@code keybinds} are reached from
+ * {@code settings}. Registering any of them yourself puts a button back, since
+ * the bar is drawn purely from what is in this registry.</p>
+ *
+ * <p>Note also that {@code sense} carries a {@link Builder#visible} gate rather
+ * than a permission: its button is hidden until the viewer's realm actually
+ * unlocks the spirit sense.</p>
  *
  * <h2>Threading</h2>
  *

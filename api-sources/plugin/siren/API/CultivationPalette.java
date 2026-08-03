@@ -61,6 +61,20 @@ import java.util.function.Supplier;
  * and leaves five crimson does not read as a palette, it reads as a bug. Passing
  * some but not all is refused at {@link Builder#build}.</p>
  *
+ * <h2>Semantic colors are the other exception</h2>
+ *
+ * <p>A few strings are colored from Java through {@code Message.color} rather than
+ * by a document - the Spirit Sense ritual verdict is the one that matters, because
+ * it says "yes / wait / never" and the color IS half the message. Those cannot ride
+ * on a document the way everything else does, so a palette may state them directly
+ * through {@link Builder#semantic}.</p>
+ *
+ * <p>Unlike the halos these are individually optional: {@link #getSemantic} takes
+ * the caller's own default, so a palette that omits them keeps Cultivation's. That
+ * matters for a genuinely light palette, where the stock jade-on-ink verdict text
+ * would be all but invisible on paper - but it is not something every palette has
+ * to think about.</p>
+ *
  * <h2>Threading</h2>
  *
  * <p>Register from your plugin's {@code setup()}; load order does not matter, since
@@ -77,26 +91,47 @@ public final class CultivationPalette {
      */
     public static final String DEFAULT_KEY = "cultivation:default";
 
+    /**
+     * A meaning a color carries, for the few strings Java colors itself.
+     *
+     * <p>Named by what they mean rather than by hue, because that is what has to
+     * survive a re-grading: on ink, "this ground will carry your breakthrough" is
+     * jade; on paper it has to be a deep green to be legible at all. The meaning
+     * is the constant, the hue is the palette's business.</p>
+     */
+    public enum Semantic {
+        /** Yes - the thing you are asking about is ready. */
+        POSITIVE,
+        /** Not yet, but waiting will fix it. */
+        NEUTRAL,
+        /** No, and it will not become yes. */
+        NEGATIVE
+    }
+
     private final String key;
     private final Supplier<Message> name;
+    private final String nameKey;
     private final String sectionKey;
     private final int swatch;
     private final String documentRoot;
     private final String auraPrefix;
     private final Set<String> documents;
     private final Map<SkillTreeBranch, Integer> halos;
+    private final Map<Semantic, Integer> semantics;
     private final String permission;
     private final Predicate<PlayerRef> visible;
 
     private CultivationPalette(Builder builder) {
         this.key = builder.key;
         this.name = builder.name;
+        this.nameKey = builder.nameKey;
         this.sectionKey = builder.sectionKey;
         this.swatch = builder.swatch;
         this.documentRoot = builder.documentRoot;
         this.auraPrefix = builder.auraPrefix;
         this.documents = Set.copyOf(builder.documents);
         this.halos = Collections.unmodifiableMap(new EnumMap<>(builder.halos));
+        this.semantics = Collections.unmodifiableMap(new EnumMap<>(builder.semantics));
         this.permission = builder.permission;
         this.visible = builder.visible;
     }
@@ -116,6 +151,20 @@ public final class CultivationPalette {
     @Nonnull
     public Message getName() {
         return this.name.get();
+    }
+
+    /**
+     * The raw translation key behind {@link #getName()}, or null when this palette
+     * was registered without one.
+     *
+     * <p>Needed because a dropdown entry takes a {@code LocalizableString}, which
+     * is built from a message <i>id</i> - a already-resolved {@code Message}
+     * cannot be turned back into one. A palette with no key falls back to showing
+     * its own id, which is what {@link #getName()} does too.</p>
+     */
+    @Nullable
+    public String getNameKey() {
+        return this.nameKey;
     }
 
     /** Translation key of the caption this palette groups under, or null for ungrouped. */
@@ -142,6 +191,33 @@ public final class CultivationPalette {
     public int getHalo(@Nonnull SkillTreeBranch branch, int fallback) {
         Integer rgb = this.halos.get(branch);
         return rgb == null ? fallback : rgb;
+    }
+
+    /**
+     * This palette's color for one meaning, or {@code fallback} when it does not
+     * state one.
+     *
+     * <p>Individually optional on purpose - a palette re-grading the menus does
+     * not have to have an opinion about verdict text, and taking the caller's own
+     * default means every existing palette keeps working unchanged.</p>
+     *
+     * @param fallback the color Cultivation would use on its own look - pass the
+     *                 real default, not 0, since that is what a palette with no
+     *                 opinion should render as.
+     */
+    public int getSemantic(@Nonnull Semantic semantic, int fallback) {
+        Integer rgb = this.semantics.get(semantic);
+        return rgb == null ? fallback : rgb;
+    }
+
+    /**
+     * The same color as a {@code #RRGGBB} string, which is the form
+     * {@code Message.color} and {@code PatchStyle.setColor} both take.
+     */
+    @Nonnull
+    public String getSemanticHex(@Nonnull Semantic semantic, @Nonnull String fallbackHex) {
+        Integer rgb = this.semantics.get(semantic);
+        return rgb == null ? fallbackHex : "#%06X".formatted(rgb);
     }
 
     /**
@@ -224,12 +300,14 @@ public final class CultivationPalette {
     public static final class Builder {
         private final String key;
         private Supplier<Message> name;
+        private String nameKey;
         private String sectionKey;
         private int swatch = 0xD9A63E;
         private String documentRoot;
         private String auraPrefix;
         private Set<String> documents = new HashSet<>();
         private final Map<SkillTreeBranch, Integer> halos = new EnumMap<>(SkillTreeBranch.class);
+        private final Map<Semantic, Integer> semantics = new EnumMap<>(Semantic.class);
         private String permission;
         private Predicate<PlayerRef> visible;
 
@@ -242,6 +320,7 @@ public final class CultivationPalette {
         @Nonnull
         public Builder name(@Nonnull String translationKey) {
             this.name = () -> Text.of(translationKey);
+            this.nameKey = translationKey;
             return this;
         }
 
@@ -309,6 +388,20 @@ public final class CultivationPalette {
         @Nonnull
         public Builder halo(@Nonnull SkillTreeBranch branch, int rgb) {
             this.halos.put(branch, rgb);
+            return this;
+        }
+
+        /**
+         * States this palette's color for one meaning - see {@link Semantic}.
+         *
+         * <p>Each is independently optional, unlike the halos: anything left
+         * unset falls back to whatever Cultivation would have used. Worth setting
+         * when a palette moves far enough from ink that the stock colors stop
+         * being legible on it.</p>
+         */
+        @Nonnull
+        public Builder semantic(@Nonnull Semantic semantic, int rgb) {
+            this.semantics.put(semantic, rgb);
             return this;
         }
 
