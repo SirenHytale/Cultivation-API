@@ -101,7 +101,7 @@ under `OptionalDependencies` rather than `Dependencies`:
 
 ```json
 "OptionalDependencies": {
-  "Siren:Cultivation": ">=0.7.4"
+  "Siren:Cultivation": ">=0.8.0"
 }
 ```
 

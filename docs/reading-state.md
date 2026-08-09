@@ -141,6 +141,25 @@ Cultivation's own settings are readable too, through
 [`CultivationConfigs`](config-access.md) — the right way to ask "what does a
 breakthrough cost on *this* server" rather than assuming the defaults.
 
+### Two reads that take neither an accessor nor a `Ref`
+
+```java
+CultivationTitle worn = CultivationAPI.getTitle(store, ref);              // needs a real Store
+boolean owns = CultivationAPI.hasStoreBenefit(playerUuid, "my-mod-crown"); // 0.8.0 — UUID only
+```
+
+`getTitle(store, ref)` wants a genuine `Store<EntityStore>` rather than the usual
+`ComponentAccessor`, since it reads the player's settings component; it returns
+`null` both for a player wearing nothing and for one whose chosen title nobody
+registers any more. See [Titles](registries.md#titles).
+
+`hasStoreBenefit` is the outlier in this whole page: **a `UUID`, no accessor, safe
+from any thread, and it answers for offline players** — which is what makes it
+usable from a leaderboard or a web hook. It reads a cached set, so it is cheap
+enough for a per-draw check. Read [the two ids](store-benefits.md#two-ids-and-they-are-not-interchangeable)
+before your first call; passing the registry key instead of the product slug
+returns `false` forever without a word.
+
 ## Telling Cultivation something changed
 
 If your mod changes a player's progression numbers behind Cultivation's back —

@@ -24,6 +24,7 @@ import plugin.siren.Utils.Config.SpiritCoreConfig;
 import plugin.siren.Utils.Config.SpiritVeinConfig;
 import plugin.siren.Utils.Config.TechniqueConfig;
 import plugin.siren.Utils.Config.UpdateConfig;
+import plugin.siren.Utils.Config.WebStoreConfig;
 import plugin.siren.Utils.Config.WarConfig;
 import plugin.siren.ECS.Races.PlayerRace;
 
@@ -226,6 +227,16 @@ public final class CultivationConfigs {
     @Nonnull
     public static Config<UpdateConfig> update() {
         return Cultivation.getUpdateConfig();
+    }
+
+    /**
+     * The Treasure Pavilion benefit sync: whether purchases on xianxia.dev are
+     * applied to players here, how often the lists are re-read, and whether
+     * the recheck command is available.
+     */
+    @Nonnull
+    public static Config<WebStoreConfig> webStore() {
+        return Cultivation.getWebStoreConfig();
     }
 
     /**

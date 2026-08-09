@@ -184,10 +184,10 @@ a listener; do not build long-lived state around their shape.
 
 ### Rule types
 
-Five plain data classes describe *what the server has configured*, as opposed to
+Six plain data classes describe *what the server has configured*, as opposed to
 *what a player has done*. Each is a config entry with a public constructor, so an
 addon can build one and hand it to the matching registry in
-[`registries.md`](registries.md):
+[`registries.md`](registries.md) — with the one exception noted in the table:
 
 | Type | Package | Describes |
 | --- | --- | --- |
@@ -196,6 +196,7 @@ addon can build one and hand it to the matching registry in
 | `SectBuildingType` | `plugin.siren.Utils.Config` | a kind of sect building, and whether its ground carries the sect's Dao |
 | `LifeBoundTrait` | `plugin.siren.Utils.Config` | a nature a bound treasure can roll, and the art it may unlock |
 | `TechniqueParam` | `plugin.siren.Utils.Config` | one named number inside a rule (`Radius`, `BaseDamage`, …) |
+| `TechniqueFusionRule` | `plugin.siren.Utils.Config` | *(0.8.0)* one fusion recipe — its two parents, its result, cost, odds and whether it consumes the parents. Config-only; no registry takes one, see [Technique Fusion](registries.md#technique-fusion). |
 
 A rule's `damageType` names a **DamageCause asset**, not a `DaoElement`. Vanilla
 ships `Fire`, `Ice`, `Poison`, `Physical` and friends; Cultivation adds one per
@@ -203,6 +204,35 @@ element (`Cultivation_Fire`, `Cultivation_Void`, …), and
 `DaoElement.getDamageCauseId()` gives you the right string for an element. A name
 that resolves to nothing **silently falls back to physical damage** rather than
 erroring, so a typo here costs you the element without a log line.
+
+### `CelestialEventType`
+
+*New in 0.8.0.* `plugin.siren.Utils.Celestial.CelestialEventType` is a `record`
+carried by both `CelestialEvents` payloads, and the thing you hand
+`CelestialManager.registerEventType` to add a phenomenon of your own:
+
+```java
+record CelestialEventType(String id, String nameKey, String weatherId,
+                          float durationMinutes, float weight, boolean enabled)
+```
+
+Deliberately a **thin descriptor, not a callback interface** — it buys scheduling,
+the sky and the chat announcement, and nothing else. An event's actual gameplay
+effect is the registrant's own systems reading `CelestialManager.active()`, which
+is the same shape `SectBuildingType` uses. See
+[Celestial event types](registries.md#celestial-event-types).
+
+`id` is stable, lowercase and never shown to players — it is the
+`/celestial start <id>` argument and the identity `active()` is compared against.
+`weatherId` is a Hytale `Weather` asset id, so an addon supplying its own sky
+ships that asset too.
+
+### `StoreBenefit`
+
+*New in 0.8.0.* The one type in this list that **is** in `plugin.siren.API`, built
+through `StoreBenefit.builder(key, productSlug)` and carried by both
+`StoreBenefitEvents` grant/revoke payloads. Its two ids are not interchangeable —
+see [Treasure Pavilion benefits](store-benefits.md#two-ids-and-they-are-not-interchangeable).
 
 ### `BeastArt` and `BeastArtEffect`
 

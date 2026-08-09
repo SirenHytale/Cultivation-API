@@ -91,6 +91,59 @@ boolean isReadyForAdvancement(accessor, ref)
 ritual — the right gate for an item that says "you are ready" or an NPC that
 offers to officiate.
 
+## The end of the ladder: Ascension
+
+*New in 0.8.0.*
+
+A cultivator at the very top of the ladder may attempt the **Ascension Capstone**
+(飞升). Surviving it either leaves them at the peak as an Ascended cultivator or —
+if the server enabled prestige — resets them to the first realm to climb again with
+a permanent stacking bonus.
+
+This is deliberately **observe-and-veto only**. There is no `ascend(...)` call, and
+that is not an oversight: an ascension runs a timed ritual with escalating lightning
+that can kill, so a synchronous "do it now" call has no sensible semantics. The
+three hooks are:
+
+```java
+CultivationEvents.onPreAscension(event -> {
+    // The one hook for gating the ladder's ending behind something of your own.
+    if (!myPlugin.hasHeavenlyMandate(event.player())) {
+        event.setCancelled(true);
+    }
+});
+
+CultivationEvents.onAscension(event -> {
+    // ascensionCount INCLUDES this one. prestiged() says they chose to begin again -
+    // and by the time this fires they have ALREADY been reset to the first realm.
+    myPlugin.recordAscension(event.player(), event.ascensionCount(), event.prestiged());
+});
+
+CultivationEvents.onAscensionFailed(event -> {
+    // abandoned() distinguishes giving up from being beaten by the tribulation.
+    myPlugin.consoleThem(event.player());
+});
+```
+
+Three things to plan around:
+
+- **An ascension is not a breakthrough.** It gets its own event rather than a
+  `BreakthroughEvent` with a special realm, precisely so a listener counting
+  breakthroughs does not credit one here. If your mod rewards rank-ups, decide
+  separately what an ascension is worth.
+- **`prestiged()` means the reset already happened.** Read the player's realm inside
+  `onAscension` and you will see the *first* realm, not the peak. Anything that
+  needs their pre-ascension standing has to have captured it earlier — in
+  `onPreAscension`, which fires while they are still at the top.
+- **Prestige is off by default** (`Ascension-Prestige-Enabled`), so on most servers
+  `prestiged()` is always `false` and the count only ever reaches 1. Do not build a
+  progression that assumes it climbs.
+
+The API exposes no getter for a player's ascension count between events, so record
+what `onAscension` hands you rather than expecting to read it back. `isMaxLevel`
+still answers whether a cultivator has run out of ladder, which is the gate for
+"may they attempt this at all".
+
 ## Skill points and nodes
 
 ```java

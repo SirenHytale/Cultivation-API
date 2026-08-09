@@ -143,6 +143,23 @@ happened to**. Blocking there stalls that world for every player on it.
 A listener that throws is caught, logged and skipped, so one broken addon cannot
 break the mod or other addons. Do not lean on that — it hides your bug.
 
+### Two events that have no subject world at all (0.8.0)
+
+The rule above assumes there *is* a player whose world thread you are on. Two of
+the classes added in 0.8.0 break that assumption, and a listener written on
+autopilot will reach for a `ref()` that is not there:
+
+- **`StoreBenefitEvents`** runs on **the remote checker thread** — a grant is
+  discovered by an HTTP sweep, so there is no world in hand at all, the payload
+  carries a bare `UUID`, and the player is very often offline. Find them
+  (`Universe.get().getPlayer(uuid)`, check `isValid()`) and hop to their world
+  before reading or writing a single component. See
+  [Treasure Pavilion benefits](store-benefits.md#these-do-not-run-on-a-world-thread).
+- **`CelestialEvents`** is server-wide. It *is* dispatched from a ticking world, so
+  do not block — but **which** world thread you are on is whichever one reached the
+  shared scheduler first, not any particular player's. Hop per player before
+  touching anybody.
+
 ## 9. Reading `getStage()` under a `ProgressionProvider`
 
 `CultivationAPI.getStage(...)` returns `null` whenever a provider is installed —
@@ -241,3 +258,46 @@ If you edit anything under `src/main/resources` (assets, `server.lang`,
 `manifest.json`), run `mvn clean install` rather than `mvn install`. Maven will
 otherwise keep the previously-packaged copy, and you will debug a fix that never
 shipped.
+
+## 16. Asking `hasStoreBenefit` for the registry key (0.8.0)
+
+**Symptom:** a store benefit that nobody ever owns. No log line, no exception.
+
+A `StoreBenefit` carries **two** ids and they are not interchangeable:
+
+```java
+StoreBenefit.builder("myMod:store:crown",   // key — yours, namespaced
+                     "my-mod-crown")        // productSlug — the store's
+
+CultivationAPI.hasStoreBenefit(uuid, "my-mod-crown");        // right
+CultivationAPI.hasStoreBenefit(uuid, "myMod:store:crown");   // always false
+```
+
+The query takes the **slug**, because that is what the entitlement list is keyed
+by on the website. Keep the slug in a constant beside the `builder(...)` call so
+the two can only ever disagree in one place.
+
+Related, and just as quiet: `false` is also what you get when the operator
+disabled the system, disabled that one product, or the first sweep has not landed
+yet. So `false` means "do not apply this" — never "this player did not buy it".
+Do not persist it as a fact. See
+[Treasure Pavilion benefits](store-benefits.md).
+
+## 17. Cancelling `PreMeditationStop` unconditionally (0.8.0)
+
+`MeditationStopReason` gained a third value in 0.8.0, `RITUAL_COMPLETE` — the
+cultivator rising from a seat they just earned a rank in. A listener written
+against the old two-value enum as a blanket `setCancelled(true)` now pins players
+to the ground after every breakthrough.
+
+```java
+CultivationEvents.onPreMeditationStop(event -> {
+    if (event.reason() == CultivationEvents.MeditationStopReason.MOVEMENT) {
+        event.setCancelled(true);   // switch on the reason, always
+    }
+});
+```
+
+Cancelling this one cannot undo the breakthrough either — it is the single stop
+reason that fires *after* the change it reports, with the rank already granted and
+the ritual state already cleared.

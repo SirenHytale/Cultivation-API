@@ -1,25 +1,27 @@
 # Events
 
-Cultivation exposes **160 listener hooks** across thirteen subsystems. This page covers
-the rules that apply to all of them. For the full catalogue — every event, its
-payload, and what each field means — see
-**[the event reference](events-reference.md)**.
+Cultivation exposes **173 listener hooks** across fifteen subsystems — 93
+post-events and 80 cancellable pre-events. This page covers the rules that apply
+to all of them. For the full catalog — every event, its payload, and what each
+field means — see **[the event reference](events-reference.md)**.
 
 | Class | Covers |
 | --- | --- |
-| `CultivationEvents` | Qi, meditation, rituals, breakthroughs, advancements, demotions, tribulations, the Heart-Devil Trial, Qi Deviation, races, skill tree, respecs |
+| `CultivationEvents` | Qi, meditation, rituals, breakthroughs, advancements, demotions, tribulations, the Heart-Devil Trial, Qi Deviation, the Ascension capstone, races, skill tree, respecs |
 | `DaoEvents` | Elements, affinity drift, Yin-Yang alignment, moral paths, karma, Devil harvest |
-| `TechniqueEvents` | Performing and learning arts, mastery advancement, Sword Flying, timed combat buffs |
+| `TechniqueEvents` | Performing and learning arts, fusing two into a third, mastery advancement, Sword Flying, timed combat buffs |
 | `ItemEvents` | Loot drops, pills, spirit cores, manuals, weapon refinement, Life-Bound treasures |
 | `BeastEvents` | Taming, hatching, binding, summoning, companion growth, beast arts, evolution, mounts |
-| `SectEvents` | Founding, membership, ranks, halls, inscriptions, the sect Dao, shared progression, buildings |
+| `SectEvents` | Founding, membership, ranks, abbreviations, halls, inscriptions, the sect Dao, shared progression, buildings |
 | `WarEvents` | Declaring sieges and how they resolve |
 | `DuelEvents` | Challenges, duels, wager payouts |
 | `FormationEvents` | Laying and dispersing spirit arrays, trap strikes |
 | `DwellingEvents` | Cave Abodes, Spirit Springs, upkeep, seclusion |
+| `CelestialEvents` | *(0.8.0)* Server-wide phenomena starting and ending — Spirit Tide, Meteor Shower, Blood Moon, and [any an addon registers](registries.md#celestial-event-types) |
 | `BodyTemperingEvents` | Tempering sessions and the thresholds they cross |
 | `FistEvents` | Fist-art levels earned by landing blows bare-handed |
 | `ProfileEvents` | Switching between a player's cultivation profiles |
+| `StoreBenefitEvents` | *(0.8.0)* [Treasure Pavilion](store-benefits.md) entitlements arriving and leaving. **The one class here that does not fire on a world thread** |
 
 ## Pre vs post
 
@@ -97,6 +99,27 @@ A listener that throws is caught, logged and skipped, so one broken addon can
 neither break the mod's own systems nor other addons' listeners. Do not rely on
 it — it hides your bug.
 
+### The one exception: `StoreBenefitEvents`
+
+`StoreBenefitEvents` breaks the rule above, because there is no player-world in
+hand when it fires. Grants and revokes are discovered by an HTTP sweep, so those
+listeners run on **the remote checker thread**, and the payload carries a bare
+`UUID` rather than a `Ref` — for a player who may well be offline. Find them and
+hop first; see [Treasure Pavilion benefits](store-benefits.md#these-do-not-run-on-a-world-thread).
+
+### `CelestialEvents` has no subject, so it has no *particular* world thread
+
+`CelestialEvents` is still dispatched from a ticking world — `CelestialScheduleSystem`
+is an ordinary delayed system — so a listener is on *a* world thread and must not
+block. But a celestial event is server-wide and has no subject player, so **which**
+world thread runs your listener is whichever one reached the shared scheduler
+first, and the payload carries a `CelestialEventType` rather than a `ref()`.
+
+Treat it like the store events for the purpose of touching anybody: enumerate the
+players you care about and hop onto each one's own world thread before reading a
+component. Everything else in this API follows the subject's-world-thread rule
+exactly as described above.
+
 ## Registration
 
 Register once, from your plugin's `setup()`. The listener lists are
@@ -143,6 +166,14 @@ CultivationEvents.onPreMeditationStop(event -> {
     }
 });
 ```
+
+Switch on the reason rather than cancelling unconditionally. `MeditationStopReason`
+gained a third value in 0.8.0 — `RITUAL_COMPLETE`, the cultivator rising from a
+seat they just earned a rank in — and a blanket `setCancelled(true)` now keeps them
+sat there afterwards. This is the one stop reason that fires **after** the change
+it reports: the rank is already granted and the ritual state already cleared, so
+cancelling cannot undo the breakthrough. It only leaves them seated, which reads
+as a stuck player rather than as a feature.
 
 **Block sect wars outside a scheduled window**
 

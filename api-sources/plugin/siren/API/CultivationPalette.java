@@ -63,11 +63,16 @@ import java.util.function.Supplier;
  *
  * <h2>Semantic colors are the other exception</h2>
  *
- * <p>A few strings are colored from Java through {@code Message.color} rather than
- * by a document - the Spirit Sense ritual verdict is the one that matters, because
- * it says "yes / wait / never" and the color IS half the message. Those cannot ride
- * on a document the way everything else does, so a palette may state them directly
+ * <p>Some strings are colored from Java through {@code Message.color} rather than by
+ * a document. Sometimes that is because the color IS half the message - the Spirit
+ * Sense ritual verdict says "yes / wait / never" - and sometimes because a label's
+ * color varies with state, and a Label cannot be re-styled after it is drawn, so the
+ * color has to travel with the {@code Message}. Either way the text escapes the
+ * documents a palette re-grades, so a palette may state those colors directly
  * through {@link Builder#semantic}.</p>
+ *
+ * <p>Anything that renders in <i>chat</i> is deliberately not on this list. Chat sits
+ * over the world, not over a themed panel, so it is not the palette's business.</p>
  *
  * <p>Unlike the halos these are individually optional: {@link #getSemantic} takes
  * the caller's own default, so a palette that omits them keeps Cultivation's. That
@@ -105,7 +110,51 @@ public final class CultivationPalette {
         /** Not yet, but waiting will fix it. */
         NEUTRAL,
         /** No, and it will not become yes. */
-        NEGATIVE
+        NEGATIVE,
+
+        // The tiers below are not verdicts - they are the ordinary text tiers,
+        // needed because some pages build a whole label from Java. The Info page
+        // is the clearest case: every line on a mod card carries a colour that
+        // varies with state, so all of it travels as a coloured Message and none
+        // of it is in the document a palette re-grades. Left to the defaults,
+        // that page stays parchment-on-ink no matter which look is worn - which
+        // on a light palette means pale text on pale paper.
+
+        /** The strongest emphasis - a name, or a line that has to be noticed. Bright gold by default. */
+        HEADING,
+        /** Emphasis a step below a heading - a caption, a qualifier. Gold by default. */
+        ACCENT,
+        /** Ordinary readable text. Parchment by default. */
+        BODY,
+        /** Reference text, deliberately quiet. Dim parchment by default. */
+        MUTED,
+        /**
+         * The second identity color - jade in the default look, the hue the sect
+         * pages are built on.
+         *
+         * <p>Distinct from {@link #POSITIVE} even though both are jade here: this
+         * one says <i>which world a thing belongs to</i>, not that it is good.
+         * The land page tells a sect claim from a private abode by jade against
+         * gold, and reading that as a verdict would make "sect ground" mean
+         * "everything is fine".</p>
+         */
+        SECONDARY
+    }
+
+    /**
+     * One semantic colour, null-safe, as the {@code #RRGGBB} string
+     * {@code Message.color} takes.
+     *
+     * <p>Static because the palette itself is nullable at most call sites - a
+     * page reads it once for the whole build and passes it down - and every
+     * caller would otherwise repeat the same null check. Pass the colour
+     * Cultivation's own look uses as {@code fallbackHex}: a palette that states
+     * no opinion should render exactly as before, not as black.</p>
+     */
+    @Nonnull
+    public static String hex(@Nullable CultivationPalette palette, @Nonnull Semantic semantic,
+                             @Nonnull String fallbackHex) {
+        return palette == null ? fallbackHex : palette.getSemanticHex(semantic, fallbackHex);
     }
 
     private final String key;

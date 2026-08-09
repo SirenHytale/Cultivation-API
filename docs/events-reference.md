@@ -1,7 +1,7 @@
 # Event reference
 
 Every event Cultivation fires, grouped by the class that declares it.
-**160 listener hooks** across 13 subsystems.
+**173 listener hooks** across 15 subsystems.
 
 > Generated from `api-sources/` by `tools/gen_events_reference.py`. Do not edit
 > by hand — re-run the script instead. The prose in each entry is the javadoc on
@@ -22,12 +22,12 @@ CultivationEvents.onBreakthrough(event -> {
 
 ## Core progression
 
-`plugin.siren.API.CultivationEvents` — Qi, meditation, rituals, breakthroughs, advancements, demotions, tribulations, the Heart-Devil Trial, Qi Deviation, races, the skill tree and respecs.
+`plugin.siren.API.CultivationEvents` — Qi, meditation, rituals, breakthroughs, advancements, demotions, tribulations, the Heart-Devil Trial, Qi Deviation, the Ascension capstone, races, the skill tree and respecs.
 
 **Enums declared here**
 
 - `CultivationEvents.RitualType` — Which timed meditation ritual a ritual event refers to. Values: `BREAKTHROUGH`, `ADVANCEMENT`, `REFINEMENT`
-- `CultivationEvents.MeditationStopReason` — Why a player stopped meditating. Values: `COMMAND`, `MOVEMENT`
+- `CultivationEvents.MeditationStopReason` — Why a player stopped meditating. Values: `COMMAND`, `MOVEMENT`, `RITUAL_COMPLETE`
 
 **Post-events** — fired once the change is committed; cannot be cancelled.
 
@@ -190,6 +190,35 @@ A timed meditation ritual just began (the tick that first accrued progress).
 | `ref()` | `Ref<EntityStore>` |
 | `player()` | `PlayerRef` |
 | `type()` | `RitualType` |
+
+### `AscensionEvent`
+
+```java
+CultivationEvents.onAscension(event -> { /* ... */ });
+```
+
+A cultivator survived the Ascension Capstone (飞升) - the end of the ladder. `ascensionCount` is the total INCLUDING this one, and `prestiged` says whether they chose to begin again (and so have already been reset to the first realm by the time this fires) or to remain at the peak as an Ascended cultivator. Deliberately its own event rather than a `BreakthroughEvent` with a special realm: an ascension is not a breakthrough, and a listener that treats it as one would credit the wrong thing.
+
+| Accessor | Type |
+| --- | --- |
+| `ref()` | `Ref<EntityStore>` |
+| `player()` | `PlayerRef` |
+| `ascensionCount()` | `int` |
+| `prestiged()` | `boolean` |
+
+### `AscensionFailedEvent`
+
+```java
+CultivationEvents.onAscensionFailed(event -> { /* ... */ });
+```
+
+A cultivator's Ascension attempt ended in failure.
+
+| Accessor | Type |
+| --- | --- |
+| `ref()` | `Ref<EntityStore>` |
+| `player()` | `PlayerRef` |
+| `abandoned()` | `boolean` |
 
 ### `DemotionEvent`
 
@@ -399,13 +428,25 @@ A player is about to stop meditating. Cancel to keep them seated - useful to mak
 | `player()` | `PlayerRef` | read (may be null) |
 | `reason()` | `MeditationStopReason` | read |
 
+### `PreAscensionEvent`
+
+```java
+CultivationEvents.onPreAscension(event -> { /* ... */ });
+```
+
+A cultivator is about to begin the Ascension Capstone. Cancelling keeps them at the peak untried - the one hook a server needs to gate the ladder's ending behind something of its own (a quest, an item, a date).
+
+| Member | Type | |
+| --- | --- | --- |
+| `ref()` | `Ref<EntityStore>` | read |
+| `player()` | `PlayerRef` | read (may be null) |
+| `prestiged()` | `boolean` | read |
+
 ### `PreRitualStartEvent`
 
 ```java
 CultivationEvents.onPreRitualStart(event -> { /* ... */ });
 ```
-
-A timed meditation ritual is about to begin. Cancel to refuse it - the player keeps meditating (banking Qi) but never enters the ritual.
 
 | Member | Type | |
 | --- | --- | --- |
@@ -704,7 +745,7 @@ A Devil-path cultivator is about to harvest Qi from a slain player. Cancel to de
 
 ## Techniques
 
-`plugin.siren.API.TechniqueEvents` — Performing and learning arts, Sword Flying, and the timed combat buffs.
+`plugin.siren.API.TechniqueEvents` — Performing and learning arts, fusing two into a third, Sword Flying, and the timed combat buffs.
 
 **Enums declared here**
 
@@ -786,6 +827,21 @@ A timed technique buff was applied. `magnitude` means whatever that buff measure
 | `type()` | `BuffType` |
 | `durationSeconds()` | `float` |
 | `magnitude()` | `float` |
+
+### `TechniqueFusionEvent`
+
+```java
+TechniqueEvents.onTechniqueFusion(event -> { /* ... */ });
+```
+
+A Technique Fusion ritual succeeded: `fusionId` names the recipe, `resultTechniqueId` the art just granted. Whether the two parents were consumed is not carried here - listen for the ordinary `TechniqueLearnEvent` the grant fires, and (if the recipe consumed them) two separate learned-set removals happened via `TechniqueUnlockManager.revoke`, which does not fire an event of its own (nothing in play ever removes knowledge except this and an admin tool).
+
+| Accessor | Type |
+| --- | --- |
+| `ref()` | `Ref<EntityStore>` |
+| `player()` | `PlayerRef` |
+| `fusionId()` | `String` |
+| `resultTechniqueId()` | `String` |
 
 ### `TechniqueBuffExpireEvent`
 
@@ -898,6 +954,27 @@ A timed technique buff is about to be applied. Cancel to deny it; the setters re
 | `magnitude()` | `float` | read |
 | `setDurationSeconds(float)` | `void` | re-tune |
 | `setMagnitude(float)` | `void` | re-tune |
+
+### `PreTechniqueFusionEvent`
+
+```java
+TechniqueEvents.onPreTechniqueFusion(event -> { /* ... */ });
+```
+
+A fusion ritual is about to run - every gate (both parents mastered, the realm floor, the Qi, the cooldown) has already passed. Cancel to refuse it silently (no Qi spent, no cooldown, neither parent touched); `setQiCost`, `setConsumeParents` and `setFailureChancePercent` re-tune this one attempt without touching `TechniqueConfig.json`.
+
+| Member | Type | |
+| --- | --- | --- |
+| `ref()` | `Ref<EntityStore>` | read |
+| `player()` | `PlayerRef` | read (may be null) |
+| `fusionId()` | `String` | read |
+| `resultTechniqueId()` | `String` | read |
+| `qiCost()` | `float` | read |
+| `consumeParents()` | `boolean` | read |
+| `failureChancePercent()` | `float` | read |
+| `setQiCost(float)` | `void` | re-tune |
+| `setConsumeParents(boolean)` | `void` | re-tune |
+| `setFailureChancePercent(float)` | `void` | re-tune |
 
 ### `PreTechniqueMasteryAdvanceEvent`
 
@@ -1414,7 +1491,7 @@ A companion is about to be summoned in its rideable body. Cancel to refuse the m
 
 ## Sects
 
-`plugin.siren.API.SectEvents` — Founding, disbanding, membership, ranks, halls and inscriptions.
+`plugin.siren.API.SectEvents` — Founding, disbanding, membership, ranks, abbreviations, halls and inscriptions.
 
 **Enums declared here**
 
@@ -1548,6 +1625,21 @@ A sect's motto was replaced.
 | `sect()` | `Sect` |
 | `oldMotto()` | `String` |
 | `newMotto()` | `String` |
+
+### `SectAbbreviationChangeEvent`
+
+```java
+SectEvents.onSectAbbreviationChange(event -> { /* ... */ });
+```
+
+A sect's abbreviation was replaced. `oldAbbreviation` is empty for a sect that never had one.
+
+| Accessor | Type |
+| --- | --- |
+| `leader()` | `UUID` |
+| `sect()` | `Sect` |
+| `oldAbbreviation()` | `String` |
+| `newAbbreviation()` | `String` |
 
 ### `SectBannerChangeEvent`
 
@@ -1760,6 +1852,22 @@ A motto is about to be set. Cancel to refuse it; `setMotto` to rewrite it (the 6
 | `oldMotto()` | `String` | read |
 | `motto()` | `String` | read |
 | `setMotto(String)` | `void` | re-tune |
+
+### `PreSectAbbreviationChangeEvent`
+
+```java
+SectEvents.onPreSectAbbreviationChange(event -> { /* ... */ });
+```
+
+A sect's abbreviation is about to change. Cancel to refuse it; `setAbbreviation` to rewrite it (the 3-6 letters/digits rule and the uniqueness check still apply afterward).
+
+| Member | Type | |
+| --- | --- | --- |
+| `leader()` | `UUID` | read |
+| `sect()` | `Sect` | read |
+| `oldAbbreviation()` | `String` | read |
+| `abbreviation()` | `String` | read |
+| `setAbbreviation(String)` | `void` | re-tune |
 
 ### `PreSectBannerChangeEvent`
 
@@ -2369,6 +2477,62 @@ A seclusion retreat is about to pay out. Cancel to forfeit it (reported to the p
 
 ---
 
+## Celestial events
+
+`plugin.siren.API.CelestialEvents` — Server-wide phenomena - Spirit Tide, Meteor Shower, Blood Moon, and any an addon registered through `CelestialManager.registerEventType`. Both hooks are generic to every type rather than one pair per phenomenon, so switch on `type().id()` to react to a particular one.
+
+**Post-events** — fired once the change is committed; cannot be cancelled.
+
+### `CelestialEventStartEvent`
+
+```java
+CelestialEvents.onCelestialEventStart(event -> { /* ... */ });
+```
+
+A celestial event just started; its sky is already live.
+
+| Accessor | Type |
+| --- | --- |
+| `type()` | `CelestialEventType` |
+| `startedAtMillis()` | `long` |
+| `endsAtMillis()` | `long` |
+| `forcedByAdmin()` | `boolean` |
+
+### `CelestialEventEndEvent`
+
+```java
+CelestialEvents.onCelestialEventEnd(event -> { /* ... */ });
+```
+
+A celestial event just ended; its sky is already clearing.
+
+| Accessor | Type |
+| --- | --- |
+| `type()` | `CelestialEventType` |
+| `startedAtMillis()` | `long` |
+| `endedAtMillis()` | `long` |
+| `forcedByAdmin()` | `boolean` |
+
+**Pre-events** — fired before the change; `setCancelled(true)` vetoes it, and any setter below re-tunes the numbers the mod then uses.
+
+### `PreCelestialEventStartEvent`
+
+```java
+CelestialEvents.onPreCelestialEventStart(event -> { /* ... */ });
+```
+
+A celestial event is about to start. Cancel to skip this pick entirely (the scheduler simply waits for its next check rather than substituting another event, so a listener that vetoes every pick would leave none running - the same "silence is a valid answer" shape `PreSectJoinEvent` has); `setDurationMinutes` to run it longer or shorter than `CelestialEventType#durationMinutes()`.
+
+| Member | Type | |
+| --- | --- | --- |
+| `type()` | `CelestialEventType` | read |
+| `durationMinutes()` | `float` | read |
+| `forcedByAdmin()` | `boolean` | read |
+| `setDurationMinutes(float)` | `void` | re-tune |
+
+
+---
+
 ## Body tempering
 
 `plugin.siren.API.BodyTemperingEvents` — The second ladder, climbed by taking blows rather than by gathering Qi: XP earned from damage that reached the body, and the levels it buys. The pre-XP event carries a MUTABLE amount, so a listener can scale the reward rather than only allow or forbid it.
@@ -2620,4 +2784,54 @@ A profile is about to be erased. Cancel to keep it.
 | `ref()` | `Ref<EntityStore>` | read |
 | `player()` | `PlayerRef` | read |
 | `profile()` | `Profile` | read |
+
+
+---
+
+## Treasure Pavilion benefits
+
+`plugin.siren.API.StoreBenefitEvents` — Entitlements bought on xianxia.dev arriving and leaving. **These fire on the remote checker thread, not on a world thread**, and none of them is cancellable - both departures from every other class here, so read the class javadoc before a listener touches a player.
+
+**Post-events** — fired once the change is committed; cannot be cancelled.
+
+### `BenefitGrantedEvent`
+
+```java
+StoreBenefitEvents.onBenefitGranted(event -> { /* ... */ });
+```
+
+A player the last sweep did not list is now entitled to `benefit`.
+
+| Accessor | Type |
+| --- | --- |
+| `playerUuid()` | `UUID` |
+| `benefit()` | `StoreBenefit` |
+
+### `BenefitRevokedEvent`
+
+```java
+StoreBenefitEvents.onBenefitRevoked(event -> { /* ... */ });
+```
+
+A previously entitled player is no longer listed - a refund, a chargeback, or the server disabling the product. Fired for each player, whether or not they are online; the wearer of an auto-registered title keeps it only until their next join, when it is re-validated.
+
+| Accessor | Type |
+| --- | --- |
+| `playerUuid()` | `UUID` |
+| `benefit()` | `StoreBenefit` |
+
+### `SyncCompletedEvent`
+
+```java
+StoreBenefitEvents.onSyncCompleted(event -> { /* ... */ });
+```
+
+One sweep finished - every registered product was fetched (or skipped as disabled). `failedProducts` names the fetches that came to nothing; their previous lists were kept, not cleared.
+
+| Accessor | Type |
+| --- | --- |
+| `products()` | `int` |
+| `granted()` | `int` |
+| `revoked()` | `int` |
+| `failedProducts()` | `List<String>` |
 

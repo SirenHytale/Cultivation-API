@@ -12,8 +12,8 @@ import java.util.function.Consumer;
  * package. Not itself a stable API surface - register through
  * {@link CultivationEvents}, {@link SectEvents}, {@link WarEvents},
  * {@link DuelEvents}, {@link FormationEvents}, {@link DwellingEvents},
- * {@link BeastEvents}, {@link TechniqueEvents}, {@link DaoEvents} or
- * {@link ItemEvents} instead.
+ * {@link BeastEvents}, {@link TechniqueEvents}, {@link DaoEvents},
+ * {@link ItemEvents} or {@link CelestialEvents} instead.
  *
  * <p>A listener that throws is logged and skipped so one broken addon can
  * neither break the mod's own systems nor the other addons listening to the

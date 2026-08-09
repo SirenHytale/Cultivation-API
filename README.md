@@ -2,15 +2,15 @@
 
 The public integration surface of **[Cultivation](https://xianxia.dev/)**, a Xianxia
 progression mod for Hytale servers — realms and Qi, daos, sects, techniques, spirit
-beasts, formations, cave abodes, duels and alchemy.
+beasts, formations, cave abodes, duels, alchemy and the heavens themselves.
 
 This repository is for **mod developers**. It contains the API's Java sources,
-a complete reference for all **160 events**, and worked examples. Everything here
+a complete reference for all **173 events**, and worked examples. Everything here
 is the real code the mod ships — nothing is a summary written after the fact.
 
 | | |
 | --- | --- |
-| **Artifact** | `plugin.siren:Cultivation:0.7.4` |
+| **Artifact** | `plugin.siren:Cultivation:0.8.0` |
 | **Package** | `plugin.siren.API` |
 | **Plugin id** | `Siren:Cultivation` |
 | **Hytale server** | `0.5.x` (built against `com.hypixel.hytale:Server:0.5.7`) |
@@ -26,8 +26,8 @@ internals to change how it behaves. Every one of these is a supported hook:
 | I want to… | Use | Guide |
 | --- | --- | --- |
 | Read a player's realm, level, Qi, race, skill nodes | `CultivationAPI` getters | [Reading player state](docs/reading-state.md) |
-| React when something happens (breakthrough, tame, siege…) | 84 post-events | [Events](docs/events.md) |
-| Veto something, or re-tune its numbers | 76 cancellable pre-events | [Events](docs/events.md) |
+| React when something happens (breakthrough, tame, siege…) | 93 post-events | [Events](docs/events.md) |
+| Veto something, or re-tune its numbers | 80 cancellable pre-events | [Events](docs/events.md) |
 | Keep your own progression in step with a player's saves | `ProfileEvents` | [Profiles](docs/profiles.md) |
 | Grant Qi, force a breakthrough, hand out a skill node | `addQi`, `completeBreakthrough`, `grantSkillNode` | [Driving progression](docs/driving-progression.md) |
 | Read or drain a chunk's spirit vein | `readSpiritVein`, `drainSpiritVein` | [Driving progression](docs/driving-progression.md) |
@@ -56,10 +56,15 @@ internals to change how it behaves. Every one of these is a supported hook:
 | Add a kind of sect building | `registerSectBuildingType` | [Registries](docs/registries.md) |
 | Add a nature a Life-Bound treasure can roll | `registerLifeBoundTrait` | [Registries](docs/registries.md) |
 | Ask what element the ground or a biome pushes toward | `getGroundDao`, `getTerrainElement` | [Driving progression](docs/driving-progression.md) |
+| Add a cosmetic label players wear beside their name | `registerTitle` | [Registries](docs/registries.md#titles) |
+| Gate, or react to, the end of the ladder | `onPreAscension`, `onAscension` | [Driving progression](docs/driving-progression.md#the-end-of-the-ladder-ascension) |
+| Add a server-wide phenomenon with its own sky | `CelestialManager.registerEventType` | [Registries](docs/registries.md#celestial-event-types) |
+| Re-tune or veto a Technique Fusion | `onPreTechniqueFusion` | [Registries](docs/registries.md#technique-fusion) |
+| Sell something on the web store and deliver it in game | `registerStoreBenefit`, `hasStoreBenefit` | [Store benefits](docs/store-benefits.md) |
 
-The last three are the big ones — and the last two are easy to confuse, so:
+Three of those are the big ones, and two of the three are easy to confuse:
 `CultivationTheme` changes the **words**, `CultivationPalette` changes the
-**colors**. A `ProgressionProvider` lets your mod own levelling
+**colors**. The third, `ProgressionProvider`, lets your mod own levelling
 outright while sects, daos, techniques, beasts, formations, abodes, duels, alchemy
 and the skill tree keep working on top of it — that is how the
 [SoulRings](https://www.mermaids.dev/cultivation/) addon turns Cultivation into
@@ -74,10 +79,10 @@ your local repository once:
 
 ```bash
 mvn install:install-file \
-  -Dfile=Cultivation-0.7.4.jar \
+  -Dfile=Cultivation-0.8.0.jar \
   -DgroupId=plugin.siren \
   -DartifactId=Cultivation \
-  -Dversion=0.7.4 \
+  -Dversion=0.8.0 \
   -Dpackaging=jar
 ```
 
@@ -87,7 +92,7 @@ Then depend on it in `provided` scope:
 <dependency>
     <groupId>plugin.siren</groupId>
     <artifactId>Cultivation</artifactId>
-    <version>0.7.4</version>
+    <version>0.8.0</version>
     <scope>provided</scope>
 </dependency>
 ```
@@ -102,7 +107,7 @@ resolves Cultivation's classes for you:
 
 ```json
 "Dependencies": {
-  "Siren:Cultivation": ">=0.7.4"
+  "Siren:Cultivation": ">=0.8.0"
 }
 ```
 
@@ -163,9 +168,10 @@ float qi = CultivationAPI.getQi(accessor, ref);
 | **[Driving progression](docs/driving-progression.md)** | Granting Qi, ranking up, meditation, spirit veins, and the rest of the world |
 | **[Config access](docs/config-access.md)** | Reading and writing Cultivation's own settings, and when not to |
 | **[Events](docs/events.md)** | Pre vs post, cancelling, re-tuning, threading, error handling |
-| **[Event reference](docs/events-reference.md)** | All 160 listeners with their payloads — generated from source |
+| **[Event reference](docs/events-reference.md)** | All 173 listeners with their payloads — generated from source |
 | **[Registries](docs/registries.md)** | Races, techniques, Qi-absorption items |
 | **[Profiles](docs/profiles.md)** | Keeping your own progression in step with a player's separate saves |
+| **[Store benefits](docs/store-benefits.md)** | Registering a Treasure Pavilion product, and the one event family that is not on a world thread |
 | **[UI integration](docs/ui.md)** | Menu pages, Codex articles, admin config sections |
 | **[Compatibility](docs/compatibility.md)** | Endless Leveling, PlaceholderAPI, Marriage; optional-dependency guards |
 | **[Progression provider](docs/progression-provider.md)** | Replacing the realm/Qi ladder entirely |
@@ -188,7 +194,7 @@ assistant to read `AGENTS.md` first.
 ## Source layout
 
 ```
-api-sources/plugin/siren/API/   The 24 public API classes, verbatim
+api-sources/plugin/siren/API/   The 39 public API classes, verbatim
 docs/                            Guides and the generated event reference
 examples/                        A worked example addon
 tools/gen_events_reference.py    Regenerates docs/events-reference.md

@@ -72,6 +72,9 @@ public final class SectEvents {
     /** A sect's motto was replaced. */
     public record SectMottoChangeEvent(@Nonnull UUID manager, @Nonnull Sect sect, @Nonnull String oldMotto, @Nonnull String newMotto) {}
 
+    /** A sect's abbreviation was replaced. {@code oldAbbreviation} is empty for a sect that never had one. */
+    public record SectAbbreviationChangeEvent(@Nonnull UUID leader, @Nonnull Sect sect, @Nonnull String oldAbbreviation, @Nonnull String newAbbreviation) {}
+
     /** A sect changed the banner flown over its hall. */
     public record SectBannerChangeEvent(@Nonnull UUID manager, @Nonnull Sect sect, @Nonnull String oldBannerId, @Nonnull String newBannerId) {}
 
@@ -238,6 +241,32 @@ public final class SectEvents {
     }
 
     /**
+     * A sect's abbreviation is about to change. Cancel to refuse it;
+     * {@link #setAbbreviation} to rewrite it (the 3-6 letters/digits rule and
+     * the uniqueness check still apply afterward).
+     */
+    public static final class PreSectAbbreviationChangeEvent extends CancellableEvent {
+        private final UUID leader;
+        private final Sect sect;
+        private final String oldAbbreviation;
+        private String abbreviation;
+
+        public PreSectAbbreviationChangeEvent(@Nonnull UUID leader, @Nonnull Sect sect,
+                                              @Nonnull String oldAbbreviation, @Nonnull String abbreviation){
+            this.leader = leader;
+            this.sect = sect;
+            this.oldAbbreviation = oldAbbreviation;
+            this.abbreviation = abbreviation;
+        }
+
+        @Nonnull public UUID leader(){ return this.leader; }
+        @Nonnull public Sect sect(){ return this.sect; }
+        @Nonnull public String oldAbbreviation(){ return this.oldAbbreviation; }
+        @Nonnull public String abbreviation(){ return this.abbreviation; }
+        public void setAbbreviation(@Nonnull String abbreviation){ this.abbreviation = abbreviation; }
+    }
+
+    /**
      * A hall banner is about to change. Cancel to refuse it; {@link #setBannerId}
      * to force a different one - useful for a server that wants a sect's banner
      * decided by something other than the sect's own taste (a war outcome, a
@@ -401,6 +430,8 @@ public final class SectEvents {
     private static final List<Consumer<PreSectRankChangeEvent>> PRE_RANK_CHANGE = EventBus.newListenerList();
     private static final List<Consumer<SectMottoChangeEvent>> MOTTO_CHANGE = EventBus.newListenerList();
     private static final List<Consumer<PreSectMottoChangeEvent>> PRE_MOTTO_CHANGE = EventBus.newListenerList();
+    private static final List<Consumer<SectAbbreviationChangeEvent>> ABBREVIATION_CHANGE = EventBus.newListenerList();
+    private static final List<Consumer<PreSectAbbreviationChangeEvent>> PRE_ABBREVIATION_CHANGE = EventBus.newListenerList();
     private static final List<Consumer<SectBannerChangeEvent>> BANNER_CHANGE = EventBus.newListenerList();
     private static final List<Consumer<PreSectBannerChangeEvent>> PRE_BANNER_CHANGE = EventBus.newListenerList();
     private static final List<Consumer<SectJoinPolicyChangeEvent>> JOIN_POLICY_CHANGE = EventBus.newListenerList();
@@ -431,6 +462,8 @@ public final class SectEvents {
     public static void onPreSectRankChange(@Nonnull Consumer<PreSectRankChangeEvent> listener){ PRE_RANK_CHANGE.add(listener); }
     public static void onSectMottoChange(@Nonnull Consumer<SectMottoChangeEvent> listener){ MOTTO_CHANGE.add(listener); }
     public static void onPreSectMottoChange(@Nonnull Consumer<PreSectMottoChangeEvent> listener){ PRE_MOTTO_CHANGE.add(listener); }
+    public static void onSectAbbreviationChange(@Nonnull Consumer<SectAbbreviationChangeEvent> listener){ ABBREVIATION_CHANGE.add(listener); }
+    public static void onPreSectAbbreviationChange(@Nonnull Consumer<PreSectAbbreviationChangeEvent> listener){ PRE_ABBREVIATION_CHANGE.add(listener); }
     public static void onSectBannerChange(@Nonnull Consumer<SectBannerChangeEvent> listener){ BANNER_CHANGE.add(listener); }
     public static void onPreSectBannerChange(@Nonnull Consumer<PreSectBannerChangeEvent> listener){ PRE_BANNER_CHANGE.add(listener); }
     public static void onSectJoinPolicyChange(@Nonnull Consumer<SectJoinPolicyChangeEvent> listener){ JOIN_POLICY_CHANGE.add(listener); }
@@ -463,6 +496,8 @@ public final class SectEvents {
     public static boolean firePreSectRankChange(@Nonnull PreSectRankChangeEvent event){ return EventBus.fire(PRE_RANK_CHANGE, event, "PreSectRankChangeEvent"); }
     public static void fireSectMottoChange(@Nonnull SectMottoChangeEvent event){ EventBus.dispatch(MOTTO_CHANGE, event, "SectMottoChangeEvent"); }
     public static boolean firePreSectMottoChange(@Nonnull PreSectMottoChangeEvent event){ return EventBus.fire(PRE_MOTTO_CHANGE, event, "PreSectMottoChangeEvent"); }
+    public static void fireSectAbbreviationChange(@Nonnull SectAbbreviationChangeEvent event){ EventBus.dispatch(ABBREVIATION_CHANGE, event, "SectAbbreviationChangeEvent"); }
+    public static boolean firePreSectAbbreviationChange(@Nonnull PreSectAbbreviationChangeEvent event){ return EventBus.fire(PRE_ABBREVIATION_CHANGE, event, "PreSectAbbreviationChangeEvent"); }
     public static void fireSectBannerChange(@Nonnull SectBannerChangeEvent event){ EventBus.dispatch(BANNER_CHANGE, event, "SectBannerChangeEvent"); }
     public static boolean firePreSectBannerChange(@Nonnull PreSectBannerChangeEvent event){ return EventBus.fire(PRE_BANNER_CHANGE, event, "PreSectBannerChangeEvent"); }
     public static void fireSectJoinPolicyChange(@Nonnull SectJoinPolicyChangeEvent event){ EventBus.dispatch(JOIN_POLICY_CHANGE, event, "SectJoinPolicyChangeEvent"); }

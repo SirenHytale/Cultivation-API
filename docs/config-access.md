@@ -69,16 +69,41 @@ saving the one holder you edited — but useful after a bulk rewrite.
 | | `spiritCores()` | Core drop rates and their Qi values |
 | | `spiritVein()` | Per-chunk Qi pools, tiers, regen, drain |
 | | `breakthrough()` | What a rank-up costs and pays out |
+| | `bodyTempering()` | The second ladder's XP curve and what each level buys |
 | | `skillTree()` | Node costs and effects |
 | | `raceSystem()` | The race system's own switches |
 | | `race(PlayerRace)` | One race's stat block — including a race another mod registered |
 | **Arts** | `dao()` `technique()` `manual()` `alchemy()` `refinement()` `lifeBound()` `beast()` | What a cultivator practices, crafts, tempers and binds |
 | **Society** | `sect()` `formation()` `dwelling()` `war()` `duel()` `partner()` | Sects, the ground they hold, the homes they build, the fights they pick |
 | **Compatibility** | `endlessLeveling()` | How Cultivation shares the stats it raises — see [Compatibility](compatibility.md) |
+| **Release** | `update()` | The version check behind the Info page — see [Update checks](registries.md#update-checks) |
+| | `webStore()` | *(0.8.0)* The Treasure Pavilion sync: whether purchases are applied here, how often the lists are re-read, and which products the server refuses — see [Store benefits](store-benefits.md#the-operators-switches) |
 
 Note `race(PlayerRace)` returns the `RaceConfig` directly rather than a holder,
 because a race's stat block is reached through the race, not through a file of
 its own.
+
+### Files with no accessor yet
+
+Cultivation ships seven config files that `CultivationConfigs` does not expose:
+**Celestial**, **Fist**, **Land**, **Master-Disciple**, **Qi Deviation**,
+**Secret Realm** and **Tournament**. Five of the seven arrived with 0.8.0's new
+subsystems and simply have not been given an accessor.
+
+They are reachable, on the internals terms the [README](../README.md#compatibility)
+sets out for anything outside `plugin.siren.API`:
+
+```java
+import plugin.siren.Cultivation;
+import plugin.siren.Utils.Config.CelestialConfig;
+
+Config<CelestialConfig> holder = Cultivation.getCelestialConfig();
+```
+
+`plugin.siren.Cultivation` is free to change shape between versions, so prefer a
+matching `Pre*` event where one exists (`PreCelestialEventStartEvent` re-tunes a
+celestial event's duration without reading its config at all) and expect to
+revisit anything that reaches through the plugin class.
 
 ## Threading
 

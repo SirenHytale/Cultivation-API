@@ -1647,6 +1647,45 @@ public class CultivationAPI {
         return getTitle(key);
     }
 
+    // --- Treasure Pavilion store benefits ------------------------------------
+
+    /**
+     * Adds a purchasable web-store benefit to the entitlement sync: the server
+     * periodically reads the public list of player UUIDs who bought this
+     * product on xianxia.dev and answers {@link #hasStoreBenefit} from it.
+     *
+     * <p>Call from your plugin's {@code setup()}; registering before or after
+     * the sync starts both work (a late registration is fetched immediately).
+     * A benefit built with {@link StoreBenefit.Builder#title} also gets a
+     * picker title unlocked by owning it. Delivery, caching, the operator's
+     * config switches and {@code /cultivation store recheck} all come with
+     * registration - see {@link StoreBenefitEvents} for applying an effect
+     * beyond a title.</p>
+     */
+    public static void registerStoreBenefit(@Nonnull StoreBenefit benefit){
+        plugin.siren.Utils.Update.WebStoreBenefits.register(benefit);
+    }
+
+    /** Removes a previously registered store benefit - for a plugin unloading cleanly. */
+    public static void unregisterStoreBenefit(@Nonnull String key){
+        plugin.siren.Utils.Update.WebStoreBenefits.unregister(key);
+    }
+
+    /** @return every registered store benefit, in registration order. A fresh list, safe to hold. */
+    @Nonnull
+    public static List<StoreBenefit> getStoreBenefits(){
+        return plugin.siren.Utils.Update.WebStoreBenefits.getBenefits();
+    }
+
+    /**
+     * Whether this player bought this product on the web store, per the last
+     * sync. False when the operator disabled the system or that product.
+     * Readable from any thread; cheap enough for a per-draw check.
+     */
+    public static boolean hasStoreBenefit(@Nullable java.util.UUID playerUuid, @Nonnull String productSlug){
+        return plugin.siren.Utils.Update.WebStoreBenefits.hasBenefit(playerUuid, productSlug);
+    }
+
     /**
      * The event-data key a nav click arrives under. Add it to your page's codec
      * as a plain {@code Codec.STRING} field - it carries a literal page id, not

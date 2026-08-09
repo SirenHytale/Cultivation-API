@@ -70,7 +70,16 @@ public final class CultivationEvents {
         /** They toggled it off themselves with /cultivation meditate. */
         COMMAND,
         /** They wandered away from the spot they sat down at. */
-        MOVEMENT
+        MOVEMENT,
+        /**
+         * A realm breakthrough or a sub-stage advancement finished, and the
+         * cultivator rises from the seat they earned it in.
+         *
+         * <p>Fired AFTER the rank has been granted and the ritual state cleared,
+         * so a listener sees a cultivator who has already advanced. Cancelling
+         * the pre-event keeps them seated; it cannot undo the breakthrough.</p>
+         */
+        RITUAL_COMPLETE
     }
 
     // --- Post-event payloads (notifications; cannot be cancelled) ---
@@ -107,6 +116,24 @@ public final class CultivationEvents {
 
     /** A timed meditation ritual just began (the tick that first accrued progress). */
     public record RitualStartEvent(@Nonnull Ref<EntityStore> ref, @Nullable PlayerRef player, @Nonnull RitualType type) {}
+
+    /**
+     * A cultivator survived the Ascension Capstone (飞升) - the end of the
+     * ladder. {@code ascensionCount} is the total INCLUDING this one, and
+     * {@code prestiged} says whether they chose to begin again (and so have
+     * already been reset to the first realm by the time this fires) or to
+     * remain at the peak as an Ascended cultivator.
+     *
+     * <p>Deliberately its own event rather than a {@link BreakthroughEvent}
+     * with a special realm: an ascension is not a breakthrough, and a listener
+     * that treats it as one would credit the wrong thing.</p>
+     */
+    public record AscensionEvent(@Nonnull Ref<EntityStore> ref, @Nullable PlayerRef player,
+                                 int ascensionCount, boolean prestiged) {}
+
+    /** A cultivator's Ascension attempt ended in failure. */
+    public record AscensionFailedEvent(@Nonnull Ref<EntityStore> ref, @Nullable PlayerRef player,
+                                       boolean abandoned) {}
 
     /** A player was demoted a sub-stage for abandoning a ritual (or for Qi Deviation). Banked Qi has been wiped and the granting skill points revoked. */
     public record DemotionEvent(@Nonnull Ref<EntityStore> ref, @Nullable PlayerRef player, @Nonnull CultivationRealm realm,
@@ -353,6 +380,28 @@ public final class CultivationEvents {
     }
 
     /** A timed meditation ritual is about to begin. Cancel to refuse it - the player keeps meditating (banking Qi) but never enters the ritual. */
+    /**
+     * A cultivator is about to begin the Ascension Capstone. Cancelling keeps
+     * them at the peak untried - the one hook a server needs to gate the
+     * ladder's ending behind something of its own (a quest, an item, a date).
+     */
+    public static final class PreAscensionEvent extends CancellableEvent {
+        private final Ref<EntityStore> ref;
+        private final PlayerRef player;
+        private final boolean prestiged;
+
+        public PreAscensionEvent(@Nonnull Ref<EntityStore> ref, @Nullable PlayerRef player, boolean prestiged){
+            this.ref = ref;
+            this.player = player;
+            this.prestiged = prestiged;
+        }
+
+        @Nonnull public Ref<EntityStore> ref(){ return this.ref; }
+        @Nullable public PlayerRef player(){ return this.player; }
+        /** Whether they intend to reset and climb again, rather than remain at the peak. */
+        public boolean prestiged(){ return this.prestiged; }
+    }
+
     public static final class PreRitualStartEvent extends CancellableEvent {
         private final Ref<EntityStore> ref;
         private final PlayerRef player;
@@ -469,6 +518,9 @@ public final class CultivationEvents {
     private static final List<Consumer<MeditationStopEvent>> MEDITATION_STOP = EventBus.newListenerList();
     private static final List<Consumer<PreMeditationStopEvent>> PRE_MEDITATION_STOP = EventBus.newListenerList();
     private static final List<Consumer<RitualStartEvent>> RITUAL_START = EventBus.newListenerList();
+    private static final List<Consumer<AscensionEvent>> ASCENSION = EventBus.newListenerList();
+    private static final List<Consumer<AscensionFailedEvent>> ASCENSION_FAILED = EventBus.newListenerList();
+    private static final List<Consumer<PreAscensionEvent>> PRE_ASCENSION = EventBus.newListenerList();
     private static final List<Consumer<PreRitualStartEvent>> PRE_RITUAL_START = EventBus.newListenerList();
     private static final List<Consumer<DemotionEvent>> DEMOTION = EventBus.newListenerList();
     private static final List<Consumer<PreDemotionEvent>> PRE_DEMOTION = EventBus.newListenerList();
@@ -498,6 +550,9 @@ public final class CultivationEvents {
     public static void onMeditationStop(@Nonnull Consumer<MeditationStopEvent> listener){ MEDITATION_STOP.add(listener); }
     public static void onPreMeditationStop(@Nonnull Consumer<PreMeditationStopEvent> listener){ PRE_MEDITATION_STOP.add(listener); }
     public static void onRitualStart(@Nonnull Consumer<RitualStartEvent> listener){ RITUAL_START.add(listener); }
+    public static void onAscension(@Nonnull Consumer<AscensionEvent> listener){ ASCENSION.add(listener); }
+    public static void onAscensionFailed(@Nonnull Consumer<AscensionFailedEvent> listener){ ASCENSION_FAILED.add(listener); }
+    public static void onPreAscension(@Nonnull Consumer<PreAscensionEvent> listener){ PRE_ASCENSION.add(listener); }
     public static void onPreRitualStart(@Nonnull Consumer<PreRitualStartEvent> listener){ PRE_RITUAL_START.add(listener); }
     public static void onDemotion(@Nonnull Consumer<DemotionEvent> listener){ DEMOTION.add(listener); }
     public static void onPreDemotion(@Nonnull Consumer<PreDemotionEvent> listener){ PRE_DEMOTION.add(listener); }
@@ -529,6 +584,9 @@ public final class CultivationEvents {
     public static void fireMeditationStop(@Nonnull MeditationStopEvent event){ EventBus.dispatch(MEDITATION_STOP, event, "MeditationStopEvent"); }
     public static boolean firePreMeditationStop(@Nonnull PreMeditationStopEvent event){ return EventBus.fire(PRE_MEDITATION_STOP, event, "PreMeditationStopEvent"); }
     public static void fireRitualStart(@Nonnull RitualStartEvent event){ EventBus.dispatch(RITUAL_START, event, "RitualStartEvent"); }
+    public static void fireAscension(@Nonnull AscensionEvent event){ EventBus.dispatch(ASCENSION, event, "AscensionEvent"); }
+    public static void fireAscensionFailed(@Nonnull AscensionFailedEvent event){ EventBus.dispatch(ASCENSION_FAILED, event, "AscensionFailedEvent"); }
+    public static boolean firePreAscension(@Nonnull PreAscensionEvent event){ return EventBus.fire(PRE_ASCENSION, event, "PreAscensionEvent"); }
     public static boolean firePreRitualStart(@Nonnull PreRitualStartEvent event){ return EventBus.fire(PRE_RITUAL_START, event, "PreRitualStartEvent"); }
     public static void fireDemotion(@Nonnull DemotionEvent event){ EventBus.dispatch(DEMOTION, event, "DemotionEvent"); }
     public static boolean firePreDemotion(@Nonnull PreDemotionEvent event){ return EventBus.fire(PRE_DEMOTION, event, "PreDemotionEvent"); }

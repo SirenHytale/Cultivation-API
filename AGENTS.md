@@ -33,7 +33,7 @@ cover it, because nearly every mechanic is re-tunable there.
 1. **`docs/pitfalls.md`** — the mistakes that crash servers. Read this first.
 2. `docs/getting-started.md` — dependency wiring and `setup()`.
 3. The guide for whatever the user is doing (see `README.md`'s table).
-4. `docs/events-reference.md` — all 160 listeners with their payloads. Generated
+4. `docs/events-reference.md` — all 173 listeners with their payloads. Generated
    from source, so it is accurate; it is long, so search it rather than reading
    it end to end.
 
@@ -77,6 +77,18 @@ Synchronously, on the world thread of the player the event happened to. So:
   `CompletableFuture.runAsync(task, otherWorld)`.
 - A listener that throws is caught, logged and skipped — the mod and other
   addons keep working. Do not rely on this; it hides your bug.
+
+**Two 0.8.0 classes have no subject player, so this rule does not apply as
+written.** Check which you are writing before assuming a `ref()`:
+
+- **`StoreBenefitEvents`** fires on the **remote checker thread** — grants are
+  discovered by an HTTP sweep, so there is no world in hand, the payload carries a
+  bare `UUID`, and the player is frequently offline. `Universe.get().getPlayer(uuid)`,
+  check `isValid()`, hop to their world, then read components.
+- **`CelestialEvents`** is server-wide. It *is* on a world thread (so still do not
+  block), but it is whichever world reached the shared scheduler first, not a
+  particular player's, and the payload has a `CelestialEventType` rather than a
+  `ref()`. Hop per player before touching anybody.
 
 ### 4. `provided` scope, never shaded
 
@@ -220,6 +232,14 @@ void startMeditating(accessor, ref)   // stopMeditating does NOT apply the demot
 void stopMeditating(accessor, ref)
 ```
 
+There is deliberately **no `ascend(...)`**. The Ascension Capstone (0.8.0, the end
+of the ladder) is observe-and-veto only, through `CultivationEvents.onPreAscension`
+/ `onAscension` / `onAscensionFailed`. Note that by the time `AscensionEvent` fires
+with `prestiged() == true` the player has **already** been reset to the first realm,
+so capture any pre-ascension standing in the pre-event. Prestige is off by default,
+and no getter exposes a player's ascension count between events — record what the
+event hands you.
+
 **The world, and the other subsystems** — chunk coords, not block coords:
 
 ```java
@@ -236,10 +256,17 @@ float getMeditationRegenMultiplier(String world, int cx, int cz, UUID player)
 
 **Cultivation's own settings** — `CultivationConfigs`, one accessor per file
 (`cultivation()`, `spiritVein()`, `dao()`, `sect()`, … , `endlessLeveling()`,
-plus `race(PlayerRace)`). Each returns the live `Config<T>` **holder**; call
-`.get()` at the point of use and `.save()` after writing. To change a value for
-one player or one event, use the matching `Pre*` event instead — a config write
-changes the server permanently and overwrites what its owner tuned.
+`update()`, `webStore()` (0.8.0), plus `race(PlayerRace)`). Each returns the live
+`Config<T>` **holder**; call `.get()` at the point of use and `.save()` after
+writing. To change a value for one player or one event, use the matching `Pre*`
+event instead — a config write changes the server permanently and overwrites what
+its owner tuned.
+
+**Seven config files have no accessor yet** — Celestial, Fist, Land,
+Master-Disciple, Qi Deviation, Secret Realm, Tournament (five of them arrived with
+0.8.0). They are reachable as `Cultivation.getCelestialConfig()` and friends, on
+the ordinary internals terms: `plugin.siren.Cultivation` may change shape between
+versions. Prefer a `Pre*` event where one exists.
 
 **Compatibility flags:**
 
@@ -263,10 +290,14 @@ TechniqueRule newTechniqueRule(String id, boolean enabled, boolean daoSpecific,
                                @Nullable String requiredElement, @Nullable String elements,
                                @Nullable String damageType, String unlockRealm,
                                float qiCost, float cooldownSeconds, Object... params)
-    // Fluent config-DEFAULTS on the returned rule (0.7.4):
-    //   .freelyAvailable()  no unlock needed - see the warning below
-    //   .charged()          press once to gather, again to loose
-    //   .unarmedOnly()      refuses while a weapon is in hand
+    // Fluent config-DEFAULTS on the returned rule:
+    //   .freelyAvailable()  (0.7.4) no unlock needed - see the warning below
+    //   .charged()          (0.7.4) press once to gather, again to loose
+    //   .unarmedOnly()      (0.7.4) refuses while a weapon is in hand
+    //   .fusionOnly()       (0.8.0) only ever granted by Technique Fusion; stays
+    //                       performable, but leaves the enlightenment/breakthrough/
+    //                       manual/"grant all" pool
+    //   .forRace(raceId)    locks the art to one race
 
 boolean performTechnique(ComponentAccessor<EntityStore>, Ref<EntityStore>, PlayerRef, Technique)
 void    registerQiAbsorptionItemModifier(String itemId, float multiplier)
@@ -283,6 +314,17 @@ void registerCodexEntry(CodexEntry)                 // + unregisterCodexEntry(St
 void registerCodexCategory(CodexCategory)           // + unregisterCodexCategory(String)
 void registerAdminConfigSection(AdminConfigSection)  // + unregisterAdminConfigSection(String)
 void registerPalette(CultivationPalette)            // + unregisterPalette(String)
+void registerTitle(CultivationTitle)                // + unregisterTitle(String)
+void registerSectBanner(SectBanner)                 // + unregisterSectBanner(String)
+
+// A title is PURELY cosmetic. Its two gates ask different questions:
+//   .permission(node) / .visible(Predicate<PlayerRef>)  may they SEE it   -> hidden if false
+//   .unlocked(UnlockCheck)                              have they EARNED it -> greyed + .hint()
+// UnlockCheck is (Store, Ref, PlayerRef), not Predicate<PlayerRef>, because every
+// built-in title asks about the wearer's own components. Read-only; never write.
+CultivationTitle CultivationTitle.builder(String key) ... .build()
+@Nullable CultivationTitle getTitle(String key) | getTitle(Store, Ref)   // what they wear
+List<CultivationTitle> getTitles()
 
 AdminConfigSection newAdminConfigSection(String key, String labelKey, String hintKey,
                                          int sortOrder, Runnable save, List<AdminConfigField> fields)
@@ -300,6 +342,46 @@ void setProgressionProvider(@Nullable ProgressionProvider)  // null restores bui
 void setTheme(@Nullable CultivationTheme)                   // null restores built-in
 ```
 
+**Treasure Pavilion store benefits** (0.8.0) — see
+[`docs/store-benefits.md`](docs/store-benefits.md):
+
+```java
+void registerStoreBenefit(StoreBenefit)     // + unregisterStoreBenefit(String key)
+List<StoreBenefit> getStoreBenefits()
+boolean hasStoreBenefit(@Nullable UUID playerUuid, String productSlug)
+
+StoreBenefit.builder(String key, String productSlug)
+        .name(String translationKey)     // how it is listed
+        .title(String translationKey)    // ALSO registers a CultivationTitle for owners
+        .build()
+```
+
+Two ids, NOT interchangeable: `key` is yours and must be namespaced; `productSlug`
+is the store's. **`hasStoreBenefit` takes the slug** — passing the key returns
+`false` forever, silently. `false` also means "system disabled" / "product
+disabled" / "first sweep has not landed", so it means *do not apply this*, never
+*they did not buy it*. Safe from any thread, answers for offline players.
+
+`StoreBenefitEvents` (`onBenefitGranted`, `onBenefitRevoked`, `onSyncCompleted`) is
+not cancellable and does **not** run on a world thread — see constraint 3.
+
+**Celestial events** (0.8.0) — the one open registry OUTSIDE `plugin.siren.API`,
+in `plugin.siren.Utils.Celestial`:
+
+```java
+CelestialManager.registerEventType(new CelestialEventType(
+        String id, String nameKey, String weatherId,
+        float durationMinutes, float weight, boolean enabled))
+
+@Nullable CelestialEventType CelestialManager.active()   // read this from your own systems
+```
+
+Registering buys scheduling, the sky and the chat announcement — **not** a gameplay
+effect. `CelestialEventType` is a thin descriptor, not a callback interface, so an
+addon adds its effect by reading `active()` and acting while its id is running.
+`CelestialEvents.onCelestialEventStart` / `onPreCelestialEventStart` /
+`onCelestialEventEnd` are generic to every type; switch on `type().id()`.
+
 **Palettes** (0.7.0) — the *color* half, unrelated to `CultivationTheme` above.
 See [`docs/palettes.md`](docs/palettes.md); build one with
 `CultivationPalette.builder(key)`:
@@ -315,17 +397,35 @@ String document(@Nullable CultivationPalette, String basePath)   // when built o
 void buildMenuNav(UICommandBuilder, UIEventBuilder, PlayerRef, String pageKey, Store, Ref)
 void buildMenuNav(UICommandBuilder, UIEventBuilder, PlayerRef, String pageKey)  // back-compat,
                                                         // ignores the palette - avoid
+
+// Semantic colors: the strings colored from Java, which no document can re-grade.
+// Eight meanings - POSITIVE, NEUTRAL, NEGATIVE, and (0.8.0) HEADING, ACCENT, BODY,
+// MUTED, SECONDARY. Individually optional, UNLIKE the nine halos.
+int    palette.getSemantic(Semantic, int fallbackRgb)
+String palette.getSemanticHex(Semantic, String fallbackHex)
+String CultivationPalette.hex(@Nullable CultivationPalette, Semantic, String fallbackHex)
+Builder.semantic(Semantic, int rgb)
+// ALWAYS pass the real default, never 0 / "#000000" - the fallback is what a
+// palette with no opinion renders as. SECONDARY != POSITIVE even though both are
+// jade by default: SECONDARY says which world a thing belongs to, not that it is good.
 ```
 
 **Events** — one class per subsystem, all in `plugin.siren.API`:
 
 `CultivationEvents`, `DaoEvents`, `TechniqueEvents`, `ItemEvents`, `BeastEvents`,
 `SectEvents`, `WarEvents`, `DuelEvents`, `FormationEvents`, `DwellingEvents`,
-`BodyTemperingEvents`, `FistEvents`, `ProfileEvents`.
+`CelestialEvents`, `BodyTemperingEvents`, `FistEvents`, `ProfileEvents`,
+`StoreBenefitEvents`.
 
 Every listener is `ClassName.onSomething(Consumer<SomethingEvent>)`, and nearly
 every mechanic has both `onX` (post, notification) and `onPreX` (pre, cancellable
 and re-tunable).
+
+The last two arrived in 0.8.0 and are the exceptions to that shape:
+`CelestialEvents` has one pre for two posts (no `PreCelestialEventEnd`), and
+`StoreBenefitEvents` has **no pre-events at all** — nothing there is cancellable,
+deliberately. Both also break the threading rule above; see
+[Hard constraints §3](#3-listeners-run-on-the-subjects-world-thread).
 
 **Enums you will need** (outside `plugin.siren.API` — see `docs/types.md`):
 
@@ -355,6 +455,11 @@ SkillTreeBranch   VITALITY, RESILIENCE, MIGHT, WARDING, INSIGHT, HARMONY,
 - [ ] If a palette is registered: every declared document name exists under the
       one `documentRoot`, all nine halos are set, every `append` is routed through
       `CultivationAPI.document`, and `buildMenuNav` was given `store`/`ref`.
+- [ ] If a `StoreBenefitEvents` or `CelestialEvents` listener is registered: it
+      does not assume a world thread or a `ref()`, and it hops per player before
+      touching a component.
+- [ ] If `hasStoreBenefit` is called: it is passed the **product slug**, not the
+      registry key, and a `false` answer is not persisted as "did not buy".
 
 If you could not verify something against the sources, say which part and why —
 do not present an unverified integration as working.

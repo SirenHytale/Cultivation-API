@@ -55,6 +55,7 @@ public class ExampleAddon extends JavaPlugin {
         // listeners deliberately have none - listener lifetime is server
         // lifetime, matching how plugins load once and stay.
         ExampleContent.unregisterAll();
+        CultivationHooks.unregisterAll();
 
         // If this mod had installed either of these, hand them back so a server
         // unloading only this mod returns to a working ladder and Cultivation's

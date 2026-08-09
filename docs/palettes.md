@@ -96,6 +96,81 @@ palette; never collapse them onto it.
 
 ---
 
+## Semantic colors are the other exception
+
+Some strings are colored **from Java**, through `Message.color`, rather than by a
+document — so they escape the documents a palette re-grades. Two reasons a string
+ends up there:
+
+1. **The color is half the message.** The Spirit Sense ritual verdict says "yes /
+   wait / never", and the hue is what says it.
+2. **The color varies with state.** A `Label` cannot be re-styled after it is
+   drawn, so a line whose color depends on what it reports has to carry that color
+   along with its `Message`.
+
+A palette may state those colors directly:
+
+```java
+.semantic(CultivationPalette.Semantic.POSITIVE, 0x3F7F5F)
+.semantic(CultivationPalette.Semantic.BODY,     0x2A2118)
+```
+
+**Chat is deliberately not on this list.** Chat sits over the world, not over a
+themed panel, so it is not the palette's business.
+
+### The eight meanings
+
+Three verdicts, and five ordinary text tiers added in 0.8.0:
+
+| `Semantic` | Means | Default |
+| --- | --- | --- |
+| `POSITIVE` | Yes | Jade |
+| `NEUTRAL` | Not yet, but waiting will fix it | — |
+| `NEGATIVE` | No, and it will not become yes | — |
+| `HEADING` | *(0.8.0)* The strongest emphasis — a name, a line that has to be noticed | Bright gold |
+| `ACCENT` | *(0.8.0)* A step below a heading — a caption, a qualifier | Gold |
+| `BODY` | *(0.8.0)* Ordinary readable text | Parchment |
+| `MUTED` | *(0.8.0)* Reference text, deliberately quiet | Dim parchment |
+| `SECONDARY` | *(0.8.0)* The second identity color — the hue the sect pages are built on | Jade |
+
+`SECONDARY` and `POSITIVE` are both jade in the default look and are still
+**different meanings**. `SECONDARY` says *which world a thing belongs to*, not
+that it is good: the land page tells a sect claim from a private abode by jade
+against gold, and reading that jade as a verdict would make "sect ground" mean
+"everything is fine". A palette that collapses the two loses that distinction.
+
+### Individually optional, unlike the halos
+
+There is no all-or-nothing rule here. `getSemantic` takes the **caller's own**
+default, so a palette that states no opinion renders exactly as Cultivation would:
+
+```java
+int rgb    = palette.getSemantic(Semantic.BODY, 0xE8DCC8);
+String hex = palette.getSemanticHex(Semantic.BODY, "#E8DCC8");   // for Message.color
+```
+
+Because the palette itself is nullable at most call sites, there is a static
+null-safe form — use it rather than repeating the null check:
+
+```java
+String hex = CultivationPalette.hex(palette, Semantic.BODY, "#E8DCC8");
+```
+
+**Pass the real default, never `0` or `"#000000"`.** The fallback is what a
+palette with no opinion renders as, and a zero there turns every un-stated color
+black.
+
+### When to bother
+
+A palette that only nudges the menus does not need these at all. They start to
+matter when a palette moves far enough from ink that the stock colors stop being
+legible on it — the Info page is the clearest case, since every line on a mod card
+carries a state-dependent color and none of it lives in a document. Left to the
+defaults, that page stays parchment-on-ink whichever look is worn, which on a
+genuinely light palette means pale text on pale paper.
+
+---
+
 ## Registering one
 
 The worked example below is [Cultivation: Jade Slip](https://www.mermaids.dev/cultivation/),
@@ -175,6 +250,7 @@ they get their choice back if it is reinstalled.
 | `documentRoot(String)` | The folder the variants live in, relative to `Common/UI/Custom/`. A trailing slash is added if you leave it off. |
 | `documents(Set<String>)` | Bare file names, no folders. See below. |
 | `halo(SkillTreeBranch, int rgb)` | One branch's halo color. All nine, or none. |
+| `semantic(Semantic, int rgb)` | One [Java-colored meaning](#semantic-colors-are-the-other-exception). Each independently optional. |
 | `permission(String)` | Hides this palette from players without the node |
 | `visible(Predicate<PlayerRef>)` | A gate a permission cannot express. Combines with `permission`; both must pass. |
 
@@ -412,6 +488,8 @@ blank screen rather than in a server log.
 - **Generate the documents; never hand-author a variant.** Divergence between
   variants is invisible until a player wears the odd one out.
 - **All nine halos or none.** Enforced at `build()`.
+- **Semantics are the opposite: each one optional.** Pass the real default to
+  `getSemantic`/`hex`, never `0` — the fallback is what "no opinion" renders as.
 - **Namespace the id *and* the folder.** Both namespaces are global.
 - **Every declared document under one `documentRoot`.**
 - **Route every `append` through `document`**, rows and fragments included.

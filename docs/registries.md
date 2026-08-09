@@ -5,8 +5,8 @@ own. All of them are called from your plugin's `setup()`, in any load order, and
 re-registering an id is a safe no-op rather than an error.
 
 The three content registries come first (races, techniques, Qi absorption
-modifiers); the two release registries at the end put your mod on Cultivation's
-Info page.
+modifiers), then the three release registries that put your mod on Cultivation's
+Info page, then the rest of the content surface.
 
 ---
 
@@ -231,6 +231,60 @@ Two more rule flags arrived with 0.7.4, both off unless set:
   strictly empty hand, so test against the flag rather than inspecting the
   player's held item yourself.
 
+Two more, one of them new in 0.8.0:
+
+- **`fusionOnly()`** *(0.8.0)* — the art is only ever granted by
+  [Technique Fusion](#technique-fusion). It stays fully performable once granted;
+  the flag only removes it from the enlightenment / breakthrough / manual /
+  "grant all" random pool, so that fusing its two parents is the one way in.
+- **`forRace(String raceId)`** — locks the art to one race, including a race
+  another mod registered.
+
+### Technique Fusion
+
+*New in 0.8.0.* Fusion (合道) melds two **fully mastered** arts into a third,
+stronger one — consuming both parents by default, which is what keeps fusing a
+choice rather than a free bonus.
+
+**Recipes are config-only.** There is no `registerFusion(...)`: the recipe list
+lives in `TechniqueConfig.json`'s `Fusions` array, and Cultivation loads it at
+boot. So a mod ships a fusion by shipping the recipe in the server's config — or,
+much more usefully, by registering the *result* art with `fusionOnly()` and
+letting the server owner write the recipe that produces it.
+
+What the API does give you is the pair of events, which is where an addon's own
+rules go:
+
+```java
+TechniqueEvents.onPreTechniqueFusion(event -> {
+    // Every gate has already passed: both parents mastered, the realm floor,
+    // the Qi, the cooldown. Cancelling refuses silently - no Qi spent, no
+    // cooldown stamped, neither parent touched.
+    if (!myPlugin.mayFuse(event.player(), event.fusionId())) {
+        event.setCancelled(true);
+        return;
+    }
+
+    // Or re-tune this one attempt without touching TechniqueConfig.json.
+    event.setQiCost(event.qiCost() * 0.5f);
+    event.setConsumeParents(false);
+    event.setFailureChancePercent(0f);
+});
+
+TechniqueEvents.onTechniqueFusion(event ->
+        myPlugin.announceFusion(event.player(), event.resultTechniqueId()));
+```
+
+Two ordering details worth knowing:
+
+- The failure roll happens **after** the Qi is spent and the cooldown stamped, so
+  `setFailureChancePercent` changes the odds, not the price of losing.
+- `TechniqueFusionEvent` does not say whether the parents were consumed. The grant
+  fires an ordinary `TechniqueLearnEvent` for the new art, but the two removals go
+  through `TechniqueUnlockManager.revoke`, which fires **no event of its own** —
+  nothing else in play ever removes an art. If you mirror a player's learned set,
+  re-read it after a fusion rather than applying a delta.
+
 ---
 
 ## Qi absorption item modifiers
@@ -345,7 +399,7 @@ CultivationAPI.registerCompatCheck(
         "https://example.com/api/compat/MyMod.json",
         check -> {
             if(check.getStatus() == CompatStatus.INCOMPATIBLE){
-                standDown(check.getRequiredRange());   // e.g. ">=0.7.4 <0.8.0"
+                standDown(check.getRequiredRange());   // e.g. ">=0.8.0 <0.9.0"
             }
         });
 ```
@@ -356,9 +410,9 @@ Cultivation versions that build of yours works against:
 ```json
 {
   "compatible": {
-    "1.2.0": { "min": "0.7.4", "below": "0.8.0", "blocked": [] },
-    "1.1.0": { "min": "0.7.0", "below": "0.7.4", "blocked": ["0.7.2"] },
-    "default": { "min": "0.7.4", "below": "0.8.0", "blocked": [] }
+    "1.2.0": { "min": "0.8.0", "below": "0.9.0", "blocked": [] },
+    "1.1.0": { "min": "0.7.0", "below": "0.8.0", "blocked": ["0.7.2"] },
+    "default": { "min": "0.8.0", "below": "0.9.0", "blocked": [] }
   }
 }
 ```
@@ -374,7 +428,7 @@ which is what keeps an old build from silently going `UNKNOWN` after you stop
 listing it.
 
 `getRequiredRange()` hands the band back already formatted for a log line
-(`">=0.7.4 <0.8.0"`, or `"any version"`), so you do not have to reassemble it.
+(`">=0.8.0 <0.9.0"`, or `"any version"`), so you do not have to reassemble it.
 
 ### Declare a real range in your manifest first
 
@@ -383,7 +437,7 @@ range is the mistake worth naming. A manifest `Dependencies` entry accepts a ful
 semver range — it is not limited to a floor:
 
 ```json
-"Dependencies": { "Siren:Cultivation": ">=0.7.4 <0.8.0" }
+"Dependencies": { "Siren:Cultivation": ">=0.8.0 <0.9.0" }
 ```
 
 That makes the engine refuse to load your addon against a Cultivation outside the
@@ -524,6 +578,191 @@ boolean added = CultivationAPI.registerMasteryStage(
 It returns **false** if the ladder is already full rather than silently ignoring
 you, because the ladder is capped at five and the UI and lang keys only cover
 that many. Check the return value.
+
+## Celestial event types
+
+*New in 0.8.0.*
+
+A celestial event (天象) is a server-wide phenomenon that runs for a while and
+then passes — Spirit Tide, Meteor Shower and Blood Moon are the three built-ins.
+The registry is open, and the three built-ins go in through exactly the call an
+addon uses:
+
+```java
+import plugin.siren.Utils.Celestial.CelestialEventType;
+import plugin.siren.Utils.Celestial.CelestialManager;
+
+CelestialManager.registerEventType(new CelestialEventType(
+        "mymod:ashfall",                    // id: stable, lowercase, never shown to players
+        "server.mymod.celestial.ashfall",   // lang key for the display name
+        "Weather_Ashfall",                  // the sky's Weather asset id
+        30f,                                // duration, minutes
+        1.5f,                               // pick weight, relative to the others
+        true));                             // may the scheduler pick it at all
+```
+
+> This one registry lives in `plugin.siren.Utils.Celestial`, not in
+> `plugin.siren.API` — the record and the manager are the declared open surface
+> (their javadoc says so), but they sit outside the package
+> [Compatibility](../README.md#compatibility) promises to keep stable. Treat it as
+> the exception it is, and re-check it on a Cultivation update.
+
+Registering gets you three things: **scheduling** (your event enters the weighted
+pick), **the sky** (your Weather asset is applied for its duration) and **the chat
+announcement**. It gets you no gameplay effect, because
+`CelestialEventType` is deliberately a thin descriptor rather than a callback
+interface — the built-ins' own effects are bespoke enough to be plain static
+queries on `CelestialManager` (`veinRegenMultiplier()`,
+`pathCombatMultiplier(path)`, the meteor-site check) gated on which id is running.
+
+So an addon adds its effect the same way: read `CelestialManager.active()` from
+its own systems and act while its id is the one running.
+
+```java
+CelestialEventType active = CelestialManager.active();
+if (active != null && "mymod:ashfall".equals(active.id())) {
+    // …apply whatever ashfall means
+}
+```
+
+`weight` at zero or below is never picked, which disables an event without
+unregistering it. `enabled` gates only the **scheduler** — an admin's exact
+`/celestial start <id>` still works either way.
+
+The start and end hooks are generic to every type rather than one pair per
+phenomenon, so switch on the id:
+
+```java
+CelestialEvents.onCelestialEventStart(event -> {
+    if ("mymod:ashfall".equals(event.type().id())) {
+        myPlugin.beginAshfall(event.endsAtMillis());
+    }
+});
+```
+
+`PreCelestialEventStartEvent` can veto a pick or re-scale its duration. Cancelling
+skips *this* pick entirely rather than substituting another event, so a listener
+that vetoes everything leaves nothing running — see
+[the event reference](events-reference.md#celestial-events).
+
+## Titles
+
+A title is a cosmetic label a player may wear beside their name — on the Rankings
+board, a sect roster, in chat and on the overhead nameplate. **Purely
+decorative**: nothing in this registry grants a stat, a permission side-effect, or
+any gameplay change.
+
+```java
+CultivationAPI.registerTitle(
+        CultivationTitle.builder("myMod:dragonSlayer")
+                .name("server.myMod.title.dragonSlayer")
+                .section("server.myMod.title.section")
+                .hint("server.myMod.title.hint.dragonSlayer")
+                .unlocked((store, ref, playerRef) -> MyMod.hasSlainDragon(playerRef.getUuid()))
+                .build());
+```
+
+### The two gates are different questions
+
+| Gate | Asks | A player who fails it |
+| --- | --- | --- |
+| `permission(String)` / `visible(Predicate<PlayerRef>)` | *May this player see the title exists?* — an operator or feature switch | Never sees it at all |
+| `unlocked(UnlockCheck)` | *Has this player **earned** it?* | Sees it **greyed**, with `hint` explaining what unlocks it |
+
+Getting these the wrong way round is the mistake to avoid: a progress gate
+written as `visible` makes the title invisible instead of aspirational, and the
+whole point of the greyed tile is that a player can see what to aim for — the same
+convention as a locked race card or skill node.
+
+A title with **no** `unlocked` at all is wearable by everyone who can see it,
+which is exactly right for a permission-gated donor perk where "visible" already
+says everything that matters.
+
+### Why `unlocked` takes a Store and Ref
+
+`UnlockCheck` is `(Store, Ref, PlayerRef)`, not `Predicate<PlayerRef>`, because
+every built-in title is a question about the wearer's own components — their
+realm, their dao, their sect rank — which a bare `PlayerRef` cannot answer. It is
+called on the world thread that owns the wearer, both while the picker is drawn
+and again when an equip click is handled, so it may **read** that player's
+components but must not write to the `Store`.
+
+The check runs when a title is *equipped*, not on every later read. A player whose
+standing has since drifted keeps a title they no longer qualify for, on purpose —
+it is cosmetic, so it is left alone rather than silently unequipped.
+
+### Naming and reading
+
+`name(String)` takes a translation key. The `name(Supplier<Message>)` overload is
+for a title whose text itself carries a parameter — the built-in Dao Element
+titles are one key shared across ten elements. Either way the name resolves fresh
+per draw, so a [`CultivationTheme`](theming.md) still applies to it.
+
+```java
+CultivationTitle worn = CultivationAPI.getTitle(store, ref);   // null if none
+List<CultivationTitle> all = CultivationAPI.getTitles();        // registration order
+```
+
+`getTitle(store, ref)` also returns `null` when the id a player last chose names a
+title nobody currently registers — so removing your mod never leaves a player
+stuck wearing something that no longer exists.
+
+## Sect banners
+
+A banner is the standing column of light a sect flies over its hall — what tells
+anyone walking past whose ground they are on.
+
+```java
+CultivationAPI.registerSectBanner(
+        SectBanner.builder("myMod:frostLotus")
+                .name("server.myMod.banner.frostLotus")
+                .section("server.myMod.banner.section.winter")
+                .swatch(0x9FD8F0)                          // the picker tile's color
+                .particle("MyMod_HallBanner_FrostLotus")    // your own .particlesystem
+                .build());
+```
+
+### It names a particle, not a color
+
+Same constraint that makes a [palette](palettes.md) a set of documents rather than
+a set of hex values. The spawn packet does carry a `Color` field, but nothing in
+the engine ever sends a non-null one and the client that would interpret it is not
+readable — so tinting one shared asset at spawn time is unverifiable. A banner
+therefore ships its own `.particlesystem` with its colors baked into the spawner.
+
+### The asset must be capped, or it leaks
+
+> A hall beacon is **re-spawned on a pulse** for as long as the hall stands. Your
+> `.particlesystem` therefore needs a finite `TotalParticles` **and** an explicit
+> system `LifeSpan`, sized to burn out inside `Sect-Hall-Beacon-Interval-Seconds`.
+
+Vanilla's own looping auras declare `TotalParticles: -1`, and no "stop" call exists
+anywhere in the engine — so an uncapped banner leaks an instance on every client
+that ever walks past the hall, forever. Copy a capped vanilla template rather than
+hand-writing spawner JSON.
+
+`permission` / `visible` gate who may *choose* it, exactly as on a palette or a
+title. And as with those: a sect stores its banner's **id**, never the banner, so
+removing your mod falls the hall back to the vein-tier default it had before
+banners existed — and reinstalling gives the sect its choice back.
+
+## Store benefits
+
+*New in 0.8.0.* Register a product from
+[the Treasure Pavilion](https://xianxia.dev/store) and Cultivation keeps the list
+of players who bought it current, answering `hasStoreBenefit` from it:
+
+```java
+CultivationAPI.registerStoreBenefit(
+        StoreBenefit.builder("myMod:store:crown", "my-mod-crown")
+                .name("server.myMod.store.crown")
+                .title("server.myMod.title.crown")
+                .build());
+```
+
+This registry has enough shape of its own — two non-interchangeable ids, an
+operator switch that can refuse your product, and events that do **not** fire on a
+world thread — to get its own page: **[Treasure Pavilion benefits](store-benefits.md)**.
 
 ## Standing modifiers
 

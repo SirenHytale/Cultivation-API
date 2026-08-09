@@ -65,6 +65,18 @@ public final class TechniqueEvents {
     public record TechniqueBuffApplyEvent(@Nonnull Ref<EntityStore> ref, @Nullable PlayerRef player,
                                           @Nonnull BuffType type, float durationSeconds, float magnitude) {}
 
+    /**
+     * A Technique Fusion ritual succeeded: {@code fusionId} names the recipe,
+     * {@code resultTechniqueId} the art just granted. Whether the two parents
+     * were consumed is not carried here - listen for the ordinary {@code
+     * TechniqueLearnEvent} the grant fires, and (if the recipe consumed them)
+     * two separate learned-set removals happened via {@code
+     * TechniqueUnlockManager.revoke}, which does not fire an event of its own
+     * (nothing in play ever removes knowledge except this and an admin tool).
+     */
+    public record TechniqueFusionEvent(@Nonnull Ref<EntityStore> ref, @Nullable PlayerRef player,
+                                       @Nonnull String fusionId, @Nonnull String resultTechniqueId) {}
+
     /** Cloud Step's speed multiplier was reverted, either on expiry or on cleanup. */
     public record TechniqueBuffExpireEvent(@Nonnull Ref<EntityStore> ref, @Nullable PlayerRef player, @Nonnull BuffType type) {}
 
@@ -182,6 +194,49 @@ public final class TechniqueEvents {
         public void setMagnitude(float magnitude){ this.magnitude = magnitude; }
     }
 
+    /**
+     * A fusion ritual is about to run - every gate (both parents mastered, the
+     * realm floor, the Qi, the cooldown) has already passed. Cancel to refuse
+     * it silently (no Qi spent, no cooldown, neither parent touched); {@link
+     * #setQiCost}, {@link #setConsumeParents} and {@link #setFailureChancePercent}
+     * re-tune this one attempt without touching {@code TechniqueConfig.json}.
+     */
+    public static final class PreTechniqueFusionEvent extends CancellableEvent {
+        private final Ref<EntityStore> ref;
+        private final PlayerRef player;
+        private final String fusionId;
+        private final String resultTechniqueId;
+        private float qiCost;
+        private boolean consumeParents;
+        private float failureChancePercent;
+
+        public PreTechniqueFusionEvent(@Nonnull Ref<EntityStore> ref, @Nullable PlayerRef player,
+                                       @Nonnull String fusionId, @Nonnull String resultTechniqueId,
+                                       float qiCost, boolean consumeParents, float failureChancePercent){
+            this.ref = ref;
+            this.player = player;
+            this.fusionId = fusionId;
+            this.resultTechniqueId = resultTechniqueId;
+            this.qiCost = qiCost;
+            this.consumeParents = consumeParents;
+            this.failureChancePercent = failureChancePercent;
+        }
+
+        @Nonnull public Ref<EntityStore> ref(){ return this.ref; }
+        @Nullable public PlayerRef player(){ return this.player; }
+        @Nonnull public String fusionId(){ return this.fusionId; }
+        @Nonnull public String resultTechniqueId(){ return this.resultTechniqueId; }
+        /** The one-time Qi this attempt will spend - not the resulting art's own per-cast cost. */
+        public float qiCost(){ return this.qiCost; }
+        public void setQiCost(float qiCost){ this.qiCost = qiCost; }
+        /** Whether success removes both parent arts from the cultivator's learned set. */
+        public boolean consumeParents(){ return this.consumeParents; }
+        public void setConsumeParents(boolean consumeParents){ this.consumeParents = consumeParents; }
+        /** 0-100; rolled only after the Qi is spent and the cooldown stamped. */
+        public float failureChancePercent(){ return this.failureChancePercent; }
+        public void setFailureChancePercent(float failureChancePercent){ this.failureChancePercent = failureChancePercent; }
+    }
+
     /** An art's mastery rose a rung. */
     public record TechniqueMasteryAdvanceEvent(@Nonnull Ref<EntityStore> ref, @Nullable PlayerRef player,
                                                @Nonnull String techniqueId, int stage) {}
@@ -227,6 +282,8 @@ public final class TechniqueEvents {
     private static final List<Consumer<TechniqueBuffExpireEvent>> BUFF_EXPIRE = EventBus.newListenerList();
     private static final List<Consumer<TechniqueMasteryAdvanceEvent>> MASTERY_ADVANCE = EventBus.newListenerList();
     private static final List<Consumer<PreTechniqueMasteryAdvanceEvent>> PRE_MASTERY_ADVANCE = EventBus.newListenerList();
+    private static final List<Consumer<TechniqueFusionEvent>> FUSION = EventBus.newListenerList();
+    private static final List<Consumer<PreTechniqueFusionEvent>> PRE_FUSION = EventBus.newListenerList();
 
     public static void onTechniquePerform(@Nonnull Consumer<TechniquePerformEvent> listener){ PERFORM.add(listener); }
     public static void onPreTechniquePerform(@Nonnull Consumer<PreTechniquePerformEvent> listener){ PRE_PERFORM.add(listener); }
@@ -259,4 +316,10 @@ public final class TechniqueEvents {
 
     public static void fireTechniqueMasteryAdvance(@Nonnull TechniqueMasteryAdvanceEvent event){ EventBus.dispatch(MASTERY_ADVANCE, event, "TechniqueMasteryAdvanceEvent"); }
     public static boolean firePreTechniqueMasteryAdvance(@Nonnull PreTechniqueMasteryAdvanceEvent event){ return EventBus.fire(PRE_MASTERY_ADVANCE, event, "PreTechniqueMasteryAdvanceEvent"); }
+
+    public static void onTechniqueFusion(@Nonnull Consumer<TechniqueFusionEvent> listener){ FUSION.add(listener); }
+    public static void onPreTechniqueFusion(@Nonnull Consumer<PreTechniqueFusionEvent> listener){ PRE_FUSION.add(listener); }
+
+    public static void fireTechniqueFusion(@Nonnull TechniqueFusionEvent event){ EventBus.dispatch(FUSION, event, "TechniqueFusionEvent"); }
+    public static boolean firePreTechniqueFusion(@Nonnull PreTechniqueFusionEvent event){ return EventBus.fire(PRE_FUSION, event, "PreTechniqueFusionEvent"); }
 }
