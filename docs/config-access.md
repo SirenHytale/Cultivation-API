@@ -85,14 +85,26 @@ its own.
 
 ### Files with no accessor yet
 
-Cultivation ships two config files that `CultivationConfigs` does not expose:
-**Fist** and **Land**. As of 0.9.x, every other config file — including
-Celestial, Master-Disciple, Qi Deviation, Secret Realm and Tournament, the five
-that shipped without one in 0.8.0 — has since been given an accessor, along
-with every new subsystem's own config (`talisman()`, `forging()`,
-`weaponSpirit()`, `breeding()`, `daoComprehension()`, `party()`, `dungeon()`,
-`rival()`, `treasure()`, `faction()`, `dreamTrial()`, `campaign()`, `oath()`,
-`market()`, `tide()`, `partner()`).
+Cultivation ships twelve config files that `CultivationConfigs` does not
+expose: **Bounty**, **Depths**, **Fist**, **HeavenlyRealm**, **Land**,
+**Leaderboard**, **Meridian**, **Quest**, **Reclusive**, **Retreat**,
+**SeaOfConsciousness** and **WorldBoss**.
+
+Of the seven named here through 0.8.0 (Celestial, Fist, Land, Master-Disciple,
+Qi Deviation, Secret Realm, Tournament), five gained an accessor in 0.9.x —
+only **Fist** and **Land** are still missing one. The other ten above are
+config files behind 0.9.x subsystems that were never wrapped at all. Every new
+subsystem that DID get one has its own accessor now too — `talisman()`,
+`forging()`, `weaponSpirit()`, `breeding()`, `daoComprehension()`, `party()`,
+`dungeon()`, `rival()`, `treasure()`, `faction()`, `dreamTrial()`, `campaign()`,
+`oath()`, `market()`, `tide()`, `partner()`.
+
+Four of the ten new gaps — **Depths**, **Meridian**, **Quest** and
+**WorldBoss** — DO have a public `*Events` class even though their settings
+are not reachable here; see [Event reference](events-reference.md). The other
+six — **Bounty**, **HeavenlyRealm**, **Leaderboard**, **Reclusive**,
+**Retreat** and **SeaOfConsciousness** — have no public API surface at all yet:
+no config accessor and no `*Events` class either.
 
 They are reachable, on the internals terms the [README](../README.md#compatibility)
 sets out for anything outside `plugin.siren.API`:

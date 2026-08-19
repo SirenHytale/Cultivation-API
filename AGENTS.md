@@ -267,12 +267,22 @@ writing. To change a value for one player or one event, use the matching `Pre*`
 event instead — a config write changes the server permanently and overwrites what
 its owner tuned.
 
-**Two config files still have no accessor** — Fist and Land (down from seven as
-of 0.8.0; Celestial, Master-Disciple, Qi Deviation, Secret Realm and Tournament
-all gained one in 0.9.x, see above). They remain reachable as
-`Cultivation.getFistConfig()` / `Cultivation.getLandConfig()`, on the ordinary
-internals terms: `plugin.siren.Cultivation` may change shape between versions.
-Prefer a `Pre*` event where one exists.
+**Twelve config files have no `CultivationConfigs` accessor** — Bounty, Depths,
+Fist, HeavenlyRealm, Land, Leaderboard, Meridian, Quest, Reclusive, Retreat,
+SeaOfConsciousness and WorldBoss. Of the original seven named here through
+0.8.0, Celestial, Master-Disciple, Qi Deviation, Secret Realm and Tournament all
+gained one in 0.9.x; Fist and Land are the two survivors. The other ten are
+config files behind 0.9.x subsystems that were never wrapped at all — several of
+which (Depths, Meridian, Quest, WorldBoss) DO have a public `*Events` class, so
+the events surface for those four is real even though their settings are not
+reachable through this registry. Bounty, HeavenlyRealm, Leaderboard, Reclusive,
+Retreat and SeaOfConsciousness have **no public API surface at all** — no
+`*Events` class in `plugin.siren.API` either — so nothing in this repo covers
+them yet.
+
+Every one of these twelve is reachable as `Cultivation.getFistConfig()` and
+friends, on the ordinary internals terms: `plugin.siren.Cultivation` may change
+shape between versions. Prefer a `Pre*` event where one exists.
 
 **Compatibility flags:**
 
