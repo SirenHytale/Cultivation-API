@@ -5,12 +5,12 @@ progression mod for Hytale servers — realms and Qi, daos, sects, techniques, s
 beasts, formations, cave abodes, duels, alchemy and the heavens themselves.
 
 This repository is for **mod developers**. It contains the API's Java sources,
-a complete reference for all **173 events**, and worked examples. Everything here
+a complete reference for all **261 events**, and worked examples. Everything here
 is the real code the mod ships — nothing is a summary written after the fact.
 
 | | |
 | --- | --- |
-| **Artifact** | `plugin.siren:Cultivation:0.8.0` |
+| **Artifact** | `plugin.siren:Cultivation:0.9.1` |
 | **Package** | `plugin.siren.API` |
 | **Plugin id** | `Siren:Cultivation` |
 | **Hytale server** | `0.5.x` (built against `com.hypixel.hytale:Server:0.5.7`) |
@@ -26,8 +26,8 @@ internals to change how it behaves. Every one of these is a supported hook:
 | I want to… | Use | Guide |
 | --- | --- | --- |
 | Read a player's realm, level, Qi, race, skill nodes | `CultivationAPI` getters | [Reading player state](docs/reading-state.md) |
-| React when something happens (breakthrough, tame, siege…) | 93 post-events | [Events](docs/events.md) |
-| Veto something, or re-tune its numbers | 80 cancellable pre-events | [Events](docs/events.md) |
+| React when something happens (breakthrough, tame, siege…) | 147 post-events | [Events](docs/events.md) |
+| Veto something, or re-tune its numbers | 114 cancellable pre-events | [Events](docs/events.md) |
 | Keep your own progression in step with a player's saves | `ProfileEvents` | [Profiles](docs/profiles.md) |
 | Grant Qi, force a breakthrough, hand out a skill node | `addQi`, `completeBreakthrough`, `grantSkillNode` | [Driving progression](docs/driving-progression.md) |
 | Read or drain a chunk's spirit vein | `readSpiritVein`, `drainSpiritVein` | [Driving progression](docs/driving-progression.md) |
@@ -61,6 +61,26 @@ internals to change how it behaves. Every one of these is a supported hook:
 | Add a server-wide phenomenon with its own sky | `CelestialManager.registerEventType` | [Registries](docs/registries.md#celestial-event-types) |
 | Re-tune or veto a Technique Fusion | `onPreTechniqueFusion` | [Registries](docs/registries.md#technique-fusion) |
 | Sell something on the web store and deliver it in game | `registerStoreBenefit`, `hasStoreBenefit` | [Store benefits](docs/store-benefits.md) |
+| Add a per-player row to the admin menu's Players tab | `registerPlayerAdminAction` | [UI integration](docs/ui.md#player-admin-actions-09x) |
+| Add a Personal Dao (Sword/Slaughter/Space and beside them) | `registerPersonalDao` | [`api-sources/.../DaoComprehensionEvents.java`](api-sources/plugin/siren/API/DaoComprehensionEvents.java) |
+| React to Heavenly Dao / Personal Dao comprehension and Dao Enlightenment | `DaoComprehensionEvents` | [Event reference](docs/events-reference.md#dao-comprehension-09x) |
+| React to a Forge Anchor tempering attempt | `ForgingEvents` | [Event reference](docs/events-reference.md#forging-09x) |
+| React to inscribing or using a talisman | `TalismanEvents` | [Event reference](docs/events-reference.md#talismans-09x) |
+| React to a Life-Bound Treasure's Weapon Spirit awakening, leveling or being nurtured | `WeaponSpiritEvents` | [Event reference](docs/events-reference.md#weapon-spirits-09x) |
+| React to a Beast Pen breeding ritual or a bred egg hatching | `BreedingEvents` | [Event reference](docs/events-reference.md#spirit-beast-breeding-09x) |
+| React to, or re-tune, a meridian injury or a Cracked Dantian's Qi spill | `MeridianEvents` | [Event reference](docs/events-reference.md#meridian-injuries-09x) |
+| React to party formation, membership or disbanding | `PartyEvents` | [Event reference](docs/events-reference.md#parties-09x) |
+| React to Partnered Cultivation pairing and its shared Qi bonus | `PartnerEvents` | [Event reference](docs/events-reference.md#partnered-cultivation-09x) |
+| React to swearing, breaching or cleansing a Heavenly Oath | `OathEvents` | [Event reference](docs/events-reference.md#heavenly-oaths-09x) |
+| React to the narrative Campaign's chapter advances | `CampaignEvents` | [Event reference](docs/events-reference.md#narrative-campaign-09x) |
+| React to a wandering-NPC quest chain being accepted, advanced or completed | `QuestEvents` | [Event reference](docs/events-reference.md#wandering-npc-quests-09x) |
+| React to a solo Secret Realm Depths run | `DepthsEvents` | [Event reference](docs/events-reference.md#secret-realm-depths-09x) |
+| React to a Secret Realm site opening or closing | `SecretRealmEvents` | [Event reference](docs/events-reference.md#secret-realms-09x) |
+| React to claiming a Buried Cache or entering a Ruin Vault | `TreasureEvents` | [Event reference](docs/events-reference.md#treasure-and-ruin-exploration-09x) |
+| React to an Auction House listing or the Traveling Merchant | `MarketEvents` | [Event reference](docs/events-reference.md#auction-house-and-traveling-merchant-09x) |
+| React to a Beast Tide siege on a sect hall or Cave Abode | `TideEvents` | [Event reference](docs/events-reference.md#beast-tides-09x) |
+| React to a Wandering Rival Cultivator challenge | `RivalEvents` | [Event reference](docs/events-reference.md#wandering-rival-cultivators-09x) |
+| React to a Calamity Beast (wandering world boss) | `WorldBossEvents` | [Event reference](docs/events-reference.md#calamity-beasts--world-boss-09x) |
 
 Three of those are the big ones, and two of the three are easy to confuse:
 `CultivationTheme` changes the **words**, `CultivationPalette` changes the
@@ -79,10 +99,10 @@ your local repository once:
 
 ```bash
 mvn install:install-file \
-  -Dfile=Cultivation-0.8.0.jar \
+  -Dfile=Cultivation-0.9.1.jar \
   -DgroupId=plugin.siren \
   -DartifactId=Cultivation \
-  -Dversion=0.8.0 \
+  -Dversion=0.9.1 \
   -Dpackaging=jar
 ```
 
@@ -92,7 +112,7 @@ Then depend on it in `provided` scope:
 <dependency>
     <groupId>plugin.siren</groupId>
     <artifactId>Cultivation</artifactId>
-    <version>0.8.0</version>
+    <version>0.9.1</version>
     <scope>provided</scope>
 </dependency>
 ```
@@ -107,7 +127,7 @@ resolves Cultivation's classes for you:
 
 ```json
 "Dependencies": {
-  "Siren:Cultivation": ">=0.8.0"
+  "Siren:Cultivation": ">=0.9.1"
 }
 ```
 
@@ -168,11 +188,11 @@ float qi = CultivationAPI.getQi(accessor, ref);
 | **[Driving progression](docs/driving-progression.md)** | Granting Qi, ranking up, meditation, spirit veins, and the rest of the world |
 | **[Config access](docs/config-access.md)** | Reading and writing Cultivation's own settings, and when not to |
 | **[Events](docs/events.md)** | Pre vs post, cancelling, re-tuning, threading, error handling |
-| **[Event reference](docs/events-reference.md)** | All 173 listeners with their payloads — generated from source |
+| **[Event reference](docs/events-reference.md)** | All 261 listeners with their payloads — generated from source |
 | **[Registries](docs/registries.md)** | Races, techniques, Qi-absorption items |
 | **[Profiles](docs/profiles.md)** | Keeping your own progression in step with a player's separate saves |
 | **[Store benefits](docs/store-benefits.md)** | Registering a Treasure Pavilion product, and the one event family that is not on a world thread |
-| **[UI integration](docs/ui.md)** | Menu pages, Codex articles, admin config sections |
+| **[UI integration](docs/ui.md)** | Menu pages, Codex articles, admin config sections, player admin actions |
 | **[Compatibility](docs/compatibility.md)** | Endless Leveling, PlaceholderAPI, Marriage; optional-dependency guards |
 | **[Progression provider](docs/progression-provider.md)** | Replacing the realm/Qi ladder entirely |
 | **[Theming](docs/theming.md)** | Re-wording the mod, and why a language file cannot do it |
@@ -194,10 +214,11 @@ assistant to read `AGENTS.md` first.
 ## Source layout
 
 ```
-api-sources/plugin/siren/API/   The 39 public API classes, verbatim
+api-sources/plugin/siren/API/   The 58 public API classes, verbatim
 docs/                            Guides and the generated event reference
 examples/                        A worked example addon
 tools/gen_events_reference.py    Regenerates docs/events-reference.md
+tools/build_wiki.py              Regenerates wiki/ from docs/ + README.md + AGENTS.md
 ```
 
 `api-sources/` is a **reading copy**, not a buildable module. These classes

@@ -11,7 +11,7 @@
   ],
   "ServerVersion": "0.5.x",
   "Dependencies": {
-    "Siren:Cultivation": ">=0.8.0"
+    "Siren:Cultivation": ">=0.9.1"
   },
   "OptionalDependencies": {},
   "LoadBefore": {},

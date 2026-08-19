@@ -1,7 +1,7 @@
 # Event reference
 
 Every event Cultivation fires, grouped by the class that declares it.
-**173 listener hooks** across 15 subsystems.
+**261 listener hooks** across 33 subsystems.
 
 > Generated from `api-sources/` by `tools/gen_events_reference.py`. Do not edit
 > by hand — re-run the script instead. The prose in each entry is the javadoc on
@@ -134,6 +134,22 @@ The Heart-Devil Trial tormented a deeply-leaned cultivator mid-ritual. `composur
 | `composureRemaining()` | `float` |
 | `deviated()` | `boolean` |
 | `breakthroughRitual()` | `boolean` |
+
+### `DreamTrialEvent`
+
+```java
+CultivationEvents.onDreamTrial(event -> { /* ... */ });
+```
+
+The Dream Trial's Hollow Mirror tested a cultivator mid-attempt. `composureRemaining` is what's left after this pulse's drain (0 when it broke); `broken` is true only on the pulse that shattered composure and failed the attempt; `pressure` is the dreamTrialPressure fraction (0-1) that scaled this pulse's drain - see `DreamTrialManager#dreamTrialPressure`.
+
+| Accessor | Type |
+| --- | --- |
+| `ref()` | `Ref<EntityStore>` |
+| `player()` | `PlayerRef` |
+| `composureRemaining()` | `float` |
+| `broken()` | `boolean` |
+| `pressure()` | `float` |
 
 ### `QiGainEvent`
 
@@ -383,6 +399,23 @@ A Heart-Devil pulse is about to torment a mid-ritual cultivator. Cancel to skip 
 | `leanFraction()` | `float` | read |
 | `pulseIndex()` | `int` | read |
 | `breakthroughRitual()` | `boolean` | read |
+| `setComposureDrain(float)` | `void` | re-tune |
+
+### `PreDreamTrialEvent`
+
+```java
+CultivationEvents.onPreDreamTrial(event -> { /* ... */ });
+```
+
+A Dream Trial pulse is about to test a cultivator inside the Hollow Mirror. Cancel to skip the pulse entirely; adjust `setComposureDrain` to change how hard it bites (0 makes the reflection purely cosmetic).
+
+| Member | Type | |
+| --- | --- | --- |
+| `ref()` | `Ref<EntityStore>` | read |
+| `player()` | `PlayerRef` | read (may be null) |
+| `composureDrain()` | `float` | read |
+| `pressure()` | `float` | read |
+| `pulseIndex()` | `int` | read |
 | `setComposureDrain(float)` | `void` | re-tune |
 
 ### `PreQiGainEvent`
@@ -739,6 +772,185 @@ A Devil-path cultivator is about to harvest Qi from a slain player. Cancel to de
 | `killerPlayer()` | `PlayerRef` | read |
 | `qi()` | `float` | read |
 | `setQi(float)` | `void` | re-tune |
+
+
+---
+
+## Dao comprehension (0.9.x)
+
+`plugin.siren.API.DaoComprehensionEvents` — The layer on top of the Elemental Dao: the Heavenly Dao (天道) understanding track, the open Personal Dao registry (Sword/Slaughter/Space and whatever a mod adds beside them), and Dao Enlightenment (悟道). Does not replace or collide with `DaoEvents` above.
+
+**Post-events** — fired once the change is committed; cannot be cancelled.
+
+### `HeavenlyDaoGainEvent`
+
+```java
+DaoComprehensionEvents.onHeavenlyDaoGain(event -> { /* ... */ });
+```
+
+The Heavenly Dao track advanced. `amount` is what was actually applied (after any listener re-scaled it); `total` is the value after.
+
+| Accessor | Type |
+| --- | --- |
+| `player()` | `PlayerRef` |
+| `comprehension()` | `DaoComprehensionComponent` |
+| `amount()` | `float` |
+| `total()` | `float` |
+
+### `HeavenlyDaoRankChangeEvent`
+
+```java
+DaoComprehensionEvents.onHeavenlyDaoRankChange(event -> { /* ... */ });
+```
+
+The player's HeavenlyDaoRank changed (and was announced to them).
+
+| Accessor | Type |
+| --- | --- |
+| `player()` | `PlayerRef` |
+| `comprehension()` | `DaoComprehensionComponent` |
+| `oldRank()` | `HeavenlyDaoRank` |
+| `newRank()` | `HeavenlyDaoRank` |
+
+### `PersonalDaoComprehensionEvent`
+
+```java
+DaoComprehensionEvents.onPersonalDaoComprehension(event -> { /* ... */ });
+```
+
+A Personal Dao's comprehension advanced. `amount` is what was actually applied; `total` is the value after.
+
+| Accessor | Type |
+| --- | --- |
+| `player()` | `PlayerRef` |
+| `comprehension()` | `DaoComprehensionComponent` |
+| `dao()` | `PersonalDao` |
+| `amount()` | `float` |
+| `total()` | `float` |
+
+### `PersonalDaoManifestEvent`
+
+```java
+DaoComprehensionEvents.onPersonalDaoManifest(event -> { /* ... */ });
+```
+
+A Personal Dao manifested for this player.
+
+| Accessor | Type |
+| --- | --- |
+| `player()` | `PlayerRef` |
+| `comprehension()` | `DaoComprehensionComponent` |
+| `dao()` | `PersonalDao` |
+
+### `PersonalDaoSetAsideEvent`
+
+```java
+DaoComprehensionEvents.onPersonalDaoSetAside(event -> { /* ... */ });
+```
+
+A manifested Personal Dao was set aside.
+
+| Accessor | Type |
+| --- | --- |
+| `player()` | `PlayerRef` |
+| `comprehension()` | `DaoComprehensionComponent` |
+| `dao()` | `PersonalDao` |
+
+### `DaoEnlightenmentEvent`
+
+```java
+DaoComprehensionEvents.onDaoEnlightenment(event -> { /* ... */ });
+```
+
+A Dao Enlightenment (悟道) fired. `subject` is whichever Heavenly/Personal Dao triggered it.
+
+| Accessor | Type |
+| --- | --- |
+| `player()` | `PlayerRef` |
+| `comprehension()` | `DaoComprehensionComponent` |
+| `subject()` | `DaoComprehensionManager.Subject` |
+| `comprehensionGain()` | `float` |
+| `qiGain()` | `float` |
+
+**Pre-events** — fired before the change; `setCancelled(true)` vetoes it, and any setter below re-tunes the numbers the mod then uses.
+
+### `PreHeavenlyDaoGainEvent`
+
+```java
+DaoComprehensionEvents.onPreHeavenlyDaoGain(event -> { /* ... */ });
+```
+
+The Heavenly Dao track is about to advance. Cancel to refuse it; `setAmount` to re-scale.
+
+| Member | Type | |
+| --- | --- | --- |
+| `player()` | `PlayerRef` | read (may be null) |
+| `comprehension()` | `DaoComprehensionComponent` | read |
+| `amount()` | `float` | read |
+| `setAmount(float)` | `void` | re-tune |
+
+### `PreHeavenlyDaoRankChangeEvent`
+
+```java
+DaoComprehensionEvents.onPreHeavenlyDaoRankChange(event -> { /* ... */ });
+```
+
+The player's HeavenlyDaoRank is about to change. Cancel to leave them on their current rank - the underlying value is untouched, so this only suppresses the reclassification/announcement.
+
+| Member | Type | |
+| --- | --- | --- |
+| `player()` | `PlayerRef` | read (may be null) |
+| `comprehension()` | `DaoComprehensionComponent` | read |
+| `oldRank()` | `HeavenlyDaoRank` | read |
+| `newRank()` | `HeavenlyDaoRank` | read |
+
+### `PrePersonalDaoComprehensionEvent`
+
+```java
+DaoComprehensionEvents.onPrePersonalDaoComprehension(event -> { /* ... */ });
+```
+
+A Personal Dao's comprehension is about to advance. Cancel to refuse it; `setAmount` to re-scale.
+
+| Member | Type | |
+| --- | --- | --- |
+| `player()` | `PlayerRef` | read (may be null) |
+| `comprehension()` | `DaoComprehensionComponent` | read |
+| `dao()` | `PersonalDao` | read |
+| `amount()` | `float` | read |
+| `setAmount(float)` | `void` | re-tune |
+
+### `PrePersonalDaoManifestEvent`
+
+```java
+DaoComprehensionEvents.onPrePersonalDaoManifest(event -> { /* ... */ });
+```
+
+A Personal Dao is about to manifest. Cancel to leave it comprehended but unmanifested.
+
+| Member | Type | |
+| --- | --- | --- |
+| `player()` | `PlayerRef` | read (may be null) |
+| `comprehension()` | `DaoComprehensionComponent` | read |
+| `dao()` | `PersonalDao` | read |
+
+### `PreDaoEnlightenmentEvent`
+
+```java
+DaoComprehensionEvents.onPreDaoEnlightenment(event -> { /* ... */ });
+```
+
+A Dao Enlightenment is about to fire. Cancel to refuse it (as if the roll never happened); `setComprehensionGain`/`setQiGain` to re-scale the reward.
+
+| Member | Type | |
+| --- | --- | --- |
+| `player()` | `PlayerRef` | read (may be null) |
+| `comprehension()` | `DaoComprehensionComponent` | read |
+| `subject()` | `DaoComprehensionManager.Subject` | read |
+| `comprehensionGain()` | `float` | read |
+| `qiGain()` | `float` | read |
+| `setComprehensionGain(float)` | `void` | re-tune |
+| `setQiGain(float)` | `void` | re-tune |
 
 
 ---
@@ -1196,6 +1408,266 @@ A refinement ritual is about to resolve. Cancel to abandon it silently (the weap
 
 ---
 
+## Forging (0.9.x)
+
+`plugin.siren.API.ForgingEvents` — Tempering an already-crafted Cultivation weapon/armor at a Forge Anchor - success, failure and botch outcomes.
+
+**Enums declared here**
+
+- `ForgingEvents.ForgeOutcome` — How a completed (or interrupted) forging attempt resolved. Values: `SUCCESS`, `FAILED`, `BOTCH`
+
+**Post-events** — fired once the change is committed; cannot be cancelled.
+
+### `ForgeCompleteEvent`
+
+```java
+ForgingEvents.onForgeComplete(event -> { /* ... */ });
+```
+
+A forging attempt resolved. `grade` is null unless `outcome` is SUCCESS. `resultStack` is the item as it now stands (forged, demoted, or unchanged) - null only if there was nowhere to place it back into the cultivator's inventory (see `ForgingManager#placeItem`), which the accompanying player message already reports. The item is never destroyed outright by anything this event could be reporting.
+
+| Accessor | Type |
+| --- | --- |
+| `ref()` | `Ref<EntityStore>` |
+| `player()` | `PlayerRef` |
+| `targetTier()` | `int` |
+| `outcome()` | `ForgeOutcome` |
+| `grade()` | `ForgeGrade` |
+| `resultStack()` | `ItemStack` |
+
+**Pre-events** — fired before the change; `setCancelled(true)` vetoes it, and any setter below re-tunes the numbers the mod then uses.
+
+### `PreForgeEvent`
+
+```java
+ForgingEvents.onPreForge(event -> { /* ... */ });
+```
+
+A forging attempt is about to begin - every check has passed, but no materials and no item have been touched yet. Cancel to refuse it entirely; nothing is spent and no ritual starts.
+
+| Member | Type | |
+| --- | --- | --- |
+| `ref()` | `Ref<EntityStore>` | read |
+| `player()` | `PlayerRef` | read |
+| `itemId()` | `String` | read |
+| `targetTier()` | `int` | read |
+
+
+---
+
+## Talismans (0.9.x)
+
+`plugin.siren.API.TalismanEvents` — Inscribing at a Talisman Desk (start and complete, with success/failed/botch outcomes) and using a finished talisman.
+
+**Enums declared here**
+
+- `TalismanEvents.InscribeOutcome` — How a completed (or interrupted) inscription ritual resolved. Values: `SUCCESS`, `FAILED`, `BOTCH`
+
+**Post-events** — fired once the change is committed; cannot be cancelled.
+
+### `InscribeStartEvent`
+
+```java
+TalismanEvents.onInscribeStart(event -> { /* ... */ });
+```
+
+An inscription ritual began; materials and the Qi floor check already passed.
+
+| Accessor | Type |
+| --- | --- |
+| `ref()` | `Ref<EntityStore>` |
+| `player()` | `PlayerRef` |
+| `talismanId()` | `String` |
+| `element()` | `DaoElement` |
+| `qiDrainPerSecond()` | `float` |
+
+### `InscribeCompleteEvent`
+
+```java
+TalismanEvents.onInscribeComplete(event -> { /* ... */ });
+```
+
+An inscription ritual resolved. `grade`/`stack` are null unless `outcome` is SUCCESS.
+
+| Accessor | Type |
+| --- | --- |
+| `ref()` | `Ref<EntityStore>` |
+| `player()` | `PlayerRef` |
+| `talismanId()` | `String` |
+| `element()` | `DaoElement` |
+| `outcome()` | `InscribeOutcome` |
+| `grade()` | `TalismanGrade` |
+| `stack()` | `ItemStack` |
+
+### `TalismanUseEvent`
+
+```java
+TalismanEvents.onTalismanUse(event -> { /* ... */ });
+```
+
+A talisman was used and its effect applied. `remainingCharges` is what is left AFTER this use - the stack is gone once it reaches 0. Not fired by anything in this engine slice; see this class's own doc.
+
+| Accessor | Type |
+| --- | --- |
+| `ref()` | `Ref<EntityStore>` |
+| `player()` | `PlayerRef` |
+| `talismanId()` | `String` |
+| `grade()` | `TalismanGrade` |
+| `remainingCharges()` | `int` |
+
+**Pre-events** — fired before the change; `setCancelled(true)` vetoes it, and any setter below re-tunes the numbers the mod then uses.
+
+### `PreInscribeStartEvent`
+
+```java
+TalismanEvents.onPreInscribeStart(event -> { /* ... */ });
+```
+
+An inscription ritual is about to begin. Cancel to refuse it (no materials or Qi are spent).
+
+| Member | Type | |
+| --- | --- | --- |
+| `ref()` | `Ref<EntityStore>` | read |
+| `player()` | `PlayerRef` | read |
+| `talismanId()` | `String` | read |
+| `element()` | `DaoElement` | read |
+
+### `PreInscribeCompleteEvent`
+
+```java
+TalismanEvents.onPreInscribeComplete(event -> { /* ... */ });
+```
+
+An inscription ritual is about to resolve into a grade. Cancel to abandon it silently - the same "materials/Qi already sunk, nothing is produced" shape `ItemEvents.PreRefinementCompleteEvent` uses. `setMasteryLadderFraction` and `setAffinityFraction` re-weight the two inputs `TalismanManager#rollOutcome` actually rolls against - the supported way to reshape a talisman's grade odds from an addon (e.g. a race or Sacred Body constitution granting a flat affinity bonus for the roll ONLY, without touching the persisted DaoComponent). Fires only on a natural completion, never an interruption - see this class's own doc.
+
+| Member | Type | |
+| --- | --- | --- |
+| `ref()` | `Ref<EntityStore>` | read |
+| `player()` | `PlayerRef` | read |
+| `talismanId()` | `String` | read |
+| `element()` | `DaoElement` | read |
+| `masteryLadderFraction()` | `float` | read |
+| `affinityFraction()` | `float` | read |
+| `setMasteryLadderFraction(float)` | `void` | re-tune |
+| `setAffinityFraction(float)` | `void` | re-tune |
+
+### `PreTalismanUseEvent`
+
+```java
+TalismanEvents.onPreTalismanUse(event -> { /* ... */ });
+```
+
+A talisman is about to be used. Cancel to refuse it (the charge is not spent). Not fired by this engine slice; see this class's own doc.
+
+| Member | Type | |
+| --- | --- | --- |
+| `ref()` | `Ref<EntityStore>` | read |
+| `player()` | `PlayerRef` | read |
+| `talismanId()` | `String` | read |
+| `grade()` | `TalismanGrade` | read |
+
+
+---
+
+## Weapon Spirits (0.9.x)
+
+`plugin.siren.API.WeaponSpiritEvents` — A Life-Bound Treasure's spirit (器灵) stirring awake, gaining a level, and being fed Qi through `/cultivation spirit nurture`.
+
+**Post-events** — fired once the change is committed; cannot be cancelled.
+
+### `WeaponSpiritAwakenEvent`
+
+```java
+WeaponSpiritEvents.onWeaponSpiritAwaken(event -> { /* ... */ });
+```
+
+A weapon's spirit just stirred awake; `item` is the stack AFTER the awaken is written.
+
+| Accessor | Type |
+| --- | --- |
+| `owner()` | `PlayerRef` |
+| `item()` | `ItemStack` |
+| `killsAtAwaken()` | `int` |
+
+### `WeaponSpiritLevelUpEvent`
+
+```java
+WeaponSpiritEvents.onWeaponSpiritLevelUp(event -> { /* ... */ });
+```
+
+A weapon's spirit just gained a level; `item` is the stack AFTER the level-up is written.
+
+| Accessor | Type |
+| --- | --- |
+| `owner()` | `PlayerRef` |
+| `item()` | `ItemStack` |
+| `newLevel()` | `int` |
+| `reachedMaturity()` | `boolean` |
+
+### `WeaponSpiritNurtureEvent`
+
+```java
+WeaponSpiritEvents.onWeaponSpiritNurture(event -> { /* ... */ });
+```
+
+A player just fed their weapon spirit Qi; fires once per successful `nurture` call, whether or not it also leveled the spirit up.
+
+| Accessor | Type |
+| --- | --- |
+| `owner()` | `PlayerRef` |
+| `item()` | `ItemStack` |
+| `qiConverted()` | `float` |
+| `xpGained()` | `float` |
+
+**Pre-events** — fired before the change; `setCancelled(true)` vetoes it, and any setter below re-tunes the numbers the mod then uses.
+
+### `PreWeaponSpiritAwakenEvent`
+
+```java
+WeaponSpiritEvents.onPreWeaponSpiritAwaken(event -> { /* ... */ });
+```
+
+A weapon's spirit is about to stir awake - both the refinement-tier and kill bars are already met. Cancel to hold it right at the threshold; the banked kill count is untouched, so the very next qualifying kill fires this again.
+
+| Member | Type | |
+| --- | --- | --- |
+| `owner()` | `PlayerRef` | read |
+| `item()` | `ItemStack` | read |
+| `killsAtAwaken()` | `int` | read |
+
+### `PreWeaponSpiritLevelUpEvent`
+
+```java
+WeaponSpiritEvents.onPreWeaponSpiritLevelUp(event -> { /* ... */ });
+```
+
+A weapon spirit is about to level up. Cancel to hold it at its current level (the Xp is still banked).
+
+| Member | Type | |
+| --- | --- | --- |
+| `owner()` | `PlayerRef` | read |
+| `item()` | `ItemStack` | read |
+| `oldLevel()` | `int` | read |
+| `newLevel()` | `int` | read |
+
+### `PreWeaponSpiritNurtureEvent`
+
+```java
+WeaponSpiritEvents.onPreWeaponSpiritNurture(event -> { /* ... */ });
+```
+
+A player is about to feed their weapon spirit Qi. Cancel to refuse the feeding entirely (no Qi spent, no Xp gained); `setQiToConvert` to change how much of the offered Qi actually converts - this is where `WeaponSpirit-Nurture-Max-Qi-Per-Use` is applied by default, and an addon raising or lowering it (a VIP perk, a debuff) does so by adjusting this field rather than the config itself.
+
+| Member | Type | |
+| --- | --- | --- |
+| `owner()` | `PlayerRef` | read |
+| `item()` | `ItemStack` | read |
+| `qiToConvert()` | `float` | read |
+| `setQiToConvert(float)` | `void` | re-tune |
+
+
+---
+
 ## Spirit beasts
 
 `plugin.siren.API.BeastEvents` — Taming, hatching, binding, summoning and companion growth.
@@ -1203,7 +1675,7 @@ A refinement ritual is about to resolve. Cancel to abandon it silently (the weap
 **Enums declared here**
 
 - `BeastEvents.BindSource` — How a cultivator came by their companion. Values: `TAME`, `HATCH`
-- `BeastEvents.DismissReason` — Why a companion's body left the world. Values: `DISMISSED`, `RELEASED`
+- `BeastEvents.DismissReason` — Why a companion's body left the world. Values: `DISMISSED`, `RELEASED`, `EXPEDITION`
 
 **Post-events** — fired once the change is committed; cannot be cancelled.
 
@@ -1485,6 +1957,79 @@ A companion is about to be summoned in its rideable body. Cancel to refuse the m
 | `player()` | `PlayerRef` | read (may be null) |
 | `beast()` | `SpiritBeastComponent` | read |
 | `species()` | `BeastSpecies` | read |
+
+
+---
+
+## Spirit beast breeding (0.9.x)
+
+`plugin.siren.API.BreedingEvents` — The two-cultivator ritual at a Beast Pen that produces an egg, and hatching a bred egg into a bound companion. Complements `BeastEvents` above - a bred egg still fires its `onBeastBind` when it hatches.
+
+**Post-events** — fired once the change is committed; cannot be cancelled.
+
+### `BeastBreedEvent`
+
+```java
+BreedingEvents.onBeastBreed(event -> { /* ... */ });
+```
+
+A breeding ritual completed and produced an egg for `recipient` (whoever sent the offer). Fires once, from the ritual's own completion, not from either offer or accept.
+
+| Accessor | Type |
+| --- | --- |
+| `recipient()` | `PlayerRef` |
+| `partner()` | `PlayerRef` |
+| `parentA()` | `BeastSpecies` |
+| `parentB()` | `BeastSpecies` |
+| `offspring()` | `BeastSpecies` |
+| `quality()` | `float` |
+
+### `BeastEggHatchEvent`
+
+```java
+BreedingEvents.onBeastEggHatch(event -> { /* ... */ });
+```
+
+A bred egg hatched into a bound companion.
+
+| Accessor | Type |
+| --- | --- |
+| `ref()` | `Ref<EntityStore>` |
+| `player()` | `PlayerRef` |
+| `offspring()` | `BeastSpecies` |
+| `metadata()` | `BeastEggMetadata` |
+
+**Pre-events** — fired before the change; `setCancelled(true)` vetoes it, and any setter below re-tunes the numbers the mod then uses.
+
+### `PreBeastBreedEvent`
+
+```java
+BreedingEvents.onPreBeastBreed(event -> { /* ... */ });
+```
+
+A breeding ritual is about to be seated on both cultivators - fires once both are confirmed within a shared pen with enough Qi, before either cultivator's Qi is touched. Cancel to refuse it outright; nothing has been spent yet.
+
+| Member | Type | |
+| --- | --- | --- |
+| `offerer()` | `PlayerRef` | read |
+| `accepter()` | `PlayerRef` | read |
+| `parentA()` | `BeastSpecies` | read |
+| `parentB()` | `BeastSpecies` | read |
+
+### `PreBeastEggHatchEvent`
+
+```java
+BreedingEvents.onPreBeastEggHatch(event -> { /* ... */ });
+```
+
+A bred egg is about to hatch. Cancel to refuse it - the egg is NOT consumed, matching a dormant wild-hatched egg (see `BeastEggHatchInteraction`'s bred branch).
+
+| Member | Type | |
+| --- | --- | --- |
+| `ref()` | `Ref<EntityStore>` | read |
+| `player()` | `PlayerRef` | read (may be null) |
+| `offspring()` | `BeastSpecies` | read |
+| `metadata()` | `BeastEggMetadata` | read |
 
 
 ---
@@ -2677,6 +3222,98 @@ About to gain a level. Cancelling holds the cultivator where they are; the XP st
 
 ---
 
+## Meridian injuries (0.9.x)
+
+`plugin.siren.API.MeridianEvents` — A named injury being inflicted or deepened, cured, and a Cracked Dantian's Qi spill being armed.
+
+**Post-events** — fired once the change is committed; cannot be cancelled.
+
+### `MeridianInjuryEvent`
+
+```java
+MeridianEvents.onMeridianInjury(event -> { /* ... */ });
+```
+
+An injury was inflicted (or deepened) - the write has already landed.
+
+| Accessor | Type |
+| --- | --- |
+| `ref()` | `Ref<EntityStore>` |
+| `player()` | `PlayerRef` |
+| `injury()` | `MeridianInjury` |
+| `magnitude()` | `float` |
+| `durationSeconds()` | `float` |
+
+### `MeridianCureEvent`
+
+```java
+MeridianEvents.onMeridianCure(event -> { /* ... */ });
+```
+
+An injury fully cleared (wait-it-out, meditation recovery, or an explicit cure).
+
+| Accessor | Type |
+| --- | --- |
+| `ref()` | `Ref<EntityStore>` |
+| `player()` | `PlayerRef` |
+| `injury()` | `MeridianInjury` |
+| `cureSource()` | `String` |
+
+**Pre-events** — fired before the change; `setCancelled(true)` vetoes it, and any setter below re-tunes the numbers the mod then uses.
+
+### `PreMeridianInjuryEvent`
+
+```java
+MeridianEvents.onPreMeridianInjury(event -> { /* ... */ });
+```
+
+An injury is about to be inflicted (or deepened, if already carried). Cancel to refuse it outright; `setMagnitude`/`setDurationSeconds` to re-scale the roll before it is written.
+
+| Member | Type | |
+| --- | --- | --- |
+| `ref()` | `Ref<EntityStore>` | read |
+| `player()` | `PlayerRef` | read (may be null) |
+| `injury()` | `MeridianInjury` | read |
+| `cause()` | `String` | read |
+| `magnitude()` | `float` | read |
+| `durationSeconds()` | `float` | read |
+| `setMagnitude(float)` | `void` | re-tune |
+| `setDurationSeconds(float)` | `void` | re-tune |
+
+### `PreMeridianCureEvent`
+
+```java
+MeridianEvents.onPreMeridianCure(event -> { /* ... */ });
+```
+
+An injury is about to be cured. Cancel to refuse it (it stays active).
+
+| Member | Type | |
+| --- | --- | --- |
+| `ref()` | `Ref<EntityStore>` | read |
+| `player()` | `PlayerRef` | read (may be null) |
+| `injury()` | `MeridianInjury` | read |
+| `cureSource()` | `String` | read |
+
+### `PreMeridianSpillEvent`
+
+```java
+MeridianEvents.onPreMeridianSpill(event -> { /* ... */ });
+```
+
+A Cracked Dantian's Qi spill is about to be armed (fired once at inflict/deepen, NOT per-tick). Cancel to cap future Qi gain at the new ceiling without draining the excess already banked; `setRatePerSecond` to re-tune how fast the excess drains.
+
+| Member | Type | |
+| --- | --- | --- |
+| `ref()` | `Ref<EntityStore>` | read |
+| `player()` | `PlayerRef` | read (may be null) |
+| `excessQi()` | `float` | read |
+| `ratePerSecond()` | `float` | read |
+| `setRatePerSecond(float)` | `void` | re-tune |
+
+
+---
+
 ## Cultivation profiles
 
 `plugin.siren.API.ProfileEvents` — Switching, creating and erasing the separate saves a player keeps of their own progress, and the expiry of a temporary sandbox profile.
@@ -2784,6 +3421,922 @@ A profile is about to be erased. Cancel to keep it.
 | `ref()` | `Ref<EntityStore>` | read |
 | `player()` | `PlayerRef` | read |
 | `profile()` | `Profile` | read |
+
+
+---
+
+## Parties (0.9.x)
+
+`plugin.siren.API.PartyEvents` — Ad-hoc, session-only grouping - the foundation for a later multiplayer dungeon feature that is not built yet. Forming, joining, leaving, disbanding, and inviting.
+
+**Post-events** — fired once the change is committed; cannot be cancelled.
+
+### `PartyFormedEvent`
+
+```java
+PartyEvents.onPartyFormed(event -> { /* ... */ });
+```
+
+A solo leader's first invite was accepted - the party now exists as a group, not just a leader waiting alone.
+
+| Accessor | Type |
+| --- | --- |
+| `leaderUuid()` | `UUID` |
+| `firstMemberUuid()` | `UUID` |
+
+### `PartyMemberJoinedEvent`
+
+```java
+PartyEvents.onPartyMemberJoined(event -> { /* ... */ });
+```
+
+A cultivator joined an already-formed party (i.e. not the party's very first member - see `PartyFormedEvent`).
+
+| Accessor | Type |
+| --- | --- |
+| `leaderUuid()` | `UUID` |
+| `memberUuid()` | `UUID` |
+
+### `PartyMemberLeftEvent`
+
+```java
+PartyEvents.onPartyMemberLeft(event -> { /* ... */ });
+```
+
+A cultivator left a party that still has members remaining afterward. If the leader left, `leaderUuid` is the newly promoted leader.
+
+| Accessor | Type |
+| --- | --- |
+| `leaderUuid()` | `UUID` |
+| `memberUuid()` | `UUID` |
+
+### `PartyDisbandedEvent`
+
+```java
+PartyEvents.onPartyDisbanded(event -> { /* ... */ });
+```
+
+A party stopped existing - either the leader disbanded it outright, or its last member left. `formerMembers` is a snapshot, not a live view.
+
+| Accessor | Type |
+| --- | --- |
+| `leaderUuid()` | `UUID` |
+| `formerMembers()` | `Set<UUID>` |
+
+**Pre-events** — fired before the change; `setCancelled(true)` vetoes it, and any setter below re-tunes the numbers the mod then uses.
+
+### `PrePartyInviteEvent`
+
+```java
+PartyEvents.onPrePartyInvite(event -> { /* ... */ });
+```
+
+An invite is about to be sent. Cancel to refuse it silently (the inviter still receives the manager's own result).
+
+| Member | Type | |
+| --- | --- | --- |
+| `inviterUuid()` | `UUID` | read |
+| `targetUuid()` | `UUID` | read |
+
+
+---
+
+## Partnered Cultivation (0.9.x)
+
+`plugin.siren.API.PartnerEvents` — Two married cultivators drawing on the same spirit vein together, resolved every meditation tick - pairing, unpairing, and the Qi bonus the pairing grants. Requires Marriage; see `docs/compatibility.md`.
+
+**Post-events** — fired once the change is committed; cannot be cancelled.
+
+### `PartnerPairedEvent`
+
+```java
+PartnerEvents.onPartnerPaired(event -> { /* ... */ });
+```
+
+A cultivator transitioned from unpartnered to partnered - both spouses sat down to meditate within Partner-Radius-Blocks of each other in the same world. Fired once per side (each spouse gets their own event, with `ref`/`player` naming THEM and `partnerUuid` naming their spouse), the moment the transition is detected rather than on a timer.
+
+| Accessor | Type |
+| --- | --- |
+| `ref()` | `Ref<EntityStore>` |
+| `player()` | `PlayerRef` |
+| `partnerUuid()` | `UUID` |
+
+### `PartnerUnpairedEvent`
+
+```java
+PartnerEvents.onPartnerUnpaired(event -> { /* ... */ });
+```
+
+A cultivator transitioned from partnered back to unpartnered - their spouse stood up, wandered out of radius, changed world, or the pairing otherwise lapsed. `formerPartnerUuid` is who they were partnered with a moment ago. Not fired for the spouse who themselves stood up first; see `PartnerManager.announceTransition`'s own javadoc for why only the side still seated is told.
+
+| Accessor | Type |
+| --- | --- |
+| `ref()` | `Ref<EntityStore>` |
+| `player()` | `PlayerRef` |
+| `formerPartnerUuid()` | `UUID` |
+
+**Pre-events** — fired before the change; `setCancelled(true)` vetoes it, and any setter below re-tunes the numbers the mod then uses.
+
+### `PrePartnerQiBonusEvent`
+
+```java
+PartnerEvents.onPrePartnerQiBonus(event -> { /* ... */ });
+```
+
+A partnered cultivator's meditation Qi bonus is about to apply. Cancel to deny the bonus entirely for this tick (equivalent to sitting alone); adjust `setMultiplier` to re-scale how much extra Qi this specific pairing draws.
+
+| Member | Type | |
+| --- | --- | --- |
+| `ref()` | `Ref<EntityStore>` | read |
+| `player()` | `PlayerRef` | read (may be null) |
+| `partnerUuid()` | `UUID` | read (may be null) |
+| `multiplier()` | `float` | read |
+| `setMultiplier(float)` | `void` | re-tune |
+
+
+---
+
+## Heavenly Oaths (0.9.x)
+
+`plugin.siren.API.OathEvents` — Swearing, breaching and peacefully dissolving a Heavenly Oath (天道誓言), and cleansing the Dao-Heart Flaw a breach leaves behind.
+
+**Enums declared here**
+
+- `OathEvents.FlawCleanseRoute` — How a Dao-Heart Flaw stopped being active - see `OathManager`'s three cleanse routes. Values: `EXPIRED`, `ITEM`, `COMPANION`
+
+**Post-events** — fired once the change is committed; cannot be cancelled.
+
+### `OathSwornEvent`
+
+```java
+OathEvents.onOathSworn(event -> { /* ... */ });
+```
+
+A pending offer was accepted and the oath is now sworn (binding).
+
+| Accessor | Type |
+| --- | --- |
+| `oathId()` | `String` |
+| `type()` | `OathType` |
+| `partyA()` | `UUID` |
+| `partyB()` | `UUID` |
+| `stake()` | `int` |
+| `sectId()` | `String` |
+
+### `OathBreachEvent`
+
+```java
+OathEvents.onOathBreach(event -> { /* ... */ });
+```
+
+A sworn oath was broken and its penalty has already been applied.
+
+| Accessor | Type |
+| --- | --- |
+| `oathId()` | `String` |
+| `type()` | `OathType` |
+| `breaker()` | `UUID` |
+| `victim()` | `UUID` |
+| `qiLost()` | `float` |
+| `karmaGained()` | `float` |
+
+### `OathFlawCleanseEvent`
+
+```java
+OathEvents.onOathFlawCleanse(event -> { /* ... */ });
+```
+
+A cultivator's Dao-Heart Flaw was cleansed by `route`.
+
+| Accessor | Type |
+| --- | --- |
+| `player()` | `UUID` |
+| `route()` | `FlawCleanseRoute` |
+
+### `OathDissolveEvent`
+
+```java
+OathEvents.onOathDissolve(event -> { /* ... */ });
+```
+
+A sworn oath was peacefully DISSOLVED - no penalty, either via a mutual `/cultivation oath dissolve` or the one system-triggered no-fault case (see `OathManager#dissolveActiveOath`).
+
+| Accessor | Type |
+| --- | --- |
+| `oathId()` | `String` |
+| `type()` | `OathType` |
+| `partyA()` | `UUID` |
+| `partyB()` | `UUID` |
+
+**Pre-events** — fired before the change; `setCancelled(true)` vetoes it, and any setter below re-tunes the numbers the mod then uses.
+
+### `PreOathSwearEvent`
+
+```java
+OathEvents.onPreOathSwear(event -> { /* ... */ });
+```
+
+A pending offer is about to be accepted and become a binding oath. Cancel to refuse it - the offer is consumed either way, mirroring `DuelEvents.PreDuelStartEvent`, so the offerer must send a fresh one.
+
+| Member | Type | |
+| --- | --- | --- |
+| `offerer()` | `UUID` | read |
+| `accepter()` | `UUID` | read |
+| `type()` | `OathType` | read |
+| `stake()` | `int` | read |
+| `sectId()` | `String` | read |
+| `setStake(int)` | `void` | re-tune |
+
+### `PreOathBreachEvent`
+
+```java
+OathEvents.onPreOathBreach(event -> { /* ... */ });
+```
+
+A sworn oath is about to be recorded as broken and its penalty applied. Cancel to pardon the breach outright (nothing changes - no Qi loss, no karma, no flaw); adjust the setters to re-tune the penalty instead.
+
+| Member | Type | |
+| --- | --- | --- |
+| `oathId()` | `String` | read |
+| `type()` | `OathType` | read |
+| `breaker()` | `UUID` | read |
+| `victim()` | `UUID` | read |
+| `qiLossPercent()` | `float` | read |
+| `karmaSwing()` | `float` | read |
+| `flawDurationMinutes()` | `float` | read |
+| `flawSeverity()` | `float` | read |
+| `setQiLossPercent(float)` | `void` | re-tune |
+| `setKarmaSwing(float)` | `void` | re-tune |
+| `setFlawDurationMinutes(float)` | `void` | re-tune |
+| `setFlawSeverity(float)` | `void` | re-tune |
+
+### `PreOathFlawCleanseEvent`
+
+```java
+OathEvents.onPreOathFlawCleanse(event -> { /* ... */ });
+```
+
+A Dao-Heart Flaw is about to be cleansed. Cancel to refuse the attempt (the item, if any, is still the caller's to decide whether to consume - see the call site).
+
+| Member | Type | |
+| --- | --- | --- |
+| `player()` | `UUID` | read |
+| `route()` | `FlawCleanseRoute` | read |
+
+### `PreOathDissolveEvent`
+
+```java
+OathEvents.onPreOathDissolve(event -> { /* ... */ });
+```
+
+A sworn oath is about to be peacefully DISSOLVED. Cancel to keep it active (no change - the requesting side must ask again).
+
+| Member | Type | |
+| --- | --- | --- |
+| `oathId()` | `String` | read |
+| `type()` | `OathType` | read |
+| `partyA()` | `UUID` | read |
+| `partyB()` | `UUID` | read |
+
+
+---
+
+## Narrative Campaign (0.9.x)
+
+`plugin.siren.API.CampaignEvents` — The quest-line system's chapter advances (including a campaign's very first chapter) and campaign completion.
+
+**Post-events** — fired once the change is committed; cannot be cancelled.
+
+### `CampaignChapterAdvanceEvent`
+
+```java
+CampaignEvents.onCampaignChapterAdvance(event -> { /* ... */ });
+```
+
+A chapter just became current for a player - either the campaign's very first chapter (via `CampaignManager.start`) or an advance off a finished one. `newChapterIndex` may still be locked behind its own realm floor; check `CampaignManager.getProgress` if that matters to a listener.
+
+| Accessor | Type |
+| --- | --- |
+| `ref()` | `Ref<EntityStore>` |
+| `player()` | `PlayerRef` |
+| `campaignId()` | `String` |
+| `previousChapterIndex()` | `int` |
+| `newChapterIndex()` | `int` |
+
+### `CampaignCompleteEvent`
+
+```java
+CampaignEvents.onCampaignComplete(event -> { /* ... */ });
+```
+
+Every chapter of a campaign is finished. Fires exactly once per run, the moment the last chapter's chain(s) complete.
+
+| Accessor | Type |
+| --- | --- |
+| `ref()` | `Ref<EntityStore>` |
+| `player()` | `PlayerRef` |
+| `campaignId()` | `String` |
+
+**Pre-events** — fired before the change; `setCancelled(true)` vetoes it, and any setter below re-tunes the numbers the mod then uses.
+
+### `PreCampaignChapterAdvanceEvent`
+
+```java
+CampaignEvents.onPreCampaignChapterAdvance(event -> { /* ... */ });
+```
+
+A player is about to move into a new chapter (or begin the campaign's first one, when `fromChapterIndex` is `-1`). Every built-in refusal (realm gate, already active/completed) has already passed; cancel to refuse it anyway. Nothing is written when a listener cancels - the chapter index is not advanced and no chain is accepted.
+
+| Member | Type | |
+| --- | --- | --- |
+| `ref()` | `Ref<EntityStore>` | read |
+| `player()` | `PlayerRef` | read (may be null) |
+| `campaignId()` | `String` | read |
+| `fromChapterIndex()` | `int` | read |
+| `toChapterIndex()` | `int` | read |
+
+
+---
+
+## Wandering-NPC quests (0.9.x)
+
+`plugin.siren.API.QuestEvents` — Accepting a quest chain from a wandering NPC giver, advancing through its steps, completing it (reward fully paid), or abandoning it.
+
+**Post-events** — fired once the change is committed; cannot be cancelled.
+
+### `QuestAcceptEvent`
+
+```java
+QuestEvents.onQuestAccept(event -> { /* ... */ });
+```
+
+A player has taken on a quest chain - the progress row is written and, for a site chain, its site is already rolled.
+
+| Accessor | Type |
+| --- | --- |
+| `ref()` | `Ref<EntityStore>` |
+| `player()` | `PlayerRef` |
+| `chainId()` | `String` |
+| `giverRoleId()` | `String` |
+
+### `QuestStepAdvanceEvent`
+
+```java
+QuestEvents.onQuestStepAdvance(event -> { /* ... */ });
+```
+
+A step of a chain just cleared. @param completedStepIndex the 0-based index of the step that was finished. @param nextStepIndex the 0-based index now current, or `completedStepIndex + 1` past the end when the chain has run out of steps - check `finalStep()` rather than comparing against a step count. @param finalStep true if this was the last step, so the run has moved to awaiting its reward.
+
+| Accessor | Type |
+| --- | --- |
+| `ref()` | `Ref<EntityStore>` |
+| `player()` | `PlayerRef` |
+| `chainId()` | `String` |
+| `completedStepIndex()` | `int` |
+| `nextStepIndex()` | `int` |
+| `finalStep()` | `boolean` |
+
+### `QuestCompleteEvent`
+
+```java
+QuestEvents.onQuestComplete(event -> { /* ... */ });
+```
+
+A chain is fully finished AND fully paid - every reward component landed. Fires exactly once per run, at the moment the run turns COMPLETED.
+
+| Accessor | Type |
+| --- | --- |
+| `ref()` | `Ref<EntityStore>` |
+| `player()` | `PlayerRef` |
+| `chainId()` | `String` |
+| `completionCount()` | `int` |
+
+### `QuestAbandonEvent`
+
+```java
+QuestEvents.onQuestAbandon(event -> { /* ... */ });
+```
+
+A player gave up on an in-progress run. Never fires for a run that was awaiting a reward - that one cannot be abandoned.
+
+| Accessor | Type |
+| --- | --- |
+| `ref()` | `Ref<EntityStore>` |
+| `player()` | `PlayerRef` |
+| `chainId()` | `String` |
+| `stepIndex()` | `int` |
+
+**Pre-events** — fired before the change; `setCancelled(true)` vetoes it, and any setter below re-tunes the numbers the mod then uses.
+
+### `PreQuestAcceptEvent`
+
+```java
+QuestEvents.onPreQuestAccept(event -> { /* ... */ });
+```
+
+A player is about to take on a chain. Every built-in refusal (realm gate, once-per-account, cooldown, chain cap) has already passed; cancel to refuse it anyway. Nothing is written when a listener cancels - see the class javadoc.
+
+| Member | Type | |
+| --- | --- | --- |
+| `ref()` | `Ref<EntityStore>` | read |
+| `player()` | `PlayerRef` | read (may be null) |
+| `chainId()` | `String` | read |
+| `giverRoleId()` | `String` | read |
+
+
+---
+
+## Secret Realm Depths (0.9.x)
+
+`plugin.siren.API.DepthsEvents` — A solo Depths run: starting, a floor clearing (with the escrow reward it just rolled), extraction actually paying out, and the run ending for any reason. Post-only - every one of these is a deterministic outcome of the run's own state machine.
+
+**Post-events** — fired once the change is committed; cannot be cancelled.
+
+### `DepthsRunStartEvent`
+
+```java
+DepthsEvents.onDepthsRunStart(event -> { /* ... */ });
+```
+
+A solo Depths run has started, floor 1 about to spawn.
+
+| Accessor | Type |
+| --- | --- |
+| `runId()` | `String` |
+| `ownerUuid()` | `UUID` |
+| `siteId()` | `String` |
+| `world()` | `String` |
+
+### `DepthsFloorClearEvent`
+
+```java
+DepthsEvents.onDepthsFloorClear(event -> { /* ... */ });
+```
+
+A floor's beasts are all dead - `escrowSize` is the run's TOTAL unbanked escrow count after this floor's roll (0 or 1 higher than before it, since a roll can miss).
+
+| Accessor | Type |
+| --- | --- |
+| `runId()` | `String` |
+| `ownerUuid()` | `UUID` |
+| `floor()` | `int` |
+| `escrowSize()` | `int` |
+
+### `DepthsExtractEvent`
+
+```java
+DepthsEvents.onDepthsExtract(event -> { /* ... */ });
+```
+
+The run's escrow was just actually granted - fired only when `rewardsGranted` is above zero, whether the player chose Extract or the run auto-extracted (logout/realm-close).
+
+| Accessor | Type |
+| --- | --- |
+| `runId()` | `String` |
+| `ownerUuid()` | `UUID` |
+| `depthReached()` | `int` |
+| `rewardsGranted()` | `int` |
+
+### `DepthsRunEndEvent`
+
+```java
+DepthsEvents.onDepthsRunEnd(event -> { /* ... */ });
+```
+
+The run is over, for any reason - fired once, after any `DepthsExtractEvent` the same ending also produced.
+
+| Accessor | Type |
+| --- | --- |
+| `runId()` | `String` |
+| `ownerUuid()` | `UUID` |
+| `reason()` | `DepthsRun.EndReason` |
+| `depthReached()` | `int` |
+
+
+---
+
+## Secret Realms (0.9.x)
+
+`plugin.siren.API.SecretRealmEvents` — A site's barrier coming down (openable) or going back up (closed). Post-only - opening/closing is a deterministic scheduler outcome, not a request anything downstream could meaningfully veto.
+
+**Post-events** — fired once the change is committed; cannot be cancelled.
+
+### `SecretRealmOpenEvent`
+
+```java
+SecretRealmEvents.onSecretRealmOpen(event -> { /* ... */ });
+```
+
+A Secret Realm site opened - the barrier is already down and it can be entered.
+
+| Accessor | Type |
+| --- | --- |
+| `siteId()` | `String` |
+| `tier()` | `SecretRealmTier` |
+| `world()` | `String` |
+| `chunkX()` | `int` |
+| `chunkZ()` | `int` |
+| `source()` | `SecretRealmSite.Source` |
+| `sectName()` | `String` |
+| `closesAtMillis()` | `long` |
+
+### `SecretRealmCloseEvent`
+
+```java
+SecretRealmEvents.onSecretRealmClose(event -> { /* ... */ });
+```
+
+A Secret Realm site closed. `forced` is true only for an admin's immediate override (SecretRealmManager.forceClose); false for the realm's own natural close after its duration/grace window.
+
+| Accessor | Type |
+| --- | --- |
+| `siteId()` | `String` |
+| `tier()` | `SecretRealmTier` |
+| `world()` | `String` |
+| `chunkX()` | `int` |
+| `chunkZ()` | `int` |
+| `forced()` | `boolean` |
+
+
+---
+
+## Treasure and Ruin Exploration (0.9.x)
+
+`plugin.siren.API.TreasureEvents` — Claiming a Buried Cache or entering a Ruin Vault - covers both Treasure tiers, since both are "claiming" the same kind of site.
+
+**Post-events** — fired once the change is committed; cannot be cancelled.
+
+### `TreasureClaimedEvent`
+
+```java
+TreasureEvents.onTreasureClaimed(event -> { /* ... */ });
+```
+
+A Treasure site has been claimed/entered - the reward has already been paid.
+
+| Accessor | Type |
+| --- | --- |
+| `siteId()` | `String` |
+| `tier()` | `TreasureTier` |
+| `playerUuid()` | `UUID` |
+| `worldName()` | `String` |
+| `qiAwarded()` | `float` |
+| `manualAwarded()` | `boolean` |
+| `materialAwarded()` | `boolean` |
+
+**Pre-events** — fired before the change; `setCancelled(true)` vetoes it, and any setter below re-tunes the numbers the mod then uses.
+
+### `PreTreasureClaimEvent`
+
+```java
+TreasureEvents.onPreTreasureClaim(event -> { /* ... */ });
+```
+
+A player is about to claim a Buried Cache or enter a Ruin Vault. Cancel to refuse it entirely - the site stays unclaimed and the command is a no-op, the same "silence is a valid answer" shape `RivalEvents.PreRivalChallengeEvent` gives a rival challenge.
+
+| Member | Type | |
+| --- | --- | --- |
+| `siteId()` | `String` | read |
+| `tier()` | `TreasureTier` | read |
+| `playerUuid()` | `UUID` | read |
+
+
+---
+
+## Auction House and Traveling Merchant (0.9.x)
+
+`plugin.siren.API.MarketEvents` — Listing, buying, cancelling and expiring auction listings, plus the Traveling Merchant NPC opening and closing for business. Players are identified by UUID - a sold listing routinely pays out to a seller who is offline at the moment of sale.
+
+**Post-events** — fired once the change is committed; cannot be cancelled.
+
+### `AuctionListingCreatedEvent`
+
+```java
+MarketEvents.onAuctionListingCreated(event -> { /* ... */ });
+```
+
+A listing was created and is now on the shelf.
+
+| Accessor | Type |
+| --- | --- |
+| `seller()` | `UUID` |
+| `listing()` | `AuctionListing` |
+
+### `AuctionListingSoldEvent`
+
+```java
+MarketEvents.onAuctionListingSold(event -> { /* ... */ });
+```
+
+A listing sold. `listing` is the now-removed shelf entry; `sellerProceeds` is what the seller was credited after the house cut.
+
+| Accessor | Type |
+| --- | --- |
+| `listing()` | `AuctionListing` |
+| `buyer()` | `UUID` |
+| `sellerProceeds()` | `long` |
+
+### `AuctionListingCancelledEvent`
+
+```java
+MarketEvents.onAuctionListingCancelled(event -> { /* ... */ });
+```
+
+A seller pulled their own still-active listing.
+
+| Accessor | Type |
+| --- | --- |
+| `listing()` | `AuctionListing` |
+
+### `AuctionListingExpiredEvent`
+
+```java
+MarketEvents.onAuctionListingExpired(event -> { /* ... */ });
+```
+
+An unsold listing aged past Market-Auction-Listing-Duration-Hours and was returned to its seller as a claimable parcel.
+
+| Accessor | Type |
+| --- | --- |
+| `listing()` | `AuctionListing` |
+
+### `MerchantOpenedEvent`
+
+```java
+MarketEvents.onMerchantOpened(event -> { /* ... */ });
+```
+
+The Traveling Merchant opened for business in a world.
+
+| Accessor | Type |
+| --- | --- |
+| `world()` | `String` |
+| `x()` | `double` |
+| `y()` | `double` |
+| `z()` | `double` |
+
+### `MerchantClosedEvent`
+
+```java
+MarketEvents.onMerchantClosed(event -> { /* ... */ });
+```
+
+The Traveling Merchant's visit ended and the NPC despawned.
+
+| Accessor | Type |
+| --- | --- |
+| `world()` | `String` |
+
+**Pre-events** — fired before the change; `setCancelled(true)` vetoes it, and any setter below re-tunes the numbers the mod then uses.
+
+### `PreAuctionListEvent`
+
+```java
+MarketEvents.onPreAuctionList(event -> { /* ... */ });
+```
+
+A player is about to list an item. Cancel to refuse it (reported as blocked) - nothing has been touched in the seller's inventory yet.
+
+| Member | Type | |
+| --- | --- | --- |
+| `seller()` | `UUID` | read |
+| `itemId()` | `String` | read |
+| `quantity()` | `int` | read |
+| `price()` | `long` | read |
+| `setPrice(long)` | `void` | re-tune |
+
+### `PreAuctionBuyEvent`
+
+```java
+MarketEvents.onPreAuctionBuy(event -> { /* ... */ });
+```
+
+A player is about to buy a listing. Cancel to refuse it - nothing has moved yet, the listing stays on the shelf.
+
+| Member | Type | |
+| --- | --- | --- |
+| `buyer()` | `UUID` | read |
+| `listing()` | `AuctionListing` | read |
+
+
+---
+
+## Beast Tides (0.9.x)
+
+`plugin.siren.API.TideEvents` — A siege (兽潮) on a sect hall or a Cave Abode - starting a wave and resolving win/lose. Fires ALONGSIDE `CelestialEvents` for the tide's own `CelestialEventType` id, carrying the siege-specific detail (which target, how many waves) celestial events don't know about.
+
+**Post-events** — fired once the change is committed; cannot be cancelled.
+
+### `TideStartEvent`
+
+```java
+TideEvents.onTideStart(event -> { /* ... */ });
+```
+
+A tide's WARNING phase has begun - its target is locked and its beacon will spawn shortly (RISK 2 headstart).
+
+| Accessor | Type |
+| --- | --- |
+| `assaultId()` | `String` |
+| `worldName()` | `String` |
+| `abode()` | `boolean` |
+| `targetName()` | `String` |
+| `waveCount()` | `int` |
+
+### `TideWaveEvent`
+
+```java
+TideEvents.onTideWave(event -> { /* ... */ });
+```
+
+One wave was just triggered (or attempted - see `PreTideWaveEvent`).
+
+| Accessor | Type |
+| --- | --- |
+| `assaultId()` | `String` |
+| `waveIndex()` | `int` |
+| `waveCount()` | `int` |
+
+### `TideResolveEvent`
+
+```java
+TideEvents.onTideResolve(event -> { /* ... */ });
+```
+
+The assault is over - the outcome (and any reward/suppression) has already been applied.
+
+| Accessor | Type |
+| --- | --- |
+| `assaultId()` | `String` |
+| `worldName()` | `String` |
+| `abode()` | `boolean` |
+| `targetName()` | `String` |
+| `result()` | `TideAssault.Result` |
+
+**Pre-events** — fired before the change; `setCancelled(true)` vetoes it, and any setter below re-tunes the numbers the mod then uses.
+
+### `PreTideStartEvent`
+
+```java
+TideEvents.onPreTideStart(event -> { /* ... */ });
+```
+
+A target has been picked and a tide is about to enter WARNING. Cancel to abandon this pick entirely - the scheduler simply waits for its next check, the same "silence is a valid answer" shape `PreSectJoinEvent` has.
+
+| Member | Type | |
+| --- | --- | --- |
+| `worldName()` | `String` | read |
+| `abode()` | `boolean` | read |
+| `targetName()` | `String` | read |
+| `waveCount()` | `int` | read |
+| `setWaveCount(int)` | `void` | re-tune |
+
+### `PreTideWaveEvent`
+
+```java
+TideEvents.onPreTideWave(event -> { /* ... */ });
+```
+
+One wave is about to be triggered. Cancel to skip just this attempt (the timer and wave index still advance - defenders get a breather, not an extra wave).
+
+| Member | Type | |
+| --- | --- | --- |
+| `assaultId()` | `String` | read |
+| `waveIndex()` | `int` | read |
+
+### `PreTideResolveEvent`
+
+```java
+TideEvents.onPreTideResolve(event -> { /* ... */ });
+```
+
+The assault is about to resolve. Cancel to skip applying the reward (WON) or suppression/cooldown (LOST) - the assault still ends and cleans up either way, only the outcome-specific side effect is skipped. `setSuppressionSteps`/`setSuppressionDurationMinutes` retune a LOSS; `setContributionReward` retunes a WIN.
+
+| Member | Type | |
+| --- | --- | --- |
+| `assaultId()` | `String` | read |
+| `result()` | `TideAssault.Result` | read |
+| `suppressionSteps()` | `int` | read |
+| `suppressionDurationMinutes()` | `float` | read |
+| `contributionReward()` | `int` | read |
+| `setSuppressionSteps(int)` | `void` | re-tune |
+| `setSuppressionDurationMinutes(float)` | `void` | re-tune |
+| `setContributionReward(int)` | `void` | re-tune |
+
+
+---
+
+## Wandering Rival Cultivators (0.9.x)
+
+`plugin.siren.API.RivalEvents` — Challenging a Wandering Rival Cultivator NPC, and its defeat payout.
+
+**Post-events** — fired once the change is committed; cannot be cancelled.
+
+### `RivalDefeatedEvent`
+
+```java
+RivalEvents.onRivalDefeated(event -> { /* ... */ });
+```
+
+A challenged Wandering Rival Cultivator has been defeated - the winner's reward has already been paid.
+
+| Accessor | Type |
+| --- | --- |
+| `encounterId()` | `String` |
+| `winnerUuid()` | `UUID` |
+| `worldName()` | `String` |
+| `qiAwarded()` | `float` |
+| `manualAwarded()` | `boolean` |
+| `materialAwarded()` | `boolean` |
+
+**Pre-events** — fired before the change; `setCancelled(true)` vetoes it, and any setter below re-tunes the numbers the mod then uses.
+
+### `PreRivalChallengeEvent`
+
+```java
+RivalEvents.onPreRivalChallenge(event -> { /* ... */ });
+```
+
+A player has right-clicked to challenge a Wandering Rival Cultivator. Cancel to refuse the challenge entirely - the rival stays `ROAMING` and the interaction is a no-op, the same "silence is a valid answer" shape `DuelEvents.PreDuelChallengeEvent` gives a duel challenge.
+
+| Member | Type | |
+| --- | --- | --- |
+| `encounterId()` | `String` | read |
+| `challengerUuid()` | `UUID` | read |
+| `npcRef()` | `Ref<EntityStore>` | read |
+
+
+---
+
+## Calamity Beasts / world boss (0.9.x)
+
+`plugin.siren.API.WorldBossEvents` — A wandering, solo world boss (灾劫兽) with no fixed target, unlike Beast Tide's place-anchored siege - its OMEN phase beginning, the boss NPC actually spawning, and the encounter resolving.
+
+**Post-events** — fired once the change is committed; cannot be cancelled.
+
+### `WorldBossStartEvent`
+
+```java
+WorldBossEvents.onWorldBossStart(event -> { /* ... */ });
+```
+
+A Calamity Beast's OMEN phase has begun - its spawn point and species are locked and the omen sky/announcement is already live.
+
+| Accessor | Type |
+| --- | --- |
+| `encounterId()` | `String` |
+| `worldName()` | `String` |
+| `roleId()` | `String` |
+| `position()` | `Vector3d` |
+
+### `WorldBossSpawnEvent`
+
+```java
+WorldBossEvents.onWorldBossSpawn(event -> { /* ... */ });
+```
+
+The OMEN ended and the boss NPC now actually exists in the world (ACTIVE phase begun).
+
+| Accessor | Type |
+| --- | --- |
+| `encounterId()` | `String` |
+| `worldName()` | `String` |
+| `roleId()` | `String` |
+| `position()` | `Vector3d` |
+| `bossRef()` | `Ref<EntityStore>` |
+
+### `WorldBossResolveEvent`
+
+```java
+WorldBossEvents.onWorldBossResolve(event -> { /* ... */ });
+```
+
+The encounter is over, for any reason - any reward payout has already been queued.
+
+| Accessor | Type |
+| --- | --- |
+| `encounterId()` | `String` |
+| `worldName()` | `String` |
+| `roleId()` | `String` |
+| `result()` | `WorldBossEncounter.Result` |
+| `contributorCount()` | `int` |
+| `totalContribution()` | `float` |
+
+**Pre-events** — fired before the change; `setCancelled(true)` vetoes it, and any setter below re-tunes the numbers the mod then uses.
+
+### `PreWorldBossStartEvent`
+
+```java
+WorldBossEvents.onPreWorldBossStart(event -> { /* ... */ });
+```
+
+A Calamity Beast is about to begin its OMEN phase. Cancel to abandon this start entirely - the scheduler simply waits for its next check, the same "silence is a valid answer" shape `TideEvents.PreTideStartEvent` has. See the class javadoc for why this carries no re-tunable numbers, unlike Tide's own pre-start event.
+
+| Member | Type | |
+| --- | --- | --- |
+| `worldName()` | `String` | read |
+| `roleId()` | `String` | read |
+| `position()` | `Vector3d` | read |
 
 
 ---

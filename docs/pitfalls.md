@@ -301,3 +301,30 @@ CultivationEvents.onPreMeditationStop(event -> {
 Cancelling this one cannot undo the breakthrough either — it is the single stop
 reason that fires *after* the change it reports, with the rank already granted and
 the ritual state already cleared.
+
+## 18. Routing `PlayerAdminAction.apply` through a `CommandBuffer` (0.9.x)
+
+**Symptom:** either an unnecessary detour through a `CommandBuffer` that isn't
+there, or — the more dangerous direction — copying `PlayerAdminAction`'s direct
+`Store.putComponent` pattern into an actual ticking system or event listener,
+where pitfall #1 above still applies at full force.
+
+`PlayerAdminAction#apply` is the one place in this API where writing straight
+through a `Store<EntityStore>`, including `Store.putComponent`, is the
+**established, correct** pattern rather than the mistake pitfall #1 warns about:
+
+```java
+public void apply(Store<EntityStore> targetStore, Ref<EntityStore> targetRef,
+        PlayerRef targetPlayerRef, PlayerRef actingAdmin, boolean targetingSelf, String value){
+    targetStore.putComponent(targetRef, new MyComponent(value));   // correct HERE
+}
+```
+
+`apply` is invoked from `AdminPlayerActions.run` inside
+`CompletableFuture.runAsync(..., targetWorld)` — the same calling context every
+built-in Players-tab action (Realm, Stage, Qi, Level, …) already writes through
+directly — not from a ticking ECS system or event listener, so the
+CommandBuffer rule does not apply here. It *is* still resolved onto the
+**target's** own world thread, which may differ from the admin's, so report
+outcomes only through `PlayerRef#sendMessage` on `targetPlayerRef`/`actingAdmin`
+— there is no page left to talk back to by the time this runs.

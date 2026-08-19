@@ -85,19 +85,23 @@ its own.
 
 ### Files with no accessor yet
 
-Cultivation ships seven config files that `CultivationConfigs` does not expose:
-**Celestial**, **Fist**, **Land**, **Master-Disciple**, **Qi Deviation**,
-**Secret Realm** and **Tournament**. Five of the seven arrived with 0.8.0's new
-subsystems and simply have not been given an accessor.
+Cultivation ships two config files that `CultivationConfigs` does not expose:
+**Fist** and **Land**. As of 0.9.x, every other config file — including
+Celestial, Master-Disciple, Qi Deviation, Secret Realm and Tournament, the five
+that shipped without one in 0.8.0 — has since been given an accessor, along
+with every new subsystem's own config (`talisman()`, `forging()`,
+`weaponSpirit()`, `breeding()`, `daoComprehension()`, `party()`, `dungeon()`,
+`rival()`, `treasure()`, `faction()`, `dreamTrial()`, `campaign()`, `oath()`,
+`market()`, `tide()`, `partner()`).
 
 They are reachable, on the internals terms the [README](../README.md#compatibility)
 sets out for anything outside `plugin.siren.API`:
 
 ```java
 import plugin.siren.Cultivation;
-import plugin.siren.Utils.Config.CelestialConfig;
+import plugin.siren.Utils.Config.FistConfig;
 
-Config<CelestialConfig> holder = Cultivation.getCelestialConfig();
+Config<FistConfig> holder = Cultivation.getFistConfig();
 ```
 
 `plugin.siren.Cultivation` is free to change shape between versions, so prefer a

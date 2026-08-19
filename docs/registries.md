@@ -399,7 +399,7 @@ CultivationAPI.registerCompatCheck(
         "https://example.com/api/compat/MyMod.json",
         check -> {
             if(check.getStatus() == CompatStatus.INCOMPATIBLE){
-                standDown(check.getRequiredRange());   // e.g. ">=0.8.0 <0.9.0"
+                standDown(check.getRequiredRange());   // e.g. ">=0.9.0 <0.10.0"
             }
         });
 ```
@@ -410,9 +410,9 @@ Cultivation versions that build of yours works against:
 ```json
 {
   "compatible": {
-    "1.2.0": { "min": "0.8.0", "below": "0.9.0", "blocked": [] },
-    "1.1.0": { "min": "0.7.0", "below": "0.8.0", "blocked": ["0.7.2"] },
-    "default": { "min": "0.8.0", "below": "0.9.0", "blocked": [] }
+    "1.2.0": { "min": "0.9.0", "below": "0.10.0", "blocked": [] },
+    "1.1.0": { "min": "0.8.0", "below": "0.9.0", "blocked": ["0.8.3"] },
+    "default": { "min": "0.9.0", "below": "0.10.0", "blocked": [] }
   }
 }
 ```
@@ -428,7 +428,7 @@ which is what keeps an old build from silently going `UNKNOWN` after you stop
 listing it.
 
 `getRequiredRange()` hands the band back already formatted for a log line
-(`">=0.8.0 <0.9.0"`, or `"any version"`), so you do not have to reassemble it.
+(`">=0.9.0 <0.10.0"`, or `"any version"`), so you do not have to reassemble it.
 
 ### Declare a real range in your manifest first
 
@@ -437,7 +437,7 @@ range is the mistake worth naming. A manifest `Dependencies` entry accepts a ful
 semver range — it is not limited to a floor:
 
 ```json
-"Dependencies": { "Siren:Cultivation": ">=0.8.0 <0.9.0" }
+"Dependencies": { "Siren:Cultivation": ">=0.9.0 <0.10.0" }
 ```
 
 That makes the engine refuse to load your addon against a Cultivation outside the

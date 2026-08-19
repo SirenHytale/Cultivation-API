@@ -35,7 +35,9 @@ public final class BeastEvents {
         /** Sent home; it keeps everything it has cultivated. */
         DISMISSED,
         /** Set free for good - the bond itself is broken. */
-        RELEASED
+        RELEASED,
+        /** Sent off on a Beast Expedition; it keeps everything it has cultivated and returns once the timer completes. */
+        EXPEDITION
     }
 
     // --- Post-events ---

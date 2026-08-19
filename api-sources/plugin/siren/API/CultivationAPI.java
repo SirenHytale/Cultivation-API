@@ -15,10 +15,16 @@ import com.hypixel.hytale.math.util.ChunkUtil;
 import plugin.siren.Cultivation;
 import plugin.siren.ECS.Components.Chunk.SpiritVeinComponent;
 import plugin.siren.ECS.Components.BodyTemperingComponent;
+import plugin.siren.ECS.Components.DaoHeartFlawComponent;
 import plugin.siren.ECS.Components.CultivationComponent;
 import plugin.siren.ECS.Components.CultivationSettingsComponent;
 import plugin.siren.ECS.Components.CultivationStateComponent;
 import plugin.siren.ECS.Components.DaoComponent;
+import plugin.siren.ECS.Components.DaoComprehensionComponent;
+import plugin.siren.ECS.Dao.HeavenlyDaoRank;
+import plugin.siren.ECS.Dao.PersonalDao;
+import plugin.siren.ECS.Meridian.MeridianInjury;
+import plugin.siren.Utils.Meridian.MeridianInjuryManager;
 import plugin.siren.ECS.Components.RaceComponent;
 import plugin.siren.ECS.Components.SkillTreeComponent;
 import plugin.siren.ECS.Components.SpiritBeastComponent;
@@ -31,23 +37,29 @@ import plugin.siren.ECS.Realms.CultivationRealm;
 import plugin.siren.ECS.Realms.CultivationStage;
 import plugin.siren.ECS.Technique.Technique;
 import plugin.siren.ECS.Technique.TechniqueEffect;
+import plugin.siren.ECS.Technique.TechniqueGate;
 import plugin.siren.ECS.SkillTree.SkillTreeStat;
 import plugin.siren.Utils.BodyTemperingManager;
 import plugin.siren.Utils.CultivationModifiers;
 import plugin.siren.Utils.CultivationManager;
 import plugin.siren.Utils.DaoManager;
+import plugin.siren.Utils.Dao.DaoComprehensionManager;
 import plugin.siren.Utils.QiAbsorptionItemRegistry;
 import plugin.siren.Utils.SkillTreeManager;
 import plugin.siren.Utils.SpiritVeinManager;
+import plugin.siren.Utils.TechniqueBuffManager;
 import plugin.siren.Utils.TechniqueManager;
+import plugin.siren.Utils.TechniqueUnlockManager;
 import plugin.siren.Utils.Config.RaceConfig;
 import plugin.siren.Utils.Config.TechniqueRule;
 import plugin.siren.Utils.Duel.DuelManager;
+import plugin.siren.Utils.Oath.OathManager;
 import plugin.siren.Utils.Dwelling.Dwelling;
 import plugin.siren.Utils.Dwelling.DwellingManager;
 import plugin.siren.Utils.Formation.FormationManager;
 import plugin.siren.Utils.Sect.Sect;
 import plugin.siren.Utils.Sect.SectManager;
+import plugin.siren.Utils.UI.Admin.AdminPlayerActions;
 import plugin.siren.Utils.UI.CultivationNav;
 import plugin.siren.Utils.Update.BuildIntegrity;
 import plugin.siren.Utils.Update.CompatChecker;
@@ -81,6 +93,7 @@ import plugin.siren.Utils.Config.LifeBoundTrait;
 import plugin.siren.Utils.Config.MasteryStageRule;
 import plugin.siren.Utils.Config.SectBuildingType;
 import plugin.siren.Utils.LifeBound.LifeBoundTraits;
+import plugin.siren.Utils.WeaponSpirit.WeaponSpiritManager;
 import plugin.siren.Utils.TechniqueMasteryManager;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 import java.util.Collection;
@@ -123,9 +136,11 @@ import java.util.Collection;
  *       the timed combat buffs</li>
  *   <li>{@link ItemEvents} - drops, pills, cores, manuals, weapon refinement</li>
  *   <li>{@link BeastEvents} - taming, hatching, summoning, companion growth</li>
+ *   <li>{@link BreedingEvents} - breeding offers/rituals, bred-egg hatching</li>
  *   <li>{@link SectEvents} - founding, membership, ranks, halls, inscriptions</li>
  *   <li>{@link WarEvents} - declaring sieges and how they resolve</li>
  *   <li>{@link DuelEvents} - challenges, duels, wager payouts</li>
+ *   <li>{@link OathEvents} - swearing, breaching, and cleansing the Dao-Heart Flaw</li>
  *   <li>{@link FormationEvents} - laying and dispersing spirit arrays, traps</li>
  *   <li>{@link DwellingEvents} - Cave Abodes, Spirit Springs, upkeep, seclusion</li>
  * </ul>
@@ -154,6 +169,14 @@ public class CultivationAPI {
      * iteration vastly outnumbers the handful of writes.
      */
     private static final List<AdminConfigSection> ADMIN_CONFIG_SECTIONS = new CopyOnWriteArrayList<>();
+
+    /**
+     * Per-player admin actions other mods have added to the Players tab, in
+     * registration order. Copy-on-write for the same reason as the config
+     * sections above: written once per plugin at setup, iterated every time an
+     * admin opens or refreshes the Players tab.
+     */
+    private static final List<PlayerAdminAction> PLAYER_ADMIN_ACTIONS = new CopyOnWriteArrayList<>();
 
     /**
      * Every page on the menus' shared nav bar - Cultivation's own ten, put
@@ -408,6 +431,85 @@ public class CultivationAPI {
         }
 
         return null;
+    }
+
+    // --- Contributing per-player actions to the admin menu ---
+
+    /**
+     * Adds a row to {@code /cultivation admin}'s Players tab - a dropdown of
+     * choices plus an inline apply button - targeting whichever player the
+     * admin currently has selected. See {@link PlayerAdminAction} for the full
+     * contract; this is the Players-tab analog of
+     * {@link #registerAdminConfigSection}.
+     *
+     * <p>Call from your plugin's {@code setup()}. Load order does not matter:
+     * nothing reads the registry until an admin actually opens the Players tab.
+     * Registering the same key twice replaces the first, so this is safe across
+     * a reload of your plugin.</p>
+     *
+     * <p>The Players tab is gated on {@code cultivation.admin}, so an action may
+     * safely make a real, permanent change to a player's state.</p>
+     *
+     * <p>{@link PlayerAdminAction#getKey()} must contain a namespace separator
+     * (a colon - see the interface's own javadoc) and must not equal one of the
+     * reserved literals in {@link AdminPlayerActions#RESERVED_KEYS}. A key
+     * failing either check is rejected: logged as a warning naming the caller and
+     * the offending key, and never added. This does not throw - it runs inside
+     * another plugin's {@code setup()}, and a misbehaving registration is
+     * absorbed and logged rather than crashing the caller's plugin load, the same
+     * convention every other registry here follows.</p>
+     */
+    public static void registerPlayerAdminAction(@Nonnull PlayerAdminAction action){
+        String key = action.getKey();
+        if(key.indexOf(':') < 0 || AdminPlayerActions.RESERVED_KEYS.contains(key)){
+            String caller = StackWalker.getInstance()
+                    .walk(frames -> frames.skip(1).findFirst())
+                    .map(StackWalker.StackFrame::getClassName)
+                    .orElse("unknown caller");
+            Cultivation.LOGGER.atWarning().log(
+                    "Rejected PlayerAdminAction key '%s' registered by '%s' - it must be namespaced with a "
+                            + "':' and must not collide with a reserved built-in action key. Not registered.",
+                    key, caller);
+            return;
+        }
+
+        PLAYER_ADMIN_ACTIONS.removeIf(existing -> existing.getKey().equals(key));
+        PLAYER_ADMIN_ACTIONS.add(action);
+    }
+
+    /** Removes a previously registered action - for a plugin unloading cleanly. */
+    public static void unregisterPlayerAdminAction(@Nonnull String actionKey){
+        PLAYER_ADMIN_ACTIONS.removeIf(existing -> existing.getKey().equals(actionKey));
+    }
+
+    /**
+     * @return every registered action, ordered by
+     * {@link PlayerAdminAction#getSortOrder()} and then registration order,
+     * with anything currently hiding itself ({@link PlayerAdminAction#isVisible()})
+     * left out. A fresh list, safe to hold.
+     */
+    @Nonnull
+    public static List<PlayerAdminAction> getPlayerAdminActions(){
+        List<PlayerAdminAction> actions = new ArrayList<>();
+        for(PlayerAdminAction action : PLAYER_ADMIN_ACTIONS){
+            if(isVisible(action)){
+                actions.add(action);
+            }
+        }
+
+        actions.sort(Comparator.comparingInt(PlayerAdminAction::getSortOrder));
+        return actions;
+    }
+
+    /** As {@link PlayerAdminAction#isVisible()}, but a throwing gate hides the row instead of the page. */
+    private static boolean isVisible(@Nonnull PlayerAdminAction action){
+        try{
+            return action.isVisible();
+        }catch(Throwable throwable){
+            Cultivation.LOGGER.atWarning().withCause(throwable).log(
+                    "PlayerAdminAction '%s' threw while deciding whether to show itself - hiding it.", action.getKey());
+            return false;
+        }
     }
 
     /**
@@ -2046,6 +2148,46 @@ public class CultivationAPI {
     }
 
     /**
+     * Registers a {@link TechniqueGate} - Cultivation's extensibility point for
+     * gating a technique on a condition another mod supplies at runtime (e.g.
+     * "is this player currently transformed into some other mod's creature
+     * form"). Declare which gate ids a technique requires on its
+     * {@link TechniqueRule} with {@link TechniqueRule#requiresGates}.
+     *
+     * <p>With the default status key ({@code server.cultivation.technique.status.gateRefused}).
+     * Registering the same id twice safely replaces the old entry, so this is
+     * safe to call again from your plugin's {@code setup()} on a reload.</p>
+     *
+     * @param id         a stable, unique id - namespace it with your mod's name
+     *                   (e.g. "mermaids:song_ready") to avoid colliding with
+     *                   another mod's gate.
+     * @param failureKey a full server.lang key (including its {@code server.}
+     *                   prefix) for the chat message sent when this gate refuses
+     *                   a cast; receives a {@code technique} Message param.
+     * @param condition  what this gate actually checks.
+     */
+    @Nonnull
+    public static TechniqueGate registerTechniqueGate(@Nonnull String id, @Nonnull String failureKey, @Nonnull TechniqueGate.Condition condition){
+        return TechniqueGate.register(id, failureKey, condition);
+    }
+
+    /**
+     * As {@link #registerTechniqueGate(String, String, TechniqueGate.Condition)},
+     * but with your own short status-label key for the /cultivation technique
+     * list and the keybinds UI, instead of the generic fallback.
+     */
+    @Nonnull
+    public static TechniqueGate registerTechniqueGate(@Nonnull String id, @Nonnull String failureKey,
+                                                       @Nullable String statusKey, @Nonnull TechniqueGate.Condition condition){
+        return TechniqueGate.register(id, failureKey, statusKey, condition);
+    }
+
+    /** Withdraws a previously registered {@link TechniqueGate} - for a plugin unloading cleanly. */
+    public static void unregisterTechniqueGate(@Nonnull String id){
+        TechniqueGate.unregister(id);
+    }
+
+    /**
      * Convenience builder for a {@link TechniqueRule} to pass to
      * {@link #registerTechnique}. All the tuning knobs of a technique in one
      * call; {@code params} are technique-specific named numbers your effect
@@ -2096,6 +2238,47 @@ public class CultivationAPI {
     public static boolean performTechnique(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref,
                                            @Nonnull PlayerRef playerRef, @Nonnull Technique technique){
         return TechniqueManager.activate(accessor, ref, playerRef, technique) == TechniqueManager.ActivateResult.SUCCESS;
+    }
+
+    /**
+     * Writes a technique into a cultivator's learned set for good - the same
+     * chokepoint every built-in source (manual read, sudden enlightenment, a
+     * breakthrough's gift, a sect hall's inscription) goes through, so the
+     * pre-learn veto and the learn event fire exactly the same way for an
+     * addon's own grant.
+     *
+     * <p><b>Mutates a component - inside a system, {@code accessor} MUST be the
+     * system's {@code CommandBuffer}, never a bare {@code Store}.</b> A system
+     * runs under the store's processing lock, and a direct {@code Store}
+     * component write there throws and takes the world thread down with it.</p>
+     *
+     * @param messageKey a server.lang key announcing it, taking a
+     *                   {@code technique} param, or {@code null} to say nothing
+     *                   (what an admin grant wants).
+     * @return true if this actually taught something new.
+     */
+    public static boolean grantTechnique(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref,
+                                         @Nullable PlayerRef playerRef, @Nonnull Technique technique, @Nullable String messageKey){
+        return TechniqueUnlockManager.grant(accessor, ref, playerRef, technique, messageKey);
+    }
+
+    /** @return true if the Personal Dao system is currently enabled in config. */
+    public static boolean isPersonalDaoSystemEnabled(){
+        return Cultivation.getDaoComprehensionConfig().get().isPersonalDaoEnabled();
+    }
+
+    /**
+     * Grants a player a timed Qi Barrier - an absorption pool that deducts from incoming
+     * damage before health does, the same primitive the built-in {@code qi_barrier}
+     * technique uses. Fires the usual pre/post buff-apply events, so other listeners
+     * (including built-in techniques) see it consistently.
+     *
+     * @param durationSeconds how long the barrier lasts before expiring unused.
+     * @param shieldAmount    how much incoming damage it can absorb in total.
+     */
+    public static void activateQiBarrier(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref,
+                                         float durationSeconds, float shieldAmount){
+        TechniqueBuffManager.activateQiBarrier(accessor, ref, durationSeconds, shieldAmount);
     }
 
     // --- Changing a cultivator's progression ---
@@ -2444,6 +2627,86 @@ public class CultivationAPI {
         return dao == null ? 0f : dao.getKarma();
     }
 
+    // --- Personal Dao registry (Sword/Slaughter/Space, plus whatever an addon registers) ---
+
+    /** Registers a Personal Dao. Registering the same key twice replaces the first. */
+    public static void registerPersonalDao(@Nonnull PersonalDao dao){
+        DaoComprehensionManager.registerPersonalDao(dao);
+    }
+
+    /** Withdraws a previously registered Personal Dao - for a plugin unloading cleanly. */
+    public static void unregisterPersonalDao(@Nonnull String key){
+        DaoComprehensionManager.unregisterPersonalDao(key);
+    }
+
+    /** @return every registered Personal Dao, sorted by sort order then registration order. Unmodifiable. */
+    @Nonnull
+    public static List<PersonalDao> getPersonalDaos(){
+        return DaoComprehensionManager.getPersonalDaos();
+    }
+
+    /** @return the Personal Dao registered under this key, or null if nothing claims it. */
+    @Nullable
+    public static PersonalDao getPersonalDao(@Nonnull String key){
+        return DaoComprehensionManager.getPersonalDao(key);
+    }
+
+    /** @return the comprehension this cultivator has banked toward this Personal Dao, or 0. */
+    public static float getPersonalDaoComprehension(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref, @Nonnull String key){
+        return DaoComprehensionManager.getPersonalDaoComprehension(accessor, ref, key);
+    }
+
+    /** @return true if this cultivator currently has this Personal Dao manifested. */
+    public static boolean isPersonalDaoManifested(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref, @Nonnull String key){
+        return DaoComprehensionManager.isPersonalDaoManifested(accessor, ref, key);
+    }
+
+    /** Grants (or, with a negative amount, works off) comprehension toward a registered Personal Dao by key. No-ops for an unregistered key. */
+    public static void addPersonalDaoComprehension(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref, @Nonnull String key, float amount, @Nullable PlayerRef playerRef){
+        DaoComprehensionManager.addPersonalDaoComprehension(accessor, ref, key, amount, playerRef);
+    }
+
+    // --- Heavenly Dao (天道) ---
+
+    /** @return this cultivator's raw Heavenly Dao value, 0..Heavenly-Dao-Max. */
+    public static float getHeavenlyDao(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref){
+        return DaoComprehensionManager.getHeavenlyDao(accessor, ref);
+    }
+
+    /** @return this cultivator's Heavenly Dao as a 0..1 fraction of Heavenly-Dao-Max. */
+    public static float getHeavenlyDaoFraction(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref){
+        return DaoComprehensionManager.getHeavenlyDaoFraction(accessor, ref);
+    }
+
+    /** @return this cultivator's Heavenly Dao rank, resolved from their current fraction. */
+    @Nonnull
+    public static HeavenlyDaoRank getHeavenlyDaoRank(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref){
+        return DaoComprehensionManager.getHeavenlyDaoRank(accessor, ref);
+    }
+
+    /** @return this cultivator's Dao Comprehension component (Heavenly Dao + every Personal Dao's progress), creating it if they have never touched the layer. */
+    @Nonnull
+    public static DaoComprehensionComponent getOrCreateDaoComprehension(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref){
+        return DaoComprehensionManager.getOrCreate(accessor, ref);
+    }
+
+    // --- Meridian Injuries ---
+
+    /** @return true if this cultivator currently carries this Meridian Injury. */
+    public static boolean hasMeridianInjury(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref, @Nonnull MeridianInjury injury){
+        return MeridianInjuryManager.has(MeridianInjuryManager.getIfPresent(accessor, ref), injury);
+    }
+
+    /** @return the magnitude (0..1) rolled for this Meridian Injury, or 0 if not carried. */
+    public static float getMeridianInjuryMagnitude(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref, @Nonnull MeridianInjury injury){
+        return MeridianInjuryManager.magnitudeOf(MeridianInjuryManager.getIfPresent(accessor, ref), injury);
+    }
+
+    /** @return the online-active seconds remaining on this Meridian Injury, or 0 if not carried. */
+    public static float getMeridianInjuryRemainingSeconds(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref, @Nonnull MeridianInjury injury){
+        return MeridianInjuryManager.remainingSecondsOf(MeridianInjuryManager.getIfPresent(accessor, ref), injury);
+    }
+
     /** @return this player's claimed Cave Abode, or null when they have none. */
     @Nullable
     public static Dwelling getAbode(@Nonnull UUID player){
@@ -2736,5 +2999,37 @@ public class CultivationAPI {
     @Nullable
     public static String getLifeBoundGrantedTechnique(@Nullable ItemStack stack){
         return LifeBoundTraits.getGrantedTechnique(stack);
+    }
+
+    // ==================== Heavenly Oath ====================
+
+    /** @return every oath currently binding this cultivator. */
+    @Nonnull
+    public static java.util.List<plugin.siren.Utils.Oath.Oath> getOaths(@Nonnull UUID player){
+        return OathManager.getActiveOaths(player);
+    }
+
+    /** @return whether this cultivator currently carries a Dao-Heart Flaw (a broken oath's punishment). */
+    public static boolean isDaoHeartFlawed(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref){
+        DaoHeartFlawComponent flaw = accessor.getComponent(ref, DaoHeartFlawComponent.getComponentType());
+        return OathManager.isFlawed(flaw);
+    }
+
+    // ==================== Weapon Spirit ====================
+
+    /** @return true once this held weapon's spirit has woken up. */
+    public static boolean isWeaponSpiritAwakened(@Nullable ItemStack stack){
+        return WeaponSpiritManager.isAwakened(stack);
+    }
+
+    /** @return this weapon spirit's current level, or 0 if it has not awakened yet. */
+    public static int getWeaponSpiritLevel(@Nullable ItemStack stack){
+        return WeaponSpiritManager.getLevel(stack);
+    }
+
+    /** @return the technique id a matured weapon spirit lends its owner, or null if not matured (or none configured). */
+    @Nullable
+    public static String getWeaponSpiritBondedTechnique(@Nullable ItemStack stack){
+        return WeaponSpiritManager.getBondedTechniqueId(stack);
     }
 }

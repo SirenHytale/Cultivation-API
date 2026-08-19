@@ -33,7 +33,7 @@ cover it, because nearly every mechanic is re-tunable there.
 1. **`docs/pitfalls.md`** — the mistakes that crash servers. Read this first.
 2. `docs/getting-started.md` — dependency wiring and `setup()`.
 3. The guide for whatever the user is doing (see `README.md`'s table).
-4. `docs/events-reference.md` — all 173 listeners with their payloads. Generated
+4. `docs/events-reference.md` — all 261 listeners with their payloads. Generated
    from source, so it is accurate; it is long, so search it rather than reading
    it end to end.
 
@@ -256,17 +256,23 @@ float getMeditationRegenMultiplier(String world, int cx, int cz, UUID player)
 
 **Cultivation's own settings** — `CultivationConfigs`, one accessor per file
 (`cultivation()`, `spiritVein()`, `dao()`, `sect()`, … , `endlessLeveling()`,
-`update()`, `webStore()` (0.8.0), plus `race(PlayerRace)`). Each returns the live
-`Config<T>` **holder**; call `.get()` at the point of use and `.save()` after
+`update()`, `webStore()` (0.8.0), plus `race(PlayerRace)`). 0.9.x added accessors
+for every new subsystem's config too — `daoComprehension()`, `talisman()`,
+`forging()`, `weaponSpirit()`, `breeding()`, `party()`, `dungeon()`, `rival()`,
+`treasure()`, `faction()`, `dreamTrial()`, `campaign()`, `oath()`, `market()`,
+`tide()`, `partner()`, `masterDisciple()`, `qiDeviation()`, `tournament()` and
+`celestial()` — plus `secretRealm()`, which previously had none. Each returns the
+live `Config<T>` **holder**; call `.get()` at the point of use and `.save()` after
 writing. To change a value for one player or one event, use the matching `Pre*`
 event instead — a config write changes the server permanently and overwrites what
 its owner tuned.
 
-**Seven config files have no accessor yet** — Celestial, Fist, Land,
-Master-Disciple, Qi Deviation, Secret Realm, Tournament (five of them arrived with
-0.8.0). They are reachable as `Cultivation.getCelestialConfig()` and friends, on
-the ordinary internals terms: `plugin.siren.Cultivation` may change shape between
-versions. Prefer a `Pre*` event where one exists.
+**Two config files still have no accessor** — Fist and Land (down from seven as
+of 0.8.0; Celestial, Master-Disciple, Qi Deviation, Secret Realm and Tournament
+all gained one in 0.9.x, see above). They remain reachable as
+`Cultivation.getFistConfig()` / `Cultivation.getLandConfig()`, on the ordinary
+internals terms: `plugin.siren.Cultivation` may change shape between versions.
+Prefer a `Pre*` event where one exists.
 
 **Compatibility flags:**
 
@@ -313,6 +319,9 @@ void registerMenuPage(CultivationMenuPage)          // + unregisterMenuPage(Stri
 void registerCodexEntry(CodexEntry)                 // + unregisterCodexEntry(String)
 void registerCodexCategory(CodexCategory)           // + unregisterCodexCategory(String)
 void registerAdminConfigSection(AdminConfigSection)  // + unregisterAdminConfigSection(String)
+void registerPlayerAdminAction(PlayerAdminAction)    // + unregisterPlayerAdminAction(String)
+                                                      // Players-tab row targeting the selected player
+                                                      // (0.9.x) see docs/ui.md#player-admin-actions-09x
 void registerPalette(CultivationPalette)            // + unregisterPalette(String)
 void registerTitle(CultivationTitle)                // + unregisterTitle(String)
 void registerSectBanner(SectBanner)                 // + unregisterSectBanner(String)
@@ -415,17 +424,30 @@ Builder.semantic(Semantic, int rgb)
 `CultivationEvents`, `DaoEvents`, `TechniqueEvents`, `ItemEvents`, `BeastEvents`,
 `SectEvents`, `WarEvents`, `DuelEvents`, `FormationEvents`, `DwellingEvents`,
 `CelestialEvents`, `BodyTemperingEvents`, `FistEvents`, `ProfileEvents`,
-`StoreBenefitEvents`.
+`StoreBenefitEvents` — plus eighteen more that shipped through 0.9.x:
+`DaoComprehensionEvents`, `ForgingEvents`, `TalismanEvents`, `WeaponSpiritEvents`,
+`BreedingEvents`, `MeridianEvents`, `PartyEvents`, `PartnerEvents`, `OathEvents`,
+`CampaignEvents`, `QuestEvents`, `DepthsEvents`, `SecretRealmEvents`,
+`TreasureEvents`, `MarketEvents`, `TideEvents`, `RivalEvents`, `WorldBossEvents`.
+See [docs/events-reference.md](docs/events-reference.md) for what each covers.
 
 Every listener is `ClassName.onSomething(Consumer<SomethingEvent>)`, and nearly
 every mechanic has both `onX` (post, notification) and `onPreX` (pre, cancellable
 and re-tunable).
 
-The last two arrived in 0.8.0 and are the exceptions to that shape:
-`CelestialEvents` has one pre for two posts (no `PreCelestialEventEnd`), and
-`StoreBenefitEvents` has **no pre-events at all** — nothing there is cancellable,
-deliberately. Both also break the threading rule above; see
+`CelestialEvents` and `StoreBenefitEvents` (0.8.0) are the two exceptions to that
+shape: `CelestialEvents` has one pre for two posts (no `PreCelestialEventEnd`),
+and `StoreBenefitEvents` has **no pre-events at all** — nothing there is
+cancellable, deliberately. Both also break the threading rule above; see
 [Hard constraints §3](#3-listeners-run-on-the-subjects-world-thread).
+
+A handful of the 0.9.x classes are **post-only by design**, for the same
+reason — not an oversight: `DepthsEvents`, `SecretRealmEvents` and (mostly)
+`WorldBossEvents` report the deterministic next state of a machine that is
+already running (a floor actually clearing, a site's own scheduler opening it,
+a random spawn point being picked) rather than a request with a real veto point.
+Read the class javadoc before assuming a subsystem is missing a pre-event by
+mistake.
 
 **Enums you will need** (outside `plugin.siren.API` — see `docs/types.md`):
 

@@ -105,6 +105,9 @@ public final class CultivationEvents {
     /** The Heart-Devil Trial tormented a deeply-leaned cultivator mid-ritual. {@code composureRemaining} is what's left after this pulse's drain (0 when it broke); {@code deviated} is true only on the pulse that shattered composure into Qi Deviation; {@code breakthroughRitual} distinguishes breakthrough trials from (opt-in) advancement ones. */
     public record HeartDevilTrialEvent(@Nonnull Ref<EntityStore> ref, @Nullable PlayerRef player, float composureRemaining, boolean deviated, boolean breakthroughRitual) {}
 
+    /** The Dream Trial's Hollow Mirror tested a cultivator mid-attempt. {@code composureRemaining} is what's left after this pulse's drain (0 when it broke); {@code broken} is true only on the pulse that shattered composure and failed the attempt; {@code pressure} is the dreamTrialPressure fraction (0-1) that scaled this pulse's drain - see {@code DreamTrialManager#dreamTrialPressure}. */
+    public record DreamTrialEvent(@Nonnull Ref<EntityStore> ref, @Nullable PlayerRef player, float composureRemaining, boolean broken, float pressure) {}
+
     /** Qi was just banked toward a player's next rank-up. {@code amount} is what was actually added (after every race/skill/pill/sect/dao multiplier and after any listener retune); {@code totalQi} is their new banked total. */
     public record QiGainEvent(@Nonnull Ref<EntityStore> ref, @Nullable PlayerRef player, float amount, float totalQi) {}
 
@@ -325,6 +328,34 @@ public final class CultivationEvents {
         public boolean breakthroughRitual(){ return this.breakthroughRitual; }
     }
 
+    /** A Dream Trial pulse is about to test a cultivator inside the Hollow Mirror. Cancel to skip the pulse entirely; adjust {@link #setComposureDrain} to change how hard it bites (0 makes the reflection purely cosmetic). */
+    public static final class PreDreamTrialEvent extends CancellableEvent {
+        private final Ref<EntityStore> ref;
+        private final PlayerRef player;
+        private final float pressure;
+        private final int pulseIndex;
+        private float composureDrain;
+
+        public PreDreamTrialEvent(@Nonnull Ref<EntityStore> ref, @Nullable PlayerRef player, float composureDrain,
+                                  float pressure, int pulseIndex){
+            this.ref = ref;
+            this.player = player;
+            this.composureDrain = composureDrain;
+            this.pressure = pressure;
+            this.pulseIndex = pulseIndex;
+        }
+
+        @Nonnull public Ref<EntityStore> ref(){ return this.ref; }
+        @Nullable public PlayerRef player(){ return this.player; }
+        /** Composure this pulse will drain; when it exceeds what's left, the attempt breaks. */
+        public float composureDrain(){ return this.composureDrain; }
+        public void setComposureDrain(float composureDrain){ this.composureDrain = composureDrain; }
+        /** How unresolved the cultivator's own Dao currently reads (0-1) - see {@code DreamTrialManager#dreamTrialPressure}. NOT the Heart-Devil Trial's extreme-lean question. */
+        public float pressure(){ return this.pressure; }
+        /** Which pulse of this attempt this is, counting from 0. */
+        public int pulseIndex(){ return this.pulseIndex; }
+    }
+
     /** Qi is about to be banked toward a player's next rank-up. Cancel to deny the gain; adjust {@link #setAmount} to re-scale it. Fires for EVERY Qi source (meditation ticks, duel payouts, admin grants), after all of the mod's own multipliers. */
     public static final class PreQiGainEvent extends CancellableEvent {
         private final Ref<EntityStore> ref;
@@ -511,6 +542,8 @@ public final class CultivationEvents {
     private static final List<Consumer<PreLifeBoundLevelUpEvent>> PRE_LIFEBOUND_LEVEL_UP = EventBus.newListenerList();
     private static final List<Consumer<HeartDevilTrialEvent>> HEART_DEVIL_TRIAL = EventBus.newListenerList();
     private static final List<Consumer<PreHeartDevilTrialEvent>> PRE_HEART_DEVIL_TRIAL = EventBus.newListenerList();
+    private static final List<Consumer<DreamTrialEvent>> DREAM_TRIAL = EventBus.newListenerList();
+    private static final List<Consumer<PreDreamTrialEvent>> PRE_DREAM_TRIAL = EventBus.newListenerList();
     private static final List<Consumer<QiGainEvent>> QI_GAIN = EventBus.newListenerList();
     private static final List<Consumer<PreQiGainEvent>> PRE_QI_GAIN = EventBus.newListenerList();
     private static final List<Consumer<MeditationStartEvent>> MEDITATION_START = EventBus.newListenerList();
@@ -543,6 +576,8 @@ public final class CultivationEvents {
     public static void onPreLifeBoundLevelUp(@Nonnull Consumer<PreLifeBoundLevelUpEvent> listener){ PRE_LIFEBOUND_LEVEL_UP.add(listener); }
     public static void onHeartDevilTrial(@Nonnull Consumer<HeartDevilTrialEvent> listener){ HEART_DEVIL_TRIAL.add(listener); }
     public static void onPreHeartDevilTrial(@Nonnull Consumer<PreHeartDevilTrialEvent> listener){ PRE_HEART_DEVIL_TRIAL.add(listener); }
+    public static void onDreamTrial(@Nonnull Consumer<DreamTrialEvent> listener){ DREAM_TRIAL.add(listener); }
+    public static void onPreDreamTrial(@Nonnull Consumer<PreDreamTrialEvent> listener){ PRE_DREAM_TRIAL.add(listener); }
     public static void onQiGain(@Nonnull Consumer<QiGainEvent> listener){ QI_GAIN.add(listener); }
     public static void onPreQiGain(@Nonnull Consumer<PreQiGainEvent> listener){ PRE_QI_GAIN.add(listener); }
     public static void onMeditationStart(@Nonnull Consumer<MeditationStartEvent> listener){ MEDITATION_START.add(listener); }
@@ -577,6 +612,8 @@ public final class CultivationEvents {
     public static boolean firePreLifeBoundLevelUp(@Nonnull PreLifeBoundLevelUpEvent event){ return EventBus.fire(PRE_LIFEBOUND_LEVEL_UP, event, "PreLifeBoundLevelUpEvent"); }
     public static void fireHeartDevilTrial(@Nonnull HeartDevilTrialEvent event){ EventBus.dispatch(HEART_DEVIL_TRIAL, event, "HeartDevilTrialEvent"); }
     public static boolean firePreHeartDevilTrial(@Nonnull PreHeartDevilTrialEvent event){ return EventBus.fire(PRE_HEART_DEVIL_TRIAL, event, "PreHeartDevilTrialEvent"); }
+    public static void fireDreamTrial(@Nonnull DreamTrialEvent event){ EventBus.dispatch(DREAM_TRIAL, event, "DreamTrialEvent"); }
+    public static boolean firePreDreamTrial(@Nonnull PreDreamTrialEvent event){ return EventBus.fire(PRE_DREAM_TRIAL, event, "PreDreamTrialEvent"); }
     public static void fireQiGain(@Nonnull QiGainEvent event){ EventBus.dispatch(QI_GAIN, event, "QiGainEvent"); }
     public static boolean firePreQiGain(@Nonnull PreQiGainEvent event){ return EventBus.fire(PRE_QI_GAIN, event, "PreQiGainEvent"); }
     public static void fireMeditationStart(@Nonnull MeditationStartEvent event){ EventBus.dispatch(MEDITATION_START, event, "MeditationStartEvent"); }

@@ -378,3 +378,70 @@ do nothing.
 
 Cultivation's own 19 sections and 109 rows are ordinary API registrations built
 this same way — which is what lets an addon reorder, hide or replace one.
+
+## Player admin actions (0.9.x)
+
+The per-player analog of an admin config section: a `PlayerAdminAction` adds a
+generic dropdown-plus-button row to `/cultivation admin`'s **Players tab**,
+appended below Cultivation's own fixed rows (Realm, Stage, Race, Qi, Ascension,
+Level), acting on whichever player the admin currently has selected.
+
+Reach for this instead of an admin config section when the value you are
+editing belongs to *one player*, not the server — a bloodline, a constitution,
+a Heavenly Flame. Cultivation owns Realm/Stage/Race/Qi/Ascension/Level directly
+and renders them as fixed rows; it must never be taught one addon's specific
+vocabulary to add a new one, so every other per-player admin control goes
+through this registry instead.
+
+```java
+CultivationAPI.registerPlayerAdminAction(new PlayerAdminAction() {
+    @Nonnull public String getKey()         { return "HeavenlyFlames:setFlame"; }
+    @Nonnull public Message getLabel()      { return Message.translation("server.heavenlyflames.admin.fieldFlame"); }
+    @Nonnull public Message getButtonLabel(){ return Message.translation("server.heavenlyflames.admin.setFlame"); }
+    @Nullable public String getTooltip()    { return null; }
+
+    @Nonnull public List<AdminConfigChoice> getChoices() { return HeavenlyFlame.allAsChoices(); }
+    @Nonnull public String getDefaultValue(){ return HeavenlyFlame.NONE; }
+
+    public void apply(Store<EntityStore> targetStore, Ref<EntityStore> targetRef,
+            PlayerRef targetPlayerRef, PlayerRef actingAdmin, boolean targetingSelf, String value) {
+        HeavenlyFlameManager.applySet(targetStore, targetRef, targetPlayerRef, actingAdmin, targetingSelf, value);
+    }
+});
+```
+
+Call from `setup()`; withdraw it from `shutdown()` with
+`CultivationAPI.unregisterPlayerAdminAction(key)`, or a reload leaves a row
+behind pointing at classes that are gone. Registering the same key twice
+replaces the first, so this is also safe across your own plugin's reload.
+
+### Key namespacing is enforced, not just conventional
+
+`getKey()` doubles as the literal action string the row's button sends back,
+riding the same channel Cultivation's own built-in actions (`"setrealm"`,
+`"setlevel"`, …) use. Registration **rejects** a key that has no `:` separator,
+or that exactly matches one of Cultivation's own reserved built-in keys — logged
+as a warning naming the caller and the offending key, and the action is simply
+never added (this does not throw; a misbehaving registration cannot crash the
+caller's own plugin load). Namespace it — `"HeavenlyFlames:setFlame"` — the
+same rule every other id in this API follows.
+
+### Threading — the one place a direct `Store` write is correct
+
+`apply` is handed a real `Store<EntityStore>`, not a `CommandBuffer`, and
+writing through it directly — including `Store.putComponent` — is the
+established pattern here, unlike a ticking system or event listener. See
+[pitfall #18](pitfalls.md#18-routing-playeradminactionapply-through-a-commandbuffer-09x)
+for why this is a deliberate exception, not a hole in the "never write to the
+Store" rule. `apply` still runs resolved onto the **target's** own world
+thread, which may differ from the admin's — report outcomes only through
+`PlayerRef#sendMessage` on `targetPlayerRef`/`actingAdmin`.
+
+### Ordering and visibility
+
+Same shape as an admin config section: `getSortOrder()` defaults to
+`AdminConfigSection.SORT_LAST`, and `isVisible()` (default `true`) is read on
+every render, so a row belonging to a subsystem the server owner switched off
+can hide itself. Unlike a config section, the Players tab's own fixed rows are
+not part of this registry at all — an addon row always appears below them
+regardless of `getSortOrder()`.

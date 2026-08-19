@@ -95,6 +95,38 @@ each branch's neighbors (`previous()` / `next()`, wrapping) are what a tier-5/6
 hybrid fork borrows from. A palette must give a color to **all nine or none** —
 hue is what tells a player which branch a node belongs to.
 
+### New in 0.9.x
+
+Seven more standalone enums arrived with the 0.9.x subsystems, each carried by
+its matching `*Events` payload:
+
+| Enum | Package | Constants |
+| --- | --- | --- |
+| `HeavenlyDaoRank` | `plugin.siren.ECS.Dao` | `UNHEEDING`, `LISTENING`, `GLIMPSING`, `CONVERSANT`, `HEAVEN_ALIGNED` — declaration order is meaningful, each paired with a comprehension-fraction floor |
+| `MeridianInjury` | `plugin.siren.ECS.Meridian` | `CRIPPLED_MERIDIAN`, `CRACKED_DANTIAN`, `SLACK_HAND` |
+| `OathType` | `plugin.siren.Utils.Oath` | `NON_AGGRESSION`, `SECT_LOYALTY`, `WAGERED_DUEL`, `MASTER_TEACH` |
+| `ForgeGrade` | `plugin.siren.Utils.Forging` | `LOW`, `MID`, `HIGH`, `PERFECT` |
+| `TalismanGrade` | `plugin.siren.Utils.Talisman` | `LOW`, `MID`, `HIGH`, `PERFECT` |
+| `SecretRealmTier` | `plugin.siren.Utils.Realm` | `ORDINARY`, `IMMORTAL_COURT` (仙庭, ascension-gated) |
+| `TreasureTier` | `plugin.siren.Utils.Treasure` | `CACHE` (Buried Cache, in-place claim), `VAULT` (Ruin Vault, private-instance entry) |
+
+Four more are declared **nested** inside the class that owns them, one level
+down from the enums above but no less part of the stable signature since they
+appear in a post-event's payload:
+
+| Enum | Owner | Constants |
+| --- | --- | --- |
+| `DepthsRun.EndReason` | `plugin.siren.Utils.Depths.DepthsRun` | `EXTRACTED`, `DIED`, `ABANDONED` |
+| `SecretRealmSite.Source` | `plugin.siren.Utils.Realm.SecretRealmSite` | how the site came to exist — see `SecretRealmOpenEvent` |
+| `TideAssault.Result` | `plugin.siren.Utils.Tide.TideAssault` | `WON`, `LOST` |
+| `WorldBossEncounter.Result` | `plugin.siren.Utils.Boss.WorldBossEncounter` | `WON`, `VANISHED`, `TIMED_OUT` |
+
+Three more enums are declared **on the `*Events` class itself** rather than in
+`Utils`/`ECS` — `ForgingEvents.ForgeOutcome`, `TalismanEvents.InscribeOutcome`
+(both `SUCCESS`/`FAILED`/`BOTCH`) and `OathEvents.FlawCleanseRoute`
+(`EXPIRED`/`ITEM`/`COMPANION`). These are listed with their full javadoc in
+[the event reference](events-reference.md) rather than duplicated here.
+
 ---
 
 ## Object types
@@ -178,6 +210,9 @@ Domain objects carried by their subsystems' event payloads:
 | `Dwelling` | `plugin.siren.Utils.Dwelling` | `DwellingEvents` |
 | `BeastSpecies` | `plugin.siren.Utils.Config` | `BeastEvents` |
 | `SectBuilding` | `plugin.siren.Utils.Sect` | `SectEvents` |
+| `BeastEggMetadata` | `plugin.siren.Utils.Beast` | `BreedingEvents` *(0.9.x)* |
+| `AuctionListing` | `plugin.siren.Utils.Market` | `MarketEvents` *(0.9.x)* |
+| `PersonalDao` | `plugin.siren.ECS.Dao` | `DaoComprehensionEvents` *(0.9.x)* — an open registry like `Technique`/`BeastArt` below, not an enum; the built-in Sword/Slaughter/Space daos plus whatever a mod adds. Implements the `DaoComprehensionManager.Subject` marker interface a `DaoEnlightenmentEvent.subject()` may also hold. |
 
 These are the least stable types in this list. Read what you need off them inside
 a listener; do not build long-lived state around their shape.

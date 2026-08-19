@@ -38,11 +38,11 @@ generated.
 
 ## Read this before copying
 
-**It compiles.** As of 0.8.0 every source file here builds clean with `javac`
-against the real `Cultivation-0.8.0.jar` and `Server-0.5.7.jar`, so every API
-signature in it is verified rather than merely plausible. You cannot build it
-straight out of this repository only because neither jar can be redistributed here —
-see [Getting started](../docs/getting-started.md) for installing them.
+**It compiles.** Every source file here builds clean with `javac` against the
+real `Cultivation-0.9.1.jar` and `Server-0.5.7.jar`, so every API signature in
+it is verified rather than merely plausible. You cannot build it straight out
+of this repository only because neither jar can be redistributed here — see
+[Getting started](../docs/getting-started.md) for installing them.
 
 What is still **illustrative** is the *behavior*: the private helpers at the bottom
 of `CultivationHooks.java` (`isDoubleQiWeekend`, `hasHeavenlyMandate`, …) are

@@ -6,25 +6,43 @@ import plugin.siren.Utils.Config.AlchemyConfig;
 import plugin.siren.Utils.Config.BeastConfig;
 import plugin.siren.Utils.Config.BodyTemperingConfig;
 import plugin.siren.Utils.Config.BreakthroughConfig;
+import plugin.siren.Utils.Config.BreedingConfig;
+import plugin.siren.Utils.Config.CampaignConfig;
+import plugin.siren.Utils.Config.CelestialConfig;
 import plugin.siren.Utils.Config.CultivationConfig;
 import plugin.siren.Utils.Config.DaoConfig;
+import plugin.siren.Utils.Config.DaoComprehensionConfig;
 import plugin.siren.Utils.Config.DuelConfig;
+import plugin.siren.Utils.Config.DreamTrialConfig;
+import plugin.siren.Utils.Config.DungeonConfig;
 import plugin.siren.Utils.Config.DwellingConfig;
 import plugin.siren.Utils.Config.EndlessLevelingConfig;
+import plugin.siren.Utils.Config.ForgingConfig;
 import plugin.siren.Utils.Config.FormationConfig;
 import plugin.siren.Utils.Config.LifeBoundConfig;
 import plugin.siren.Utils.Config.ManualConfig;
+import plugin.siren.Utils.Config.MarketConfig;
+import plugin.siren.Utils.Config.MasterDiscipleConfig;
+import plugin.siren.Utils.Config.OathConfig;
 import plugin.siren.Utils.Config.PartnerConfig;
+import plugin.siren.Utils.Config.QiDeviationConfig;
 import plugin.siren.Utils.Config.RaceConfig;
 import plugin.siren.Utils.Config.RaceSystemConfig;
 import plugin.siren.Utils.Config.RefinementConfig;
+import plugin.siren.Utils.Config.RivalConfig;
 import plugin.siren.Utils.Config.SectConfig;
+import plugin.siren.Utils.Config.SecretRealmConfig;
 import plugin.siren.Utils.Config.SkillTreeConfig;
 import plugin.siren.Utils.Config.SpiritCoreConfig;
 import plugin.siren.Utils.Config.SpiritVeinConfig;
+import plugin.siren.Utils.Config.TalismanConfig;
 import plugin.siren.Utils.Config.TechniqueConfig;
+import plugin.siren.Utils.Config.TideConfig;
+import plugin.siren.Utils.Config.TreasureConfig;
+import plugin.siren.Utils.Config.TournamentConfig;
 import plugin.siren.Utils.Config.UpdateConfig;
 import plugin.siren.Utils.Config.WebStoreConfig;
+import plugin.siren.Utils.Config.WeaponSpiritConfig;
 import plugin.siren.Utils.Config.WarConfig;
 import plugin.siren.ECS.Races.PlayerRace;
 
@@ -134,6 +152,11 @@ public final class CultivationConfigs {
         return Cultivation.getDaoConfig();
     }
 
+    /** Heavenly Dao (天道), the open Personal Dao registry, and Dao Enlightenment (悟道). */
+    public static Config<DaoComprehensionConfig> daoComprehension() {
+        return Cultivation.getDaoComprehensionConfig();
+    }
+
     /** The technique system's master switches, keybind gating, and per-technique rule overrides. */
     @Nonnull
     public static Config<TechniqueConfig> technique() {
@@ -152,6 +175,18 @@ public final class CultivationConfigs {
         return Cultivation.getAlchemyConfig();
     }
 
+    /** Talismans - the desk ritual, the grade roll, the mastery ladder. */
+    @Nonnull
+    public static Config<TalismanConfig> talisman() {
+        return Cultivation.getTalismanConfig();
+    }
+
+    /** Forging - the Forge Anchor ritual, the material ladder, the grade roll. */
+    @Nonnull
+    public static Config<ForgingConfig> forging() {
+        return Cultivation.getForgingConfig();
+    }
+
     /** Weapon refinement and dao affinity tempering. */
     @Nonnull
     public static Config<RefinementConfig> refinement() {
@@ -164,10 +199,22 @@ public final class CultivationConfigs {
         return Cultivation.getLifeBoundConfig();
     }
 
+    /** Weapon Spirits - a Life-Bound Treasure's own awakening, level ladder, and bonded art. */
+    @Nonnull
+    public static Config<WeaponSpiritConfig> weaponSpirit() {
+        return Cultivation.getWeaponSpiritConfig();
+    }
+
     /** Spirit beasts - species, taming, growth, and the companion roles. */
     @Nonnull
     public static Config<BeastConfig> beast() {
         return Cultivation.getBeastConfig();
+    }
+
+    /** Spirit beast breeding - the pen, the two-cultivator ritual, and incubation. */
+    @Nonnull
+    public static Config<BreedingConfig> breeding() {
+        return Cultivation.getBreedingConfig();
     }
 
     // --- Society ---
@@ -202,10 +249,135 @@ public final class CultivationConfigs {
         return Cultivation.getDuelConfig();
     }
 
+    /** The ad-hoc party system - max size and invite expiry. See PartyManager. */
+    public static Config<plugin.siren.Utils.Config.PartyConfig> party() {
+        return Cultivation.getPartyConfig();
+    }
+
+    /**
+     * The party Dungeon/Raid system ("The Sunken Foundry" / "The Foundry
+     * Warden") - the master switch, the entrance gate, party sizing, the
+     * instance asset name, and the 3-phase boss encounter's HP thresholds
+     * and per-mechanic magnitudes. See {@link plugin.siren.Utils.Dungeon.DungeonManager}.
+     */
+    @Nonnull
+    public static Config<DungeonConfig> dungeon() {
+        return Cultivation.getDungeonConfig();
+    }
+
+    /**
+     * Wandering Rival Cultivators - roaming, right-click-challenge, reward-only
+     * 1v1 NPC duels. Spawn schedule, lifetime, max health, and the winner's
+     * Qi/manual/material payout. See {@link plugin.siren.Utils.Rival.RivalManager}.
+     */
+    @Nonnull
+    public static Config<RivalConfig> rival() {
+        return Cultivation.getRivalConfig();
+    }
+
+    /**
+     * Treasure/Ruin Exploration - Buried Caches (common, in-place claim) and
+     * Ruin Vaults (rarer, private-instance entry with 0-2 native guardians).
+     * Both tiers discoverable only once Spirit Sense reaches
+     * {@code SpiritSenseStage.PRECISE}. See
+     * {@link plugin.siren.Utils.Treasure.TreasureCacheManager}.
+     */
+    @Nonnull
+    public static Config<TreasureConfig> treasure() {
+        return Cultivation.getTreasureConfig();
+    }
+
+    /** The NPC-faction reputation system - tiers, rivalry pairs, opposing-path gain. See FactionManager. */
+    public static Config<plugin.siren.Utils.Config.FactionConfig> faction() {
+        return Cultivation.getFactionConfig();
+    }
+
+    /** Heavenly Oath offer/accept + the breach penalty (Qi loss, karma, the Dao-Heart Flaw). See OathManager. */
+    @Nonnull
+    public static Config<OathConfig> oath() {
+        return Cultivation.getOathConfig();
+    }
+
     /** Partnered Cultivation. Inert unless the Marriage mod is installed - see {@link CultivationAPI#isMarriageInstalled()}. */
     @Nonnull
     public static Config<PartnerConfig> partner() {
         return Cultivation.getPartnerConfig();
+    }
+
+    /**
+     * Secret Realms and the ascension-gated Immortal Court (仙庭) tier on top
+     * of them - schedule cadence, duration, Qi multipliers, beast-stocking
+     * floors and manual-drop bonuses for BOTH tiers, plus each tier's own
+     * atmosphere Weather-Id. See docs/handoff/immortal-court.md for the
+     * Court-specific (Court-*) keys and docs/handoff/secret-realms.md for
+     * the ordinary tier's own.
+     */
+    @Nonnull
+    public static Config<SecretRealmConfig> secretRealm() {
+        return Cultivation.getSecretRealmConfig();
+    }
+
+    /**
+     * The Dream Trial (幻境劫) at the Hollow Mirror: the site anchor, entry
+     * gating, the composure/pulse/failure-mode dials, the Waking Bell charm's
+     * charge economy, and the atmosphere Weather-Id. A single hand-built site
+     * rather than a rolled Secret Realm - see {@link plugin.siren.Utils.Realm.DreamTrialManager}.
+     */
+    @Nonnull
+    public static Config<DreamTrialConfig> dreamTrial() {
+        return Cultivation.getDreamTrialConfig();
+    }
+
+    /**
+     * The narrative Campaign system ("Roots of Ruin"): the master switch, each
+     * chapter's underlying quest-chain numbers, and the fixed world coordinate
+     * each named recurring character appears at. See {@link
+     * plugin.siren.Utils.Campaign.CampaignManager} and {@link
+     * plugin.siren.Utils.Campaign.BuiltInCampaign}.
+     */
+    @Nonnull
+    public static Config<CampaignConfig> campaign() {
+        return Cultivation.getCampaignConfig();
+    }
+
+    /** The player-run Auction House and the scheduled Traveling Merchant NPC. */
+    @Nonnull
+    public static Config<MarketConfig> market() {
+        return Cultivation.getMarketConfig();
+    }
+
+    /**
+     * The Beast Tide (兽潮): the automatic scheduler, the warning/wave/resolution
+     * phases a siege drives, assault integrity, and the suppression penalty or
+     * contribution reward a resolved assault pays out.
+     */
+    @Nonnull
+    public static Config<TideConfig> tide() {
+        return Cultivation.getTideConfig();
+    }
+
+    /** Master-Disciple bonds (师徒) - offer/accept, the radius-gated Qi bonus, teaching, and breakthrough rewards. */
+    @Nonnull
+    public static Config<MasterDiscipleConfig> masterDisciple() {
+        return Cultivation.getMasterDiscipleConfig();
+    }
+
+    /** Qi Deviation (走火入魔) - the lingering post-Heart-Devil affliction, its penalties, and its cures. */
+    @Nonnull
+    public static Config<QiDeviationConfig> qiDeviation() {
+        return Cultivation.getQiDeviationConfig();
+    }
+
+    /** The sect tournament (论道大会) - bracket size, the champion payout, and manual/auto-start cadence. */
+    @Nonnull
+    public static Config<TournamentConfig> tournament() {
+        return Cultivation.getTournamentConfig();
+    }
+
+    /** Celestial Events (天象) - the shared scheduler, plus Spirit Tide, Meteor Shower, and Blood Moon. */
+    @Nonnull
+    public static Config<CelestialConfig> celestial() {
+        return Cultivation.getCelestialConfig();
     }
 
     // --- Compatibility ---
@@ -255,15 +427,33 @@ public final class CultivationConfigs {
         technique().save();
         manual().save();
         alchemy().save();
+        talisman().save();
+        forging().save();
         refinement().save();
         lifeBound().save();
+        weaponSpirit().save();
         beast().save();
+        breeding().save();
         sect().save();
         formation().save();
         dwelling().save();
         war().save();
         duel().save();
+        party().save();
+        dungeon().save();
+        rival().save();
+        treasure().save();
+        faction().save();
+        dreamTrial().save();
+        campaign().save();
+        oath().save();
+        market().save();
+        tide().save();
         partner().save();
+        masterDisciple().save();
+        qiDeviation().save();
+        tournament().save();
+        celestial().save();
         endlessLeveling().save();
         update().save();
     }
