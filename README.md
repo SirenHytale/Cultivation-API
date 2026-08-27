@@ -5,15 +5,15 @@ progression mod for Hytale servers — realms and Qi, daos, sects, techniques, s
 beasts, formations, cave abodes, duels, alchemy and the heavens themselves.
 
 This repository is for **mod developers**. It contains the API's Java sources,
-a complete reference for all **261 events**, and worked examples. Everything here
+a complete reference for all **291 events**, and worked examples. Everything here
 is the real code the mod ships — nothing is a summary written after the fact.
 
 | | |
 | --- | --- |
-| **Artifact** | `plugin.siren:Cultivation:0.9.1` |
+| **Artifact** | `plugin.siren:Cultivation:0.10.0` |
 | **Package** | `plugin.siren.API` |
 | **Plugin id** | `Siren:Cultivation` |
-| **Hytale server** | `0.5.x` (built against `com.hypixel.hytale:Server:0.5.7`) |
+| **Hytale server** | `0.6.0-pre.x` (Update 6 pre-release; built against `com.hypixel.hytale:Server:0.6.0-pre.13.1`) |
 | **Java** | 25 |
 
 ---
@@ -26,8 +26,8 @@ internals to change how it behaves. Every one of these is a supported hook:
 | I want to… | Use | Guide |
 | --- | --- | --- |
 | Read a player's realm, level, Qi, race, skill nodes | `CultivationAPI` getters | [Reading player state](docs/reading-state.md) |
-| React when something happens (breakthrough, tame, siege…) | 147 post-events | [Events](docs/events.md) |
-| Veto something, or re-tune its numbers | 114 cancellable pre-events | [Events](docs/events.md) |
+| React when something happens (breakthrough, tame, siege…) | 166 post-events | [Events](docs/events.md) |
+| Veto something, or re-tune its numbers | 125 cancellable pre-events | [Events](docs/events.md) |
 | Keep your own progression in step with a player's saves | `ProfileEvents` | [Profiles](docs/profiles.md) |
 | Grant Qi, force a breakthrough, hand out a skill node | `addQi`, `completeBreakthrough`, `grantSkillNode` | [Driving progression](docs/driving-progression.md) |
 | Read or drain a chunk's spirit vein | `readSpiritVein`, `drainSpiritVein` | [Driving progression](docs/driving-progression.md) |
@@ -81,6 +81,12 @@ internals to change how it behaves. Every one of these is a supported hook:
 | React to a Beast Tide siege on a sect hall or Cave Abode | `TideEvents` | [Event reference](docs/events-reference.md#beast-tides-09x) |
 | React to a Wandering Rival Cultivator challenge | `RivalEvents` | [Event reference](docs/events-reference.md#wandering-rival-cultivators-09x) |
 | React to a Calamity Beast (wandering world boss) | `WorldBossEvents` | [Event reference](docs/events-reference.md#calamity-beasts--world-boss-09x) |
+| React to the Pill Cauldron refining ritual, including Fire Watch tending | `AlchemyEvents` | [Event reference](docs/events-reference.md#alchemy-0100) |
+| React to a Void Rift world event opening, waving or resolving | `RiftEvents` | [Event reference](docs/events-reference.md#void-rifts-0100) |
+| Claim an off-ring Dao element outside the ten-element Wu Xing cycle | `registerOffRingRoot` | [Registries](docs/registries.md#off-ring-dao-roots-0100) |
+| Force a player's theme regardless of their own pick | `registerPaletteLock` | [Registries](docs/registries.md#palette-locks-0100) |
+| Add my own tab to the Identity page | `registerIdentitySection` | [UI integration](docs/ui.md#identity-sections-0100) |
+| Register a personal particle look for meditation/breakthroughs | `registerMeditationAura` | [Registries](docs/registries.md#meditation-auras-0100) |
 
 Three of those are the big ones, and two of the three are easy to confuse:
 `CultivationTheme` changes the **words**, `CultivationPalette` changes the
@@ -99,10 +105,10 @@ your local repository once:
 
 ```bash
 mvn install:install-file \
-  -Dfile=Cultivation-0.9.1.jar \
+  -Dfile=Cultivation-0.10.0.jar \
   -DgroupId=plugin.siren \
   -DartifactId=Cultivation \
-  -Dversion=0.9.1 \
+  -Dversion=0.10.0 \
   -Dpackaging=jar
 ```
 
@@ -112,7 +118,7 @@ Then depend on it in `provided` scope:
 <dependency>
     <groupId>plugin.siren</groupId>
     <artifactId>Cultivation</artifactId>
-    <version>0.9.1</version>
+    <version>0.10.0</version>
     <scope>provided</scope>
 </dependency>
 ```
@@ -127,7 +133,7 @@ resolves Cultivation's classes for you:
 
 ```json
 "Dependencies": {
-  "Siren:Cultivation": ">=0.9.1"
+  "Siren:Cultivation": ">=0.10.0"
 }
 ```
 
@@ -188,7 +194,7 @@ float qi = CultivationAPI.getQi(accessor, ref);
 | **[Driving progression](docs/driving-progression.md)** | Granting Qi, ranking up, meditation, spirit veins, and the rest of the world |
 | **[Config access](docs/config-access.md)** | Reading and writing Cultivation's own settings, and when not to |
 | **[Events](docs/events.md)** | Pre vs post, cancelling, re-tuning, threading, error handling |
-| **[Event reference](docs/events-reference.md)** | All 261 listeners with their payloads — generated from source |
+| **[Event reference](docs/events-reference.md)** | All 291 listeners with their payloads — generated from source |
 | **[Registries](docs/registries.md)** | Races, techniques, Qi-absorption items |
 | **[Profiles](docs/profiles.md)** | Keeping your own progression in step with a player's separate saves |
 | **[Store benefits](docs/store-benefits.md)** | Registering a Treasure Pavilion product, and the one event family that is not on a world thread |

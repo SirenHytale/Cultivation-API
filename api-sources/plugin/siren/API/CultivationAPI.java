@@ -56,7 +56,9 @@ import plugin.siren.Utils.Duel.DuelManager;
 import plugin.siren.Utils.Oath.OathManager;
 import plugin.siren.Utils.Dwelling.Dwelling;
 import plugin.siren.Utils.Dwelling.DwellingManager;
+import plugin.siren.Utils.Formation.Formation;
 import plugin.siren.Utils.Formation.FormationManager;
+import plugin.siren.Utils.Formation.FormationAugmentBridge;
 import plugin.siren.Utils.Sect.Sect;
 import plugin.siren.Utils.Sect.SectManager;
 import plugin.siren.Utils.UI.Admin.AdminPlayerActions;
@@ -169,6 +171,7 @@ public class CultivationAPI {
      * iteration vastly outnumbers the handful of writes.
      */
     private static final List<AdminConfigSection> ADMIN_CONFIG_SECTIONS = new CopyOnWriteArrayList<>();
+    private static final List<IdentitySection> IDENTITY_SECTIONS = new CopyOnWriteArrayList<>();
 
     /**
      * Per-player admin actions other mods have added to the Players tab, in
@@ -231,6 +234,28 @@ public class CultivationAPI {
      * beacon pulse and every sect page build.
      */
     private static final List<SectBanner> SECT_BANNERS = new CopyOnWriteArrayList<>();
+
+    /**
+     * Every registered meditation aura. Copy-on-write for the same reason as the
+     * registries above: written once at setup, read on every meditation tick and
+     * every ritual pulse.
+     */
+    private static final List<CultivationMeditationAura> MEDITATION_AURAS = new CopyOnWriteArrayList<>();
+
+    /**
+     * Every off-ring {@link DaoElement} slot a mod has claimed, by the element
+     * it claims. Copy-on-write for the same reason as the registries above:
+     * written once at setup, read from {@code DaoManager} and
+     * {@code DaoCombatSystem} on every relevant player action / hit.
+     */
+    private static final List<DaoRoot> OFF_RING_ROOTS = new CopyOnWriteArrayList<>();
+
+    /**
+     * Every registered palette lock, in registration order. Copy-on-write for
+     * the same reason as the registries above: written once at setup, read on
+     * every theme-page build and theme-change attempt.
+     */
+    private static final List<CultivationPaletteLock> PALETTE_LOCKS = new CopyOnWriteArrayList<>();
 
     // --- Component type getters ---
 
@@ -431,6 +456,125 @@ public class CultivationAPI {
         }
 
         return null;
+    }
+
+    // --- Contributing a tab to the Identity page ---
+
+    /**
+     * Adds a third (or later) tab to Cultivation's Identity page, alongside
+     * the built-in Race and Titles tabs - the nav bar's {@code race} button.
+     *
+     * <p>Call from your plugin's {@code setup()}. Load order does not matter:
+     * nothing reads the registry until a player actually opens the Identity
+     * page. Registering the same section id twice replaces the first, so
+     * this is safe across a reload of your plugin.</p>
+     *
+     * @see #newIdentitySection for building one from a callback without
+     * implementing {@link IdentitySection} directly.
+     */
+    public static void registerIdentitySection(@Nonnull IdentitySection section){
+        IDENTITY_SECTIONS.removeIf(existing -> existing.getId().equals(section.getId()));
+        IDENTITY_SECTIONS.add(section);
+    }
+
+    /** Removes a previously registered section - for a plugin unloading cleanly. */
+    public static void unregisterIdentitySection(@Nonnull String sectionId){
+        IDENTITY_SECTIONS.removeIf(existing -> existing.getId().equals(sectionId));
+    }
+
+    /**
+     * @return every registered section, ordered by
+     * {@link IdentitySection#getSortOrder()} and then registration order.
+     * Visibility is per-player ({@link IdentitySection#isVisible}), so unlike
+     * {@link #getAdminConfigSections()} this does not filter - the Identity
+     * page checks each section against the viewer itself. A fresh list, safe
+     * to hold.
+     */
+    @Nonnull
+    public static List<IdentitySection> getIdentitySections(){
+        List<IdentitySection> sections = new ArrayList<>(IDENTITY_SECTIONS);
+        sections.sort(Comparator.comparingInt(IdentitySection::getSortOrder));
+        return sections;
+    }
+
+    /** @return the section registered under this id, or null if nothing claims it. */
+    @Nullable
+    public static IdentitySection getIdentitySection(@Nonnull String sectionId){
+        for(IdentitySection section : IDENTITY_SECTIONS){
+            if(section.getId().equals(sectionId)){
+                return section;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Builds an {@link IdentitySection} from its parts, so contributing a tab
+     * is one call rather than an interface implementation:
+     *
+     * <pre>{@code CultivationAPI.registerIdentitySection(
+     *     CultivationAPI.newIdentitySection("MyMod:classes",
+     *             Message.translation("server.mymod.identity.tabClasses"), IdentitySection.SORT_DEFAULT,
+     *             context -> {
+     *                 context.getCommandBuilder().append(context.getContainerSelector(), myDocument);
+     *                 context.bindAction(CustomUIEventBindingType.Activating,
+     *                         "#SomeButton", "pick");
+     *             },
+     *             (context, action, value) -> {
+     *                 if("pick".equals(action)){
+     *                     // handle the click
+     *                 }
+     *             }));}</pre>
+     *
+     * @param buildCallback  builds this section's content once per page open -
+     *                       see {@link IdentitySection#build}.
+     * @param actionHandler  handles a click or value push bound with
+     *                       {@link IdentitySectionContext#bindAction} or
+     *                       {@link IdentitySectionContext#bindValueAction}, or
+     *                       null for a section with no interactive content.
+     */
+    @Nonnull
+    public static IdentitySection newIdentitySection(@Nonnull String id, @Nonnull Message label, int sortOrder,
+                                                       @Nonnull Consumer<IdentitySectionContext> buildCallback,
+                                                       @Nullable IdentitySection.ActionHandler actionHandler){
+        return new IdentitySection(){
+            @Nonnull
+            @Override
+            public String getId(){
+                return id;
+            }
+
+            @Nonnull
+            @Override
+            public Message getLabel(){
+                return label;
+            }
+
+            @Override
+            public void build(@Nonnull IdentitySectionContext context){
+                buildCallback.accept(context);
+            }
+
+            @Override
+            public void handleAction(@Nonnull IdentitySectionContext context, @Nonnull String action, @Nullable String value){
+                if(actionHandler != null){
+                    actionHandler.handle(context, action, value);
+                }
+            }
+
+            @Override
+            public int getSortOrder(){
+                return sortOrder;
+            }
+        };
+    }
+
+    /** As {@link #newIdentitySection(String, Message, int, Consumer, IdentitySection.ActionHandler)}, for a section with no interactive content. */
+    @Nonnull
+    public static IdentitySection newIdentitySection(@Nonnull String id, @Nonnull Message label, int sortOrder,
+                                                       @Nonnull Consumer<IdentitySectionContext> buildCallback){
+        return newIdentitySection(id, label, sortOrder, buildCallback, null);
     }
 
     // --- Contributing per-player actions to the admin menu ---
@@ -1640,6 +1784,14 @@ public class CultivationAPI {
      */
     @Nullable
     public static CultivationPalette getPalette(@Nonnull ComponentAccessor<EntityStore> store, @Nonnull Ref<EntityStore> ref){
+        CultivationPaletteLock lock = resolveActivePaletteLock(store, ref);
+        if(lock != null){
+            CultivationPalette locked = getPalette(lock.lockedPaletteKey(store, ref));
+            if(locked != null){
+                return locked;
+            }
+        }
+
         CultivationSettingsComponent settings = store.getComponent(ref, CultivationSettingsComponent.getComponentType());
         if(settings == null){
             return null;
@@ -1675,6 +1827,211 @@ public class CultivationAPI {
     @Nonnull
     public static String document(@Nullable CultivationPalette palette, @Nonnull String basePath){
         return palette == null ? basePath : palette.resolveDocument(basePath);
+    }
+
+    // --- Meditation auras ---
+
+    /**
+     * Adds a meditation aura players may choose, to the picker and to every
+     * meditation tick, breakthrough ritual and advancement ritual that spawns a
+     * particle.
+     *
+     * <p>Call from your plugin's {@code setup()}; load order does not matter,
+     * since nothing reads the registry until a cultivator sits, breaks through,
+     * or advances. Registering the same id twice replaces the first, so this is
+     * safe across a reload.</p>
+     *
+     * @see CultivationMeditationAura#builder for building one, and for why the
+     * meditation tick is a prefix while breakthrough and advancement are each a
+     * single optional override.
+     */
+    public static void registerMeditationAura(@Nonnull CultivationMeditationAura aura){
+        MEDITATION_AURAS.removeIf(existing -> existing.getKey().equals(aura.getKey()));
+        MEDITATION_AURAS.add(aura);
+    }
+
+    /**
+     * Removes a previously registered meditation aura - for a plugin unloading
+     * cleanly.
+     *
+     * <p>Players still wearing it are not migrated and do not need to be: nothing
+     * stores the aura object, only its id, and {@link #getMeditationAura(ComponentAccessor, Ref)}
+     * falls back to null (Cultivation's own built-in particles) for an id nobody
+     * claims. Uninstalling the mod that added an aura simply returns its wearers
+     * to the stock look.</p>
+     */
+    public static void unregisterMeditationAura(@Nonnull String auraKey){
+        MEDITATION_AURAS.removeIf(existing -> existing.getKey().equals(auraKey));
+    }
+
+    /** @return every registered meditation aura, in registration order. A fresh list, safe to hold. */
+    @Nonnull
+    public static List<CultivationMeditationAura> getMeditationAuras(){
+        return new ArrayList<>(MEDITATION_AURAS);
+    }
+
+    /** @return the meditation aura registered under this id, or null if nothing claims it. */
+    @Nullable
+    public static CultivationMeditationAura getMeditationAura(@Nullable String auraKey){
+        if(auraKey == null || auraKey.isEmpty()){
+            return null;
+        }
+
+        for(CultivationMeditationAura aura : MEDITATION_AURAS){
+            if(aura.getKey().equals(auraKey)){
+                return aura;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * The meditation aura this player has chosen, or null if they meditate under
+     * Cultivation's own built-in particles.
+     *
+     * <p>Null rather than a default instance, for the same reason as
+     * {@link #getPalette(ComponentAccessor, Ref)}: every caller can say "no aura,
+     * use what you were already spawning" and a server with no meditation-aura mod
+     * installed stays on exactly the code path it had before this registry
+     * existed. Returns null too when the stored id names an aura nobody registered
+     * - the mod that provided it has been removed - so a player is never stuck on
+     * an id that resolves to nothing.</p>
+     */
+    @Nullable
+    public static CultivationMeditationAura getMeditationAura(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref){
+        CultivationSettingsComponent settings = accessor.getComponent(ref, CultivationSettingsComponent.getComponentType());
+        if(settings == null){
+            return null;
+        }
+
+        return getMeditationAura(settings.getMeditationAuraId());
+    }
+
+    /**
+     * Sets this player's chosen meditation aura, re-validating the key against the
+     * registry first - the same discipline the settings page's theme dropdown
+     * already applies before calling {@code setPaletteId}, since the event
+     * carrying the id is the client's to forge.
+     *
+     * @param auraKey the key to switch to, or null/empty to return to Cultivation's
+     *                own built-in particles
+     * @return true if the choice was applied - false if this player has no
+     * settings component yet, or {@code auraKey} names an aura nobody registered
+     * or that this player is not offered
+     */
+    public static boolean setMeditationAura(@Nonnull Store<EntityStore> store, @Nonnull Ref<EntityStore> ref, @Nullable String auraKey){
+        CultivationSettingsComponent settings = store.getComponent(ref, CultivationSettingsComponent.getComponentType());
+        if(settings == null){
+            return false;
+        }
+
+        if(auraKey == null || auraKey.isEmpty()){
+            settings.setMeditationAuraId(null);
+            return true;
+        }
+
+        CultivationMeditationAura chosen = getMeditationAura(auraKey);
+        if(chosen == null){
+            return false;
+        }
+
+        PlayerRef playerRef = store.getComponent(ref, PlayerRef.getComponentType());
+        if(playerRef == null || !playerRef.isValid() || !chosen.isAvailableTo(playerRef)){
+            return false;
+        }
+
+        settings.setMeditationAuraId(chosen.getKey());
+        return true;
+    }
+
+    // --- Off-ring Dao roots ---
+
+    /**
+     * Claims an off-ring {@link DaoElement} slot - e.g. the joke DUCK
+     * constant - naming it and optionally overriding the flat counter-cycle
+     * bonus {@code DaoCombatSystem} applies when it counters another element.
+     *
+     * <p>Call from your plugin's {@code setup()}; load order does not matter.
+     * Claiming an already-claimed element replaces the previous claim, so this
+     * is safe across a reload. Until claimed, {@code DaoManager#isRootSelectable}
+     * keeps the element unselectable by any player regardless of
+     * Dao-Mutant-Roots-Enabled, and {@code DaoManager#migrateMutantRoot} never
+     * touches it either way.</p>
+     *
+     * @see DaoRoot#builder for building one.
+     */
+    public static void registerOffRingRoot(@Nonnull DaoRoot root){
+        OFF_RING_ROOTS.removeIf(existing -> existing.getElement() == root.getElement());
+        OFF_RING_ROOTS.add(root);
+    }
+
+    /**
+     * Releases a previously claimed off-ring element - for a plugin unloading
+     * cleanly. Any cultivator already walking it is not migrated; the element
+     * simply becomes unselectable again, same as any other root the server has
+     * turned off.
+     */
+    public static void unregisterOffRingRoot(@Nonnull DaoElement element){
+        OFF_RING_ROOTS.removeIf(existing -> existing.getElement() == element);
+    }
+
+    /** @return the root claiming this off-ring element, or null if nothing claims it. */
+    @Nullable
+    public static DaoRoot getOffRingRoot(@Nonnull DaoElement element){
+        for(DaoRoot root : OFF_RING_ROOTS){
+            if(root.getElement() == element){
+                return root;
+            }
+        }
+
+        return null;
+    }
+
+    /** @return true if a mod currently claims this off-ring element. */
+    public static boolean isOffRingRootClaimed(@Nonnull DaoElement element){
+        return getOffRingRoot(element) != null;
+    }
+
+    // --- Palette locks ---
+
+    /**
+     * Registers a rule that can force a specific palette on some players -
+     * an off-ring Dao root claiming its own robes, say - overriding their own
+     * theme choice entirely while it applies.
+     *
+     * <p>Call from your plugin's {@code setup()}. More than one lock may be
+     * registered; the first whose {@link CultivationPaletteLock#lockedPaletteKey}
+     * returns non-null for a given player wins, in registration order.</p>
+     *
+     * @see CultivationPaletteLock
+     */
+    public static void registerPaletteLock(@Nonnull CultivationPaletteLock lock){
+        PALETTE_LOCKS.add(lock);
+    }
+
+    /** Removes a previously registered palette lock - for a plugin unloading cleanly. */
+    public static void unregisterPaletteLock(@Nonnull CultivationPaletteLock lock){
+        PALETTE_LOCKS.remove(lock);
+    }
+
+    /**
+     * The registered lock currently forcing a palette on this player, resolved
+     * to an existing registered palette - or null if no lock applies, or every
+     * applicable lock names a palette nobody has (yet) registered, in which
+     * case every caller falls through to this player's own settings exactly as
+     * an unclaimed palette id does everywhere else in this API.
+     */
+    @Nullable
+    public static CultivationPaletteLock resolveActivePaletteLock(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref){
+        for(CultivationPaletteLock lock : PALETTE_LOCKS){
+            String key = lock.lockedPaletteKey(accessor, ref);
+            if(key != null && getPalette(key) != null){
+                return lock;
+            }
+        }
+
+        return null;
     }
 
     // --- Titles ---
@@ -2740,6 +3097,21 @@ public class CultivationAPI {
     public static float getMeditationRegenMultiplier(@Nonnull String world, int chunkX, int chunkZ, @Nonnull UUID player){
         return FormationManager.getMeditationRegenMultiplier(world, chunkX, chunkZ, player)
                 * DwellingManager.getMeditationRegenMultiplier(world, chunkX, chunkZ, player);
+    }
+
+    /** @return this formation's tier, clamped to [0, FormationManager.MAX_TIER]. */
+    public static int getFormationTier(@Nonnull Formation formation){
+        return formation.getTier();
+    }
+
+    /** @return the strongest trapping-array tier this player is currently caught by in this chunk, or a negative value when not trapped. */
+    public static int getStrongestTrappingTierAgainst(@Nonnull String world, int chunkX, int chunkZ, @Nonnull UUID player){
+        return FormationManager.getStrongestTrappingTierAgainst(world, chunkX, chunkZ, player);
+    }
+
+    /** @return whether the AugmentBlocks builtin resolved, i.e. array altar growth/decay/reconciliation is active this boot. */
+    public static boolean isArrayAltarAvailable(){
+        return FormationAugmentBridge.isAvailable();
     }
 
     /**

@@ -7,10 +7,10 @@ jar once:
 
 ```bash
 mvn install:install-file \
-  -Dfile=Cultivation-0.9.1.jar \
+  -Dfile=Cultivation-0.10.0.jar \
   -DgroupId=plugin.siren \
   -DartifactId=Cultivation \
-  -Dversion=0.9.1 \
+  -Dversion=0.10.0 \
   -Dpackaging=jar
 ```
 
@@ -23,7 +23,7 @@ Repeat whenever you move to a new Cultivation version.
     <dependency>
         <groupId>com.hypixel.hytale</groupId>
         <artifactId>Server</artifactId>
-        <version>0.5.7</version>
+        <version>0.6.0-pre.13.1</version>
         <scope>provided</scope>
     </dependency>
 
@@ -35,7 +35,7 @@ Repeat whenever you move to a new Cultivation version.
     <dependency>
         <groupId>plugin.siren</groupId>
         <artifactId>Cultivation</artifactId>
-        <version>0.9.1</version>
+        <version>0.10.0</version>
         <scope>provided</scope>
     </dependency>
 </dependencies>
@@ -61,9 +61,9 @@ need them. In `src/main/resources/manifest.json`:
   "Group": "MyGroup",
   "Name": "MyAddon",
   "Version": "1.0.0",
-  "ServerVersion": "0.5.x",
+  "ServerVersion": ">=0.6.0-pre.0 <0.7.0",
   "Dependencies": {
-    "Siren:Cultivation": ">=0.9.1"
+    "Siren:Cultivation": ">=0.10.0"
   },
   "Main": "com.example.myaddon.MyAddon"
 }
@@ -71,6 +71,12 @@ need them. In `src/main/resources/manifest.json`:
 
 Without this entry, your mod loads and then dies with `NoClassDefFoundError` the
 first time it touches a Cultivation class.
+
+`ServerVersion` needs a real range, not a bare wildcard-minor string like
+`"0.5.x"` — a wildcard-minor pattern can never match a pre-release server, no
+matter how high the pre-release number is, so a mod declared that way silently
+refuses to load on any `0.6.0-pre.*` build. Match the range shape Cultivation's
+own `manifest.json` uses.
 
 ## 4. Register everything from `setup()`
 
@@ -144,7 +150,7 @@ If your mod should also work on a server without Cultivation, move the entry:
 
 ```json
 "OptionalDependencies": {
-  "Siren:Cultivation": ">=0.9.1"
+  "Siren:Cultivation": ">=0.10.0"
 }
 ```
 

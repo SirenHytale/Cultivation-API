@@ -1,7 +1,7 @@
 # Event reference
 
 Every event Cultivation fires, grouped by the class that declares it.
-**261 listener hooks** across 33 subsystems.
+**291 listener hooks** across 35 subsystems.
 
 > Generated from `api-sources/` by `tools/gen_events_reference.py`. Do not edit
 > by hand — re-run the script instead. The prose in each entry is the javadoc on
@@ -105,6 +105,21 @@ Tribulation lightning struck a mid-ritual cultivator. `damage` is the post-letha
 | `damage()` | `float` |
 | `breakthroughRitual()` | `boolean` |
 
+### `TribulationOmenEvent`
+
+```java
+CultivationEvents.onTribulationOmen(event -> { /* ... */ });
+```
+
+A ritual's Storm Omen (see `TribulationOmen`) was decided at its justStarted tick. `storm` is whether it latched - true arms the harder/better-rewarded variant for the rest of this ritual attempt only; `breakthroughRitual` distinguishes breakthrough rituals from advancement/refinement ones. Fired only when the roll actually happened (opted in, or Tribulation-Storm-Omen-Opt-In-Required is false) - a player who was never eligible gets no event either way.
+
+| Accessor | Type |
+| --- | --- |
+| `ref()` | `Ref<EntityStore>` |
+| `player()` | `PlayerRef` |
+| `storm()` | `boolean` |
+| `breakthroughRitual()` | `boolean` |
+
 ### `LifeBoundLevelUpEvent`
 
 ```java
@@ -150,6 +165,40 @@ The Dream Trial's Hollow Mirror tested a cultivator mid-attempt. `composureRemai
 | `composureRemaining()` | `float` |
 | `broken()` | `boolean` |
 | `pressure()` | `float` |
+
+### `InnerDemonTrialEvent`
+
+```java
+CultivationEvents.onInnerDemonTrial(event -> { /* ... */ });
+```
+
+An Inner Demon Rival Duel struck a mid-duel cultivator. `composureRemaining` is what's left after this pulse's drain (0 when it broke); `broken` is true only on the pulse that shattered composure and failed the duel; `echoIntensity` is the 0-1 fraction that scaled this pulse's drain - see `InnerDemonConfig`'s own doc; `nemesisEcho` is true if the phantom wore an active Nemesis's face rather than a generic echo of doubt.
+
+| Accessor | Type |
+| --- | --- |
+| `ref()` | `Ref<EntityStore>` |
+| `player()` | `PlayerRef` |
+| `composureRemaining()` | `float` |
+| `broken()` | `boolean` |
+| `echoIntensity()` | `float` |
+| `nemesisEcho()` | `boolean` |
+
+### `CleanseRiteEvent`
+
+```java
+CultivationEvents.onCleanseRite(event -> { /* ... */ });
+```
+
+A Marrow-Cleansing Rite pulse tested a mid-rite cultivator. `composureRemaining` is what's left after this pulse's drain (0 when it broke); `broken` is true only on the pulse that shattered composure and failed the rite (deepening the targeted injury); `targetMagnitude` is the targeted injury's magnitude as snapshotted at entry - see `CleanseRiteConfig`'s own doc; `companionPresent` is true if a bonded partner or master/disciple companion was close enough this pulse to reduce the drain.
+
+| Accessor | Type |
+| --- | --- |
+| `ref()` | `Ref<EntityStore>` |
+| `player()` | `PlayerRef` |
+| `composureRemaining()` | `float` |
+| `broken()` | `boolean` |
+| `targetMagnitude()` | `float` |
+| `companionPresent()` | `boolean` |
 
 ### `QiGainEvent`
 
@@ -235,6 +284,22 @@ A cultivator's Ascension attempt ended in failure.
 | `ref()` | `Ref<EntityStore>` |
 | `player()` | `PlayerRef` |
 | `abandoned()` | `boolean` |
+
+### `AscensionLegacyEvent`
+
+```java
+CultivationEvents.onAscensionLegacy(event -> { /* ... */ });
+```
+
+A cultivator's Ascension completed with the LEGACY ending - `/ascend legacy sect`/`/ascend legacy self` - see `AscensionManager.beginLegacy`. Always fires alongside (and immediately after) `AscensionEvent` for the same completion, since a Legacy ending IS a prestige-shaped reset (`AscensionEvent#prestiged` is true for it too). `sectBeneficiary` is what was actually GRANTED, never merely what was requested: true for a Lineage Stele inscription, false for a Legacy Mote - including the case where a sect-aimed attempt fell back to a Mote because the player's sect was gone by completion, which `sectFallback` distinguishes. `sectName` is set only when `sectBeneficiary` is true.
+
+| Accessor | Type |
+| --- | --- |
+| `ref()` | `Ref<EntityStore>` |
+| `player()` | `PlayerRef` |
+| `sectBeneficiary()` | `boolean` |
+| `sectFallback()` | `boolean` |
+| `sectName()` | `String` |
 
 ### `DemotionEvent`
 
@@ -368,6 +433,23 @@ Tribulation lightning is about to strike a mid-ritual cultivator. Cancel to spar
 | `breakthroughRitual()` | `boolean` | read |
 | `setDamage(float)` | `void` | re-tune |
 
+### `PreTribulationOmenEvent`
+
+```java
+CultivationEvents.onPreTribulationOmen(event -> { /* ... */ });
+```
+
+A ritual's Storm Omen roll is about to be decided, at its justStarted tick. Cancel to force it to NONE regardless of what the sky rolled (no message, no latch, the opt-in request is left armed); adjust `setStorm` to force the outcome either way.
+
+| Member | Type | |
+| --- | --- | --- |
+| `ref()` | `Ref<EntityStore>` | read |
+| `player()` | `PlayerRef` | read (may be null) |
+| `naturalStormDetected()` | `boolean` | read |
+| `storm()` | `boolean` | read |
+| `breakthroughRitual()` | `boolean` | read |
+| `setStorm(boolean)` | `void` | re-tune |
+
 ### `PreLifeBoundLevelUpEvent`
 
 ```java
@@ -416,6 +498,42 @@ A Dream Trial pulse is about to test a cultivator inside the Hollow Mirror. Canc
 | `composureDrain()` | `float` | read |
 | `pressure()` | `float` | read |
 | `pulseIndex()` | `int` | read |
+| `setComposureDrain(float)` | `void` | re-tune |
+
+### `PreInnerDemonTrialEvent`
+
+```java
+CultivationEvents.onPreInnerDemonTrial(event -> { /* ... */ });
+```
+
+An Inner Demon Rival Duel pulse is about to strike a mid-duel cultivator. Cancel to skip the pulse entirely; adjust `setComposureDrain` to change how hard it bites (0 makes the apparition purely cosmetic).
+
+| Member | Type | |
+| --- | --- | --- |
+| `ref()` | `Ref<EntityStore>` | read |
+| `player()` | `PlayerRef` | read (may be null) |
+| `composureDrain()` | `float` | read |
+| `echoIntensity()` | `float` | read |
+| `pulseIndex()` | `int` | read |
+| `nemesisEcho()` | `boolean` | read |
+| `setComposureDrain(float)` | `void` | re-tune |
+
+### `PreCleanseRiteEvent`
+
+```java
+CultivationEvents.onPreCleanseRite(event -> { /* ... */ });
+```
+
+A Marrow-Cleansing Rite pulse is about to test a mid-rite cultivator. Cancel to skip the pulse entirely; adjust `setComposureDrain` to change how hard it bites (0 makes the pulse purely cosmetic). This is where an addon (e.g. a Meridian Injury raising composure-drain multipliers) recomputes the combined drain for THIS rite.
+
+| Member | Type | |
+| --- | --- | --- |
+| `ref()` | `Ref<EntityStore>` | read |
+| `player()` | `PlayerRef` | read (may be null) |
+| `composureDrain()` | `float` | read |
+| `targetMagnitude()` | `float` | read |
+| `pulseIndex()` | `int` | read |
+| `companionPresent()` | `boolean` | read |
 | `setComposureDrain(float)` | `void` | re-tune |
 
 ### `PreQiGainEvent`
@@ -1408,6 +1526,105 @@ A refinement ritual is about to resolve. Cancel to abandon it silently (the weap
 
 ---
 
+## Alchemy (0.10.0)
+
+`plugin.siren.API.AlchemyEvents` — The Pill Cauldron refining RITUAL - starting, resolving, and the Fire Watch (火候) tending prompts along the way. Complements `ItemEvents`' `PillConsumeEvent` above, which covers drinking a finished pill, not brewing one.
+
+**Enums declared here**
+
+- `AlchemyEvents.RefineOutcome` — How a completed (or interrupted) refining ritual resolved. Values: `SUCCESS`, `FAILED`, `BOTCH`
+
+**Post-events** — fired once the change is committed; cannot be cancelled.
+
+### `RefineStartEvent`
+
+```java
+AlchemyEvents.onRefineStart(event -> { /* ... */ });
+```
+
+A refining ritual began; the herbs and Qi floor check already passed.
+
+| Accessor | Type |
+| --- | --- |
+| `ref()` | `Ref<EntityStore>` |
+| `player()` | `PlayerRef` |
+| `effect()` | `String` |
+| `qiDrainPerSecond()` | `float` |
+
+### `RefineCompleteEvent`
+
+```java
+AlchemyEvents.onRefineComplete(event -> { /* ... */ });
+```
+
+A refining ritual resolved. `grade` is null unless `outcome` is SUCCESS.
+
+| Accessor | Type |
+| --- | --- |
+| `ref()` | `Ref<EntityStore>` |
+| `player()` | `PlayerRef` |
+| `effect()` | `String` |
+| `outcome()` | `RefineOutcome` |
+| `grade()` | `PillGrade` |
+
+### `TendPromptResolvedEvent`
+
+```java
+AlchemyEvents.onTendPromptResolved(event -> { /* ... */ });
+```
+
+A Fire Watch (火候) tending prompt was resolved - answered (sharp/steady), missed, or fumbled - during a running refining ritual. `promptIndex` is 0-based (this is the Nth prompt this ritual delivered); `promptCount` is the ritual's configured `Tend-Prompts-Max` ceiling, not how many have fired so far. Post-only, like `RefineStartEvent`/ `RefineCompleteEvent` above - nothing about a single prompt's resolution is meant to be vetoed or re-weighted from outside; only the ritual-end `tendDelta` it eventually folds into is (see `PreRefineCompleteEvent#tendDelta`).
+
+| Accessor | Type |
+| --- | --- |
+| `ref()` | `Ref<EntityStore>` |
+| `player()` | `PlayerRef` |
+| `action()` | `AlchemyTendAction` |
+| `outcome()` | `AlchemyTendOutcome` |
+| `promptIndex()` | `int` |
+| `promptCount()` | `int` |
+
+**Pre-events** — fired before the change; `setCancelled(true)` vetoes it, and any setter below re-tunes the numbers the mod then uses.
+
+### `PreRefineStartEvent`
+
+```java
+AlchemyEvents.onPreRefineStart(event -> { /* ... */ });
+```
+
+A refining ritual is about to begin. Cancel to refuse it (no herbs or Qi are spent).
+
+| Member | Type | |
+| --- | --- | --- |
+| `ref()` | `Ref<EntityStore>` | read |
+| `player()` | `PlayerRef` | read |
+| `effect()` | `String` | read |
+| `durationSeconds()` | `float` | read |
+| `setDurationSeconds(float)` | `void` | re-tune |
+
+### `PreRefineCompleteEvent`
+
+```java
+AlchemyEvents.onPreRefineComplete(event -> { /* ... */ });
+```
+
+A refining ritual is about to resolve into a grade. Cancel to abandon it silently - the herbs and Qi stay spent, nothing is produced, the same shape `ItemEvents.PreRefinementCompleteEvent` and `TalismanEvents.PreInscribeCompleteEvent` both use. `setHerbQualityAvg` and `setMasteryLadderFraction` re-weight the two inputs `AlchemyManager#rollOutcome` actually rolls against. Fires only on a natural completion, never an interruption - see this class's own doc.
+
+| Member | Type | |
+| --- | --- | --- |
+| `ref()` | `Ref<EntityStore>` | read |
+| `player()` | `PlayerRef` | read |
+| `effect()` | `String` | read |
+| `herbQualityAvg()` | `float` | read |
+| `masteryLadderFraction()` | `float` | read |
+| `tendDelta()` | `float` | read |
+| `setHerbQualityAvg(float)` | `void` | re-tune |
+| `setMasteryLadderFraction(float)` | `void` | re-tune |
+| `setTendDelta(float)` | `void` | re-tune |
+
+
+---
+
 ## Forging (0.9.x)
 
 `plugin.siren.API.ForgingEvents` — Tempering an already-crafted Cultivation weapon/armor at a Forge Anchor - success, failure and botch outcomes.
@@ -1505,7 +1722,7 @@ An inscription ritual resolved. `grade`/`stack` are null unless `outcome` is SUC
 TalismanEvents.onTalismanUse(event -> { /* ... */ });
 ```
 
-A talisman was used and its effect applied. `remainingCharges` is what is left AFTER this use - the stack is gone once it reaches 0. Not fired by anything in this engine slice; see this class's own doc.
+A talisman was used and its effect applied. `remainingCharges` is what is left AFTER this use - the stack is gone once it reaches 0.
 
 | Accessor | Type |
 | --- | --- |
@@ -1557,7 +1774,7 @@ An inscription ritual is about to resolve into a grade. Cancel to abandon it sil
 TalismanEvents.onPreTalismanUse(event -> { /* ... */ });
 ```
 
-A talisman is about to be used. Cancel to refuse it (the charge is not spent). Not fired by this engine slice; see this class's own doc.
+A talisman is about to be used. Cancel to refuse it (the charge is not spent).
 
 | Member | Type | |
 | --- | --- | --- |
@@ -1674,7 +1891,7 @@ A player is about to feed their weapon spirit Qi. Cancel to refuse the feeding e
 
 **Enums declared here**
 
-- `BeastEvents.BindSource` — How a cultivator came by their companion. Values: `TAME`, `HATCH`
+- `BeastEvents.BindSource` — How a cultivator came by their companion. Values: `TAME`, `HATCH`, `DEN`
 - `BeastEvents.DismissReason` — Why a companion's body left the world. Values: `DISMISSED`, `RELEASED`, `EXPEDITION`
 
 **Post-events** — fired once the change is committed; cannot be cancelled.
@@ -1817,6 +2034,23 @@ A companion was summoned in its rideable body.
 | `beast()` | `SpiritBeastComponent` |
 | `species()` | `BeastSpecies` |
 
+### `BeastDenBroodEvent`
+
+```java
+BeastEvents.onBeastDenBrood(event -> { /* ... */ });
+```
+
+A Spirit Beast Den rolled a brood, now waiting to be claimed once due. See SpiritDenManager.ensureBrood.
+
+| Accessor | Type |
+| --- | --- |
+| `world()` | `String` |
+| `x()` | `int` |
+| `y()` | `int` |
+| `z()` | `int` |
+| `species()` | `BeastSpecies` |
+| `appraisalScore()` | `int` |
+
 **Pre-events** — fired before the change; `setCancelled(true)` vetoes it, and any setter below re-tunes the numbers the mod then uses.
 
 ### `PreBeastTameAttemptEvent`
@@ -1957,6 +2191,23 @@ A companion is about to be summoned in its rideable body. Cancel to refuse the m
 | `player()` | `PlayerRef` | read (may be null) |
 | `beast()` | `SpiritBeastComponent` | read |
 | `species()` | `BeastSpecies` | read |
+
+### `PreBeastDenBroodEvent`
+
+```java
+BeastEvents.onPreBeastDenBrood(event -> { /* ... */ });
+```
+
+A Spirit Beast Den is about to roll a brood. Cancel to leave the den without one (it will simply try again the next time its appraisal sweep calls SpiritDenManager.ensureBrood) - nothing has been persisted yet, so a veto here costs the keeper nothing.
+
+| Member | Type | |
+| --- | --- | --- |
+| `world()` | `String` | read |
+| `x()` | `int` | read |
+| `y()` | `int` | read |
+| `z()` | `int` | read |
+| `species()` | `BeastSpecies` | read |
+| `appraisalScore()` | `int` | read |
 
 
 ---
@@ -2280,6 +2531,92 @@ A won siege transferred a hall. The defender is now hall-less.
 | `chunkZ()` | `int` |
 | `veinTier()` | `int` |
 
+### `SectAllianceFormedEvent`
+
+```java
+SectEvents.onSectAllianceFormed(event -> { /* ... */ });
+```
+
+Two sects formed a mutual Alliance - see AllianceManager.acceptAlliance. `actor` is whoever accepted the proposal.
+
+| Accessor | Type |
+| --- | --- |
+| `actor()` | `UUID` |
+| `sectA()` | `Sect` |
+| `sectB()` | `Sect` |
+
+### `SectAllianceBrokenEvent`
+
+```java
+SectEvents.onSectAllianceBroken(event -> { /* ... */ });
+```
+
+A standing Alliance ended - either side's leader may break one unilaterally, see AllianceManager.breakAlliance. `actor` is whoever broke it.
+
+| Accessor | Type |
+| --- | --- |
+| `actor()` | `UUID` |
+| `sectA()` | `Sect` |
+| `sectB()` | `Sect` |
+
+### `SectRelationChangedEvent`
+
+```java
+SectEvents.onSectRelationChanged(event -> { /* ... */ });
+```
+
+A NON_AGGRESSION or TRADE relation formed or ended between two sects - never fired for ALLIANCE (see `SectAllianceFormedEvent`/`SectAllianceBrokenEvent`, which cover that rung specifically, so an addon already listening for those - a Discord-bridge mod, for instance - is not double-posted). `actor` is whoever accepted the proposal (formed) or broke the relation (not formed). `formed` is true when the relation just started, false when it just ended.
+
+| Accessor | Type |
+| --- | --- |
+| `actor()` | `UUID` |
+| `sectA()` | `Sect` |
+| `sectB()` | `Sect` |
+| `kind()` | `SectRelationKind` |
+| `formed()` | `boolean` |
+
+### `SectLibraryResearchStartEvent`
+
+```java
+SectEvents.onSectLibraryResearchStart(event -> { /* ... */ });
+```
+
+A sect's Library started researching a new subject (replacing whatever, if anything, it was researching before).
+
+| Accessor | Type |
+| --- | --- |
+| `actor()` | `UUID` |
+| `sect()` | `Sect` |
+| `techniqueId()` | `String` |
+
+### `SectLibraryCompileEvent`
+
+```java
+SectEvents.onSectLibraryCompile(event -> { /* ... */ });
+```
+
+A sect's Library finished compiling an exclusive technique manual.
+
+| Accessor | Type |
+| --- | --- |
+| `sect()` | `Sect` |
+| `techniqueId()` | `String` |
+
+### `SectLibraryRedeemEvent`
+
+```java
+SectEvents.onSectLibraryRedeem(event -> { /* ... */ });
+```
+
+A member redeemed their own copy of a compiled Library manual.
+
+| Accessor | Type |
+| --- | --- |
+| `member()` | `UUID` |
+| `sect()` | `Sect` |
+| `techniqueId()` | `String` |
+| `manualItemId()` | `String` |
+
 **Pre-events** — fired before the change; `setCancelled(true)` vetoes it, and any setter below re-tunes the numbers the mod then uses.
 
 ### `PreSectCreateEvent`
@@ -2512,6 +2849,50 @@ A hall is about to change hands to a victorious besieger. Cancel to leave it wit
 | `chunkZ()` | `int` | read |
 | `veinTier()` | `int` | read |
 
+### `PreSectLibraryResearchStartEvent`
+
+```java
+SectEvents.onPreSectLibraryResearchStart(event -> { /* ... */ });
+```
+
+A sect's Library is about to start researching a new subject. Cancel to leave it researching whatever it was (or nothing).
+
+| Member | Type | |
+| --- | --- | --- |
+| `actor()` | `UUID` | read |
+| `sect()` | `Sect` | read |
+| `oldTechniqueId()` | `String` | read |
+| `newTechniqueId()` | `String` | read |
+
+### `PreSectLibraryCompileEvent`
+
+```java
+SectEvents.onPreSectLibraryCompile(event -> { /* ... */ });
+```
+
+A sect's Library is about to compile an exclusive technique. Cancel to hold it at the door - progress stays at/above cost and this fires again on the next settle.
+
+| Member | Type | |
+| --- | --- | --- |
+| `sect()` | `Sect` | read |
+| `techniqueId()` | `String` | read |
+
+### `PreSectLibraryRedeemEvent`
+
+```java
+SectEvents.onPreSectLibraryRedeem(event -> { /* ... */ });
+```
+
+A member is about to redeem their copy of a compiled Library manual. Cancel to refuse it (not marked redeemed, so it may be retried); `setManualItemId` to substitute a different item - mirrors `ItemEvents.PreLootDropEvent#setItemId`.
+
+| Member | Type | |
+| --- | --- | --- |
+| `member()` | `UUID` | read |
+| `sect()` | `Sect` | read |
+| `techniqueId()` | `String` | read |
+| `manualItemId()` | `String` | read |
+| `setManualItemId(String)` | `void` | re-tune |
+
 
 ---
 
@@ -2521,7 +2902,7 @@ A hall is about to change hands to a victorious besieger. Cancel to leave it wit
 
 **Enums declared here**
 
-- `WarEvents.SiegeFailReason` — Why a siege ended without the attacker taking the hall. Values: `LAPSED`, `DEFENDER_GONE`
+- `WarEvents.SiegeFailReason` — Why a siege ended without the attacker triggering SUPPRESS. Values: `LAPSED`, `DEFENDER_GONE`, `MUSTER_FAILED`, `DEFENDER_ABSENT`, `ABORTED`
 
 **Post-events** — fired once the change is committed; cannot be cancelled.
 
@@ -2781,6 +3162,20 @@ A Trapping array wounded an intruder standing inside it. `damage` is the post-le
 | `chunkZ()` | `int` |
 | `damage()` | `float` |
 
+### `FormationTierChangeEvent`
+
+```java
+FormationEvents.onFormationTierChange(event -> { /* ... */ });
+```
+
+An altar-anchored formation's tier just changed. Purely informational - the tier is already live on `formation` by the time this fires.
+
+| Accessor | Type |
+| --- | --- |
+| `formation()` | `Formation` |
+| `fromTier()` | `int` |
+| `toTier()` | `int` |
+
 **Pre-events** — fired before the change; `setCancelled(true)` vetoes it, and any setter below re-tunes the numbers the mod then uses.
 
 ### `PreFormationPlaceEvent`
@@ -2833,6 +3228,21 @@ A Trapping array is about to wound an intruder. Cancel to spare them this tick e
 | `chunkZ()` | `int` | read |
 | `damage()` | `float` | read |
 | `setDamage(float)` | `void` | re-tune |
+
+### `PreFormationTierChangeEvent`
+
+```java
+FormationEvents.onPreFormationTierChange(event -> { /* ... */ });
+```
+
+An altar-anchored formation's tier is about to change. Cancel to refuse the change entirely; `setToTier` to dampen (but not fully block) a rise - see FormationManager.applyTier for how a downgrade-disallowing caller clamps a dampened value back.
+
+| Member | Type | |
+| --- | --- | --- |
+| `formation()` | `Formation` | read |
+| `fromTier()` | `int` | read |
+| `toTier()` | `int` | read |
+| `setToTier(int)` | `void` | re-tune |
 
 
 ---
@@ -4336,6 +4746,94 @@ A Calamity Beast is about to begin its OMEN phase. Cancel to abandon this start 
 | --- | --- | --- |
 | `worldName()` | `String` | read |
 | `roleId()` | `String` | read |
+| `position()` | `Vector3d` | read |
+
+
+---
+
+## Void Rifts (0.10.0)
+
+`plugin.siren.API.RiftEvents` — A randomly-triggered, server-wide world event: a rift opens, throws a fixed number of corrupted-beast waves, spawns a boss-tier Warden, then resolves SEALED or COLLAPSED. Mostly post-only, the same "auto-picked target, nothing to re-tune" shape as `WorldBossEvents` - only the open itself is cancellable.
+
+**Post-events** — fired once the change is committed; cannot be cancelled.
+
+### `RiftOpenEvent`
+
+```java
+RiftEvents.onRiftOpen(event -> { /* ... */ });
+```
+
+A Void Rift's OPENING phase has begun - its anchor and spawn point are locked and the world-event marker/announcement is already live.
+
+| Accessor | Type |
+| --- | --- |
+| `riftId()` | `String` |
+| `worldName()` | `String` |
+| `position()` | `Vector3d` |
+
+### `RiftWaveEvent`
+
+```java
+RiftEvents.onRiftWave(event -> { /* ... */ });
+```
+
+One corrupted-beast wave was just thrown during the ASSAULT phase. `waveIndex` counts from 0; `waveCount` is the total for this rift.
+
+| Accessor | Type |
+| --- | --- |
+| `riftId()` | `String` |
+| `worldName()` | `String` |
+| `position()` | `Vector3d` |
+| `waveIndex()` | `int` |
+| `waveCount()` | `int` |
+| `spawnConfigId()` | `String` |
+
+### `RiftWardenSpawnEvent`
+
+```java
+RiftEvents.onRiftWardenSpawn(event -> { /* ... */ });
+```
+
+The ASSAULT phase ended and the Warden NPC now actually exists in the world (WARDEN phase begun).
+
+| Accessor | Type |
+| --- | --- |
+| `riftId()` | `String` |
+| `worldName()` | `String` |
+| `roleId()` | `String` |
+| `position()` | `Vector3d` |
+| `wardenRef()` | `Ref<EntityStore>` |
+
+### `RiftResolveEvent`
+
+```java
+RiftEvents.onRiftResolve(event -> { /* ... */ });
+```
+
+The encounter is over, for any reason - any reward payout has already been queued. `outcome` is always `RiftPhase#SEALED` or `RiftPhase#COLLAPSED`.
+
+| Accessor | Type |
+| --- | --- |
+| `riftId()` | `String` |
+| `worldName()` | `String` |
+| `position()` | `Vector3d` |
+| `outcome()` | `RiftPhase` |
+| `contributorCount()` | `int` |
+| `totalContribution()` | `float` |
+
+**Pre-events** — fired before the change; `setCancelled(true)` vetoes it, and any setter below re-tunes the numbers the mod then uses.
+
+### `PreRiftOpenEvent`
+
+```java
+RiftEvents.onPreRiftOpen(event -> { /* ... */ });
+```
+
+A Void Rift is about to begin its OPENING phase. Cancel to abandon this open entirely - the scheduler simply waits for its next check, the same "silence is a valid answer" shape `WorldBossEvents.PreWorldBossStartEvent` has. See the class javadoc for why this carries no re-tunable numbers.
+
+| Member | Type | |
+| --- | --- | --- |
+| `worldName()` | `String` | read |
 | `position()` | `Vector3d` | read |
 
 

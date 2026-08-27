@@ -99,6 +99,9 @@ public final class CultivationEvents {
     /** Tribulation lightning struck a mid-ritual cultivator. {@code damage} is the post-lethality-cap amount fed to the damage pipeline (pre-armor/reduction); {@code breakthroughRitual} distinguishes breakthrough strikes from (config-gated) advancement ones. */
     public record TribulationStrikeEvent(@Nonnull Ref<EntityStore> ref, @Nullable PlayerRef player, float damage, boolean breakthroughRitual) {}
 
+    /** A ritual's Storm Omen (see {@code TribulationOmen}) was decided at its justStarted tick. {@code storm} is whether it latched - true arms the harder/better-rewarded variant for the rest of this ritual attempt only; {@code breakthroughRitual} distinguishes breakthrough rituals from advancement/refinement ones. Fired only when the roll actually happened (opted in, or Tribulation-Storm-Omen-Opt-In-Required is false) - a player who was never eligible gets no event either way. */
+    public record TribulationOmenEvent(@Nonnull Ref<EntityStore> ref, @Nullable PlayerRef player, boolean storm, boolean breakthroughRitual) {}
+
     /** A Life-Bound Treasure gained a level from combat XP. {@code item} is the already-updated stack (its metadata reflects {@code newLevel}). */
     public record LifeBoundLevelUpEvent(@Nonnull PlayerRef owner, @Nonnull ItemStack item, int newLevel) {}
 
@@ -107,6 +110,12 @@ public final class CultivationEvents {
 
     /** The Dream Trial's Hollow Mirror tested a cultivator mid-attempt. {@code composureRemaining} is what's left after this pulse's drain (0 when it broke); {@code broken} is true only on the pulse that shattered composure and failed the attempt; {@code pressure} is the dreamTrialPressure fraction (0-1) that scaled this pulse's drain - see {@code DreamTrialManager#dreamTrialPressure}. */
     public record DreamTrialEvent(@Nonnull Ref<EntityStore> ref, @Nullable PlayerRef player, float composureRemaining, boolean broken, float pressure) {}
+
+    /** An Inner Demon Rival Duel struck a mid-duel cultivator. {@code composureRemaining} is what's left after this pulse's drain (0 when it broke); {@code broken} is true only on the pulse that shattered composure and failed the duel; {@code echoIntensity} is the 0-1 fraction that scaled this pulse's drain - see {@code InnerDemonConfig}'s own doc; {@code nemesisEcho} is true if the phantom wore an active Nemesis's face rather than a generic echo of doubt. */
+    public record InnerDemonTrialEvent(@Nonnull Ref<EntityStore> ref, @Nullable PlayerRef player, float composureRemaining, boolean broken, float echoIntensity, boolean nemesisEcho) {}
+
+    /** A Marrow-Cleansing Rite pulse tested a mid-rite cultivator. {@code composureRemaining} is what's left after this pulse's drain (0 when it broke); {@code broken} is true only on the pulse that shattered composure and failed the rite (deepening the targeted injury); {@code targetMagnitude} is the targeted injury's magnitude as snapshotted at entry - see {@code CleanseRiteConfig}'s own doc; {@code companionPresent} is true if a bonded partner or master/disciple companion was close enough this pulse to reduce the drain. */
+    public record CleanseRiteEvent(@Nonnull Ref<EntityStore> ref, @Nullable PlayerRef player, float composureRemaining, boolean broken, float targetMagnitude, boolean companionPresent) {}
 
     /** Qi was just banked toward a player's next rank-up. {@code amount} is what was actually added (after every race/skill/pill/sect/dao multiplier and after any listener retune); {@code totalQi} is their new banked total. */
     public record QiGainEvent(@Nonnull Ref<EntityStore> ref, @Nullable PlayerRef player, float amount, float totalQi) {}
@@ -137,6 +146,24 @@ public final class CultivationEvents {
     /** A cultivator's Ascension attempt ended in failure. */
     public record AscensionFailedEvent(@Nonnull Ref<EntityStore> ref, @Nullable PlayerRef player,
                                        boolean abandoned) {}
+
+    /**
+     * A cultivator's Ascension completed with the LEGACY ending -
+     * {@code /ascend legacy sect}/{@code /ascend legacy self} - see
+     * {@code AscensionManager.beginLegacy}. Always fires alongside (and
+     * immediately after) {@link AscensionEvent} for the same completion,
+     * since a Legacy ending IS a prestige-shaped reset ({@code
+     * AscensionEvent#prestiged} is true for it too).
+     *
+     * <p>{@code sectBeneficiary} is what was actually GRANTED, never merely
+     * what was requested: true for a Lineage Stele inscription, false for a
+     * Legacy Mote - including the case where a sect-aimed attempt fell back
+     * to a Mote because the player's sect was gone by completion, which
+     * {@code sectFallback} distinguishes. {@code sectName} is set only when
+     * {@code sectBeneficiary} is true.</p>
+     */
+    public record AscensionLegacyEvent(@Nonnull Ref<EntityStore> ref, @Nullable PlayerRef player,
+                                       boolean sectBeneficiary, boolean sectFallback, @Nullable String sectName) {}
 
     /** A player was demoted a sub-stage for abandoning a ritual (or for Qi Deviation). Banked Qi has been wiped and the granting skill points revoked. */
     public record DemotionEvent(@Nonnull Ref<EntityStore> ref, @Nullable PlayerRef player, @Nonnull CultivationRealm realm,
@@ -276,6 +303,33 @@ public final class CultivationEvents {
         public boolean breakthroughRitual(){ return this.breakthroughRitual; }
     }
 
+    /** A ritual's Storm Omen roll is about to be decided, at its justStarted tick. Cancel to force it to NONE regardless of what the sky rolled (no message, no latch, the opt-in request is left armed); adjust {@link #setStorm} to force the outcome either way. */
+    public static final class PreTribulationOmenEvent extends CancellableEvent {
+        private final Ref<EntityStore> ref;
+        private final PlayerRef player;
+        private final boolean naturalStormDetected;
+        private final boolean breakthroughRitual;
+        private boolean storm;
+
+        public PreTribulationOmenEvent(@Nonnull Ref<EntityStore> ref, @Nullable PlayerRef player,
+                                       boolean naturalStormDetected, boolean breakthroughRitual){
+            this.ref = ref;
+            this.player = player;
+            this.naturalStormDetected = naturalStormDetected;
+            this.breakthroughRitual = breakthroughRitual;
+            this.storm = naturalStormDetected;
+        }
+
+        @Nonnull public Ref<EntityStore> ref(){ return this.ref; }
+        @Nullable public PlayerRef player(){ return this.player; }
+        /** Whether the NATURAL sky (never this mod's own tribulation override - see BreakthroughConfig's Tribulation-Storm-Omen-Weather-Keywords doc) matched the storm keywords. */
+        public boolean naturalStormDetected(){ return this.naturalStormDetected; }
+        /** Whether this ritual will actually latch the Storm Omen once this event returns; defaults to {@link #naturalStormDetected}. */
+        public boolean storm(){ return this.storm; }
+        public void setStorm(boolean storm){ this.storm = storm; }
+        public boolean breakthroughRitual(){ return this.breakthroughRitual; }
+    }
+
     /** A Life-Bound Treasure is about to level up. Cancel to hold it at its current level (the XP is still banked). */
     public static final class PreLifeBoundLevelUpEvent extends CancellableEvent {
         private final PlayerRef owner;
@@ -354,6 +408,70 @@ public final class CultivationEvents {
         public float pressure(){ return this.pressure; }
         /** Which pulse of this attempt this is, counting from 0. */
         public int pulseIndex(){ return this.pulseIndex; }
+    }
+
+    /** An Inner Demon Rival Duel pulse is about to strike a mid-duel cultivator. Cancel to skip the pulse entirely; adjust {@link #setComposureDrain} to change how hard it bites (0 makes the apparition purely cosmetic). */
+    public static final class PreInnerDemonTrialEvent extends CancellableEvent {
+        private final Ref<EntityStore> ref;
+        private final PlayerRef player;
+        private final float echoIntensity;
+        private final int pulseIndex;
+        private final boolean nemesisEcho;
+        private float composureDrain;
+
+        public PreInnerDemonTrialEvent(@Nonnull Ref<EntityStore> ref, @Nullable PlayerRef player, float composureDrain,
+                                       float echoIntensity, int pulseIndex, boolean nemesisEcho){
+            this.ref = ref;
+            this.player = player;
+            this.composureDrain = composureDrain;
+            this.echoIntensity = echoIntensity;
+            this.pulseIndex = pulseIndex;
+            this.nemesisEcho = nemesisEcho;
+        }
+
+        @Nonnull public Ref<EntityStore> ref(){ return this.ref; }
+        @Nullable public PlayerRef player(){ return this.player; }
+        /** Composure this pulse will drain; when it exceeds what's left, the duel breaks. */
+        public float composureDrain(){ return this.composureDrain; }
+        public void setComposureDrain(float composureDrain){ this.composureDrain = composureDrain; }
+        /** How strong the phantom hits (0-1) - see {@code InnerDemonConfig}'s own doc. 0 for a generic doubt-phantom, rising with the caller's real Nemesis tier. */
+        public float echoIntensity(){ return this.echoIntensity; }
+        /** Which pulse of this duel this is, counting from 0. */
+        public int pulseIndex(){ return this.pulseIndex; }
+        /** True if the phantom wears an active Nemesis's face; false for a generic echo of your own doubt. */
+        public boolean nemesisEcho(){ return this.nemesisEcho; }
+    }
+
+    /** A Marrow-Cleansing Rite pulse is about to test a mid-rite cultivator. Cancel to skip the pulse entirely; adjust {@link #setComposureDrain} to change how hard it bites (0 makes the pulse purely cosmetic). This is where an addon (e.g. a Meridian Injury raising composure-drain multipliers) recomputes the combined drain for THIS rite. */
+    public static final class PreCleanseRiteEvent extends CancellableEvent {
+        private final Ref<EntityStore> ref;
+        private final PlayerRef player;
+        private final float targetMagnitude;
+        private final int pulseIndex;
+        private final boolean companionPresent;
+        private float composureDrain;
+
+        public PreCleanseRiteEvent(@Nonnull Ref<EntityStore> ref, @Nullable PlayerRef player, float composureDrain,
+                                   float targetMagnitude, int pulseIndex, boolean companionPresent){
+            this.ref = ref;
+            this.player = player;
+            this.composureDrain = composureDrain;
+            this.targetMagnitude = targetMagnitude;
+            this.pulseIndex = pulseIndex;
+            this.companionPresent = companionPresent;
+        }
+
+        @Nonnull public Ref<EntityStore> ref(){ return this.ref; }
+        @Nullable public PlayerRef player(){ return this.player; }
+        /** Composure this pulse will drain; when it exceeds what's left, the rite breaks (deepening the targeted injury). */
+        public float composureDrain(){ return this.composureDrain; }
+        public void setComposureDrain(float composureDrain){ this.composureDrain = composureDrain; }
+        /** The targeted injury's magnitude (0-1) as snapshotted at entry - see {@code CleanseRiteConfig}'s own doc. */
+        public float targetMagnitude(){ return this.targetMagnitude; }
+        /** Which pulse of this attempt this is, counting from 0. */
+        public int pulseIndex(){ return this.pulseIndex; }
+        /** True if a bonded partner or master/disciple companion is close enough this pulse to reduce the drain. */
+        public boolean companionPresent(){ return this.companionPresent; }
     }
 
     /** Qi is about to be banked toward a player's next rank-up. Cancel to deny the gain; adjust {@link #setAmount} to re-scale it. Fires for EVERY Qi source (meditation ticks, duel payouts, admin grants), after all of the mod's own multipliers. */
@@ -538,12 +656,18 @@ public final class CultivationEvents {
     private static final List<Consumer<PreSkillUnlockEvent>> PRE_SKILL_UNLOCK = EventBus.newListenerList();
     private static final List<Consumer<TribulationStrikeEvent>> TRIBULATION_STRIKE = EventBus.newListenerList();
     private static final List<Consumer<PreTribulationStrikeEvent>> PRE_TRIBULATION_STRIKE = EventBus.newListenerList();
+    private static final List<Consumer<TribulationOmenEvent>> TRIBULATION_OMEN = EventBus.newListenerList();
+    private static final List<Consumer<PreTribulationOmenEvent>> PRE_TRIBULATION_OMEN = EventBus.newListenerList();
     private static final List<Consumer<LifeBoundLevelUpEvent>> LIFEBOUND_LEVEL_UP = EventBus.newListenerList();
     private static final List<Consumer<PreLifeBoundLevelUpEvent>> PRE_LIFEBOUND_LEVEL_UP = EventBus.newListenerList();
     private static final List<Consumer<HeartDevilTrialEvent>> HEART_DEVIL_TRIAL = EventBus.newListenerList();
     private static final List<Consumer<PreHeartDevilTrialEvent>> PRE_HEART_DEVIL_TRIAL = EventBus.newListenerList();
     private static final List<Consumer<DreamTrialEvent>> DREAM_TRIAL = EventBus.newListenerList();
     private static final List<Consumer<PreDreamTrialEvent>> PRE_DREAM_TRIAL = EventBus.newListenerList();
+    private static final List<Consumer<InnerDemonTrialEvent>> INNER_DEMON_TRIAL = EventBus.newListenerList();
+    private static final List<Consumer<PreInnerDemonTrialEvent>> PRE_INNER_DEMON_TRIAL = EventBus.newListenerList();
+    private static final List<Consumer<CleanseRiteEvent>> CLEANSE_RITE = EventBus.newListenerList();
+    private static final List<Consumer<PreCleanseRiteEvent>> PRE_CLEANSE_RITE = EventBus.newListenerList();
     private static final List<Consumer<QiGainEvent>> QI_GAIN = EventBus.newListenerList();
     private static final List<Consumer<PreQiGainEvent>> PRE_QI_GAIN = EventBus.newListenerList();
     private static final List<Consumer<MeditationStartEvent>> MEDITATION_START = EventBus.newListenerList();
@@ -553,6 +677,7 @@ public final class CultivationEvents {
     private static final List<Consumer<RitualStartEvent>> RITUAL_START = EventBus.newListenerList();
     private static final List<Consumer<AscensionEvent>> ASCENSION = EventBus.newListenerList();
     private static final List<Consumer<AscensionFailedEvent>> ASCENSION_FAILED = EventBus.newListenerList();
+    private static final List<Consumer<AscensionLegacyEvent>> ASCENSION_LEGACY = EventBus.newListenerList();
     private static final List<Consumer<PreAscensionEvent>> PRE_ASCENSION = EventBus.newListenerList();
     private static final List<Consumer<PreRitualStartEvent>> PRE_RITUAL_START = EventBus.newListenerList();
     private static final List<Consumer<DemotionEvent>> DEMOTION = EventBus.newListenerList();
@@ -572,12 +697,18 @@ public final class CultivationEvents {
     public static void onPreSkillUnlock(@Nonnull Consumer<PreSkillUnlockEvent> listener){ PRE_SKILL_UNLOCK.add(listener); }
     public static void onTribulationStrike(@Nonnull Consumer<TribulationStrikeEvent> listener){ TRIBULATION_STRIKE.add(listener); }
     public static void onPreTribulationStrike(@Nonnull Consumer<PreTribulationStrikeEvent> listener){ PRE_TRIBULATION_STRIKE.add(listener); }
+    public static void onTribulationOmen(@Nonnull Consumer<TribulationOmenEvent> listener){ TRIBULATION_OMEN.add(listener); }
+    public static void onPreTribulationOmen(@Nonnull Consumer<PreTribulationOmenEvent> listener){ PRE_TRIBULATION_OMEN.add(listener); }
     public static void onLifeBoundLevelUp(@Nonnull Consumer<LifeBoundLevelUpEvent> listener){ LIFEBOUND_LEVEL_UP.add(listener); }
     public static void onPreLifeBoundLevelUp(@Nonnull Consumer<PreLifeBoundLevelUpEvent> listener){ PRE_LIFEBOUND_LEVEL_UP.add(listener); }
     public static void onHeartDevilTrial(@Nonnull Consumer<HeartDevilTrialEvent> listener){ HEART_DEVIL_TRIAL.add(listener); }
     public static void onPreHeartDevilTrial(@Nonnull Consumer<PreHeartDevilTrialEvent> listener){ PRE_HEART_DEVIL_TRIAL.add(listener); }
     public static void onDreamTrial(@Nonnull Consumer<DreamTrialEvent> listener){ DREAM_TRIAL.add(listener); }
     public static void onPreDreamTrial(@Nonnull Consumer<PreDreamTrialEvent> listener){ PRE_DREAM_TRIAL.add(listener); }
+    public static void onInnerDemonTrial(@Nonnull Consumer<InnerDemonTrialEvent> listener){ INNER_DEMON_TRIAL.add(listener); }
+    public static void onPreInnerDemonTrial(@Nonnull Consumer<PreInnerDemonTrialEvent> listener){ PRE_INNER_DEMON_TRIAL.add(listener); }
+    public static void onCleanseRite(@Nonnull Consumer<CleanseRiteEvent> listener){ CLEANSE_RITE.add(listener); }
+    public static void onPreCleanseRite(@Nonnull Consumer<PreCleanseRiteEvent> listener){ PRE_CLEANSE_RITE.add(listener); }
     public static void onQiGain(@Nonnull Consumer<QiGainEvent> listener){ QI_GAIN.add(listener); }
     public static void onPreQiGain(@Nonnull Consumer<PreQiGainEvent> listener){ PRE_QI_GAIN.add(listener); }
     public static void onMeditationStart(@Nonnull Consumer<MeditationStartEvent> listener){ MEDITATION_START.add(listener); }
@@ -587,6 +718,7 @@ public final class CultivationEvents {
     public static void onRitualStart(@Nonnull Consumer<RitualStartEvent> listener){ RITUAL_START.add(listener); }
     public static void onAscension(@Nonnull Consumer<AscensionEvent> listener){ ASCENSION.add(listener); }
     public static void onAscensionFailed(@Nonnull Consumer<AscensionFailedEvent> listener){ ASCENSION_FAILED.add(listener); }
+    public static void onAscensionLegacy(@Nonnull Consumer<AscensionLegacyEvent> listener){ ASCENSION_LEGACY.add(listener); }
     public static void onPreAscension(@Nonnull Consumer<PreAscensionEvent> listener){ PRE_ASCENSION.add(listener); }
     public static void onPreRitualStart(@Nonnull Consumer<PreRitualStartEvent> listener){ PRE_RITUAL_START.add(listener); }
     public static void onDemotion(@Nonnull Consumer<DemotionEvent> listener){ DEMOTION.add(listener); }
@@ -608,12 +740,18 @@ public final class CultivationEvents {
     public static boolean firePreSkillUnlock(@Nonnull PreSkillUnlockEvent event){ return EventBus.fire(PRE_SKILL_UNLOCK, event, "PreSkillUnlockEvent"); }
     public static void fireTribulationStrike(@Nonnull TribulationStrikeEvent event){ EventBus.dispatch(TRIBULATION_STRIKE, event, "TribulationStrikeEvent"); }
     public static boolean firePreTribulationStrike(@Nonnull PreTribulationStrikeEvent event){ return EventBus.fire(PRE_TRIBULATION_STRIKE, event, "PreTribulationStrikeEvent"); }
+    public static void fireTribulationOmen(@Nonnull TribulationOmenEvent event){ EventBus.dispatch(TRIBULATION_OMEN, event, "TribulationOmenEvent"); }
+    public static boolean firePreTribulationOmen(@Nonnull PreTribulationOmenEvent event){ return EventBus.fire(PRE_TRIBULATION_OMEN, event, "PreTribulationOmenEvent"); }
     public static void fireLifeBoundLevelUp(@Nonnull LifeBoundLevelUpEvent event){ EventBus.dispatch(LIFEBOUND_LEVEL_UP, event, "LifeBoundLevelUpEvent"); }
     public static boolean firePreLifeBoundLevelUp(@Nonnull PreLifeBoundLevelUpEvent event){ return EventBus.fire(PRE_LIFEBOUND_LEVEL_UP, event, "PreLifeBoundLevelUpEvent"); }
     public static void fireHeartDevilTrial(@Nonnull HeartDevilTrialEvent event){ EventBus.dispatch(HEART_DEVIL_TRIAL, event, "HeartDevilTrialEvent"); }
     public static boolean firePreHeartDevilTrial(@Nonnull PreHeartDevilTrialEvent event){ return EventBus.fire(PRE_HEART_DEVIL_TRIAL, event, "PreHeartDevilTrialEvent"); }
     public static void fireDreamTrial(@Nonnull DreamTrialEvent event){ EventBus.dispatch(DREAM_TRIAL, event, "DreamTrialEvent"); }
     public static boolean firePreDreamTrial(@Nonnull PreDreamTrialEvent event){ return EventBus.fire(PRE_DREAM_TRIAL, event, "PreDreamTrialEvent"); }
+    public static void fireInnerDemonTrial(@Nonnull InnerDemonTrialEvent event){ EventBus.dispatch(INNER_DEMON_TRIAL, event, "InnerDemonTrialEvent"); }
+    public static boolean firePreInnerDemonTrial(@Nonnull PreInnerDemonTrialEvent event){ return EventBus.fire(PRE_INNER_DEMON_TRIAL, event, "PreInnerDemonTrialEvent"); }
+    public static void fireCleanseRite(@Nonnull CleanseRiteEvent event){ EventBus.dispatch(CLEANSE_RITE, event, "CleanseRiteEvent"); }
+    public static boolean firePreCleanseRite(@Nonnull PreCleanseRiteEvent event){ return EventBus.fire(PRE_CLEANSE_RITE, event, "PreCleanseRiteEvent"); }
     public static void fireQiGain(@Nonnull QiGainEvent event){ EventBus.dispatch(QI_GAIN, event, "QiGainEvent"); }
     public static boolean firePreQiGain(@Nonnull PreQiGainEvent event){ return EventBus.fire(PRE_QI_GAIN, event, "PreQiGainEvent"); }
     public static void fireMeditationStart(@Nonnull MeditationStartEvent event){ EventBus.dispatch(MEDITATION_START, event, "MeditationStartEvent"); }
@@ -623,6 +761,7 @@ public final class CultivationEvents {
     public static void fireRitualStart(@Nonnull RitualStartEvent event){ EventBus.dispatch(RITUAL_START, event, "RitualStartEvent"); }
     public static void fireAscension(@Nonnull AscensionEvent event){ EventBus.dispatch(ASCENSION, event, "AscensionEvent"); }
     public static void fireAscensionFailed(@Nonnull AscensionFailedEvent event){ EventBus.dispatch(ASCENSION_FAILED, event, "AscensionFailedEvent"); }
+    public static void fireAscensionLegacy(@Nonnull AscensionLegacyEvent event){ EventBus.dispatch(ASCENSION_LEGACY, event, "AscensionLegacyEvent"); }
     public static boolean firePreAscension(@Nonnull PreAscensionEvent event){ return EventBus.fire(PRE_ASCENSION, event, "PreAscensionEvent"); }
     public static boolean firePreRitualStart(@Nonnull PreRitualStartEvent event){ return EventBus.fire(PRE_RITUAL_START, event, "PreRitualStartEvent"); }
     public static void fireDemotion(@Nonnull DemotionEvent event){ EventBus.dispatch(DEMOTION, event, "DemotionEvent"); }

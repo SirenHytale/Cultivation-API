@@ -871,3 +871,97 @@ CultivationAPI.applyStatBonus(accessor, ref,
 It is **keyed**: calling it again with the same key replaces that key's
 contribution rather than stacking with it, so you can recompute freely without
 tracking what you granted last time. Pass `0` to withdraw it.
+
+## Off-ring Dao roots (0.10.0)
+
+`DaoElement` is a plain Java enum — a mod cannot add a new element constant to
+it. Core instead pre-declares off-ring slots (`DaoElement.isOffRing()`,
+currently just `DUCK`) that sit inert and unselectable by any player until a
+mod claims one:
+
+```java
+CultivationAPI.registerOffRingRoot(
+        DaoRoot.builder(DaoElement.DUCK)
+                .name("server.myMod.dao.element.duck")
+                .counterBonusPercent(35f)
+                .build());
+```
+
+Claiming a root does not give it a Wu Xing counter cycle position, a codex
+entry, or titles — every place Core lists the ten ring elements (the
+element-title loop, the "X beats Y" codex listing, both Dao-page ring rows)
+skips any off-ring element outright. Naming, iconography, titles and lore are
+entirely the claiming mod's job. `counterBonusPercent` is optional; omit it to
+fall back to the server's own `Dao-Counter-Bonus-Percent`.
+
+`getOffRingRoot(element)` and `isOffRingRootClaimed(element)` read the current
+claim; `unregisterOffRingRoot(element)` releases it. Registering over an
+existing claim replaces it, the same collision behavior every other registry
+in this API has.
+
+## Palette locks (0.10.0)
+
+A rule that forces a specific `CultivationPalette` on some players, overriding
+their own theme choice entirely while it applies — an off-ring Dao root
+claiming its own robes, for instance:
+
+```java
+CultivationAPI.registerPaletteLock(new CultivationPaletteLock() {
+    @Override
+    public String lockedPaletteKey(ComponentAccessor<EntityStore> accessor, Ref<EntityStore> ref) {
+        return CultivationAPI.getDaoElement(accessor, ref) == DaoElement.DUCK
+                ? "myMod:duckPond" : null;
+    }
+
+    @Override
+    public String reasonKey() {
+        return "server.myMod.dao.element.duck.paletteLockReason";
+    }
+});
+```
+
+More than one lock may be registered; the first whose `lockedPaletteKey`
+returns non-null for a given player wins, in registration order. Evaluated on
+the viewing player's own world thread — read their components freely, never
+write to the Store from inside it. `resolveActivePaletteLock` is what a page
+calls to find out whether a lock currently applies to a player, for showing
+the hint from `reasonKey()` in place of the theme dropdown's usual one.
+
+## Meditation auras (0.10.0)
+
+A player-choosable look for the particles raised while meditating, and
+(independently) at the moment a breakthrough or advancement completes.
+Cultivation ships none by default — everyone meditates in the stock look
+until a mod adds one and a player picks it:
+
+```java
+CultivationAPI.registerMeditationAura(
+        CultivationMeditationAura.builder("myMod:frostBreath")
+                .name("server.myMod.meditationAura.frostBreath")
+                .section("server.myMod.meditationAura.section.winter")
+                .swatch(0x9FD8F0)
+                .auraPrefix("MyMod_MeditationAura_")
+                .build());
+```
+
+This is deliberately independent of `CultivationPalette`: a palette re-grades
+the menus and the HUD — what a player is looking *at*. A meditation aura is
+what a player looks *like* while sitting, breaking through, or advancing, so
+the two choices never constrain each other.
+
+`.auraPrefix(...)` overrides the three-tier meditation-tick particle
+(`_Stirring`/`_Gathering`/`_Converging`), the same suffix-swap contract
+`CultivationPalette#resolveAura` uses for the standing realm aura.
+`.breakthroughParticle(...)` and `.advancementParticle(...)` each override one
+fixed ritual pulse. An aura must override at least one of the three, or
+`.build()` throws — a registration with nothing to show would sit in the
+picker looking choosable and change nothing. None of the three ids are
+validated against a real asset (the client is not readable from here), so
+test a newly registered aura in game before shipping it.
+
+Read a player's current choice with `getMeditationAura(accessor, ref)`; set it
+with `setMeditationAura(store, ref, auraKey)` (pass `null` to clear it back to
+the built-in look). An id nobody claims resolves back to Cultivation's own
+particles at every one of the three moments, so a mod that stops shipping an
+aura never leaves a player's session broken — the same fallback contract an
+unclaimed palette or title id has everywhere else in this API.

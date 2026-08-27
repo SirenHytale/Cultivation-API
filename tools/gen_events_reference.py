@@ -59,6 +59,14 @@ EVENT_FILES: list[tuple[str, str, str]] = [
         "Loot drops, pills, spirit cores, manuals and weapon refinement.",
     ),
     (
+        "AlchemyEvents",
+        "Alchemy (0.10.0)",
+        "The Pill Cauldron refining RITUAL - starting, resolving, and the Fire "
+        "Watch (火候) tending prompts along the way. Complements `ItemEvents`' "
+        "`PillConsumeEvent` above, which covers drinking a finished pill, not "
+        "brewing one.",
+    ),
+    (
         "ForgingEvents",
         "Forging (0.9.x)",
         "Tempering an already-crafted Cultivation weapon/armor at a Forge "
@@ -232,6 +240,15 @@ EVENT_FILES: list[tuple[str, str, str]] = [
         "A wandering, solo world boss (灾劫兽) with no fixed target, unlike "
         "Beast Tide's place-anchored siege - its OMEN phase beginning, the "
         "boss NPC actually spawning, and the encounter resolving.",
+    ),
+    (
+        "RiftEvents",
+        "Void Rifts (0.10.0)",
+        "A randomly-triggered, server-wide world event: a rift opens, throws "
+        "a fixed number of corrupted-beast waves, spawns a boss-tier Warden, "
+        "then resolves SEALED or COLLAPSED. Mostly post-only, the same "
+        "\"auto-picked target, nothing to re-tune\" shape as `WorldBossEvents` "
+        "- only the open itself is cancellable.",
     ),
     (
         "StoreBenefitEvents",

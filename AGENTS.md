@@ -33,7 +33,7 @@ cover it, because nearly every mechanic is re-tunable there.
 1. **`docs/pitfalls.md`** — the mistakes that crash servers. Read this first.
 2. `docs/getting-started.md` — dependency wiring and `setup()`.
 3. The guide for whatever the user is doing (see `README.md`'s table).
-4. `docs/events-reference.md` — all 261 listeners with their payloads. Generated
+4. `docs/events-reference.md` — all 291 listeners with their payloads. Generated
    from source, so it is accurate; it is long, so search it rather than reading
    it end to end.
 
@@ -261,7 +261,9 @@ for every new subsystem's config too — `daoComprehension()`, `talisman()`,
 `forging()`, `weaponSpirit()`, `breeding()`, `party()`, `dungeon()`, `rival()`,
 `treasure()`, `faction()`, `dreamTrial()`, `campaign()`, `oath()`, `market()`,
 `tide()`, `partner()`, `masterDisciple()`, `qiDeviation()`, `tournament()` and
-`celestial()` — plus `secretRealm()`, which previously had none. Each returns the
+`celestial()` — plus `secretRealm()`, which previously had none, and 0.10.0
+added `alliance()` (sect diplomacy - Non-Aggression/Trade/Alliance/Rivalry).
+Each returns the
 live `Config<T>` **holder**; call `.get()` at the point of use and `.save()` after
 writing. To change a value for one player or one event, use the matching `Pre*`
 event instead — a config write changes the server permanently and overwrites what
@@ -335,6 +337,25 @@ void registerPlayerAdminAction(PlayerAdminAction)    // + unregisterPlayerAdminA
 void registerPalette(CultivationPalette)            // + unregisterPalette(String)
 void registerTitle(CultivationTitle)                // + unregisterTitle(String)
 void registerSectBanner(SectBanner)                 // + unregisterSectBanner(String)
+
+// (0.10.0)
+void registerIdentitySection(IdentitySection)       // + unregisterIdentitySection(String)
+                                                      // a 3rd+ tab on the Identity page, beside Race/Titles
+IdentitySection newIdentitySection(String id, Message label, int sortOrder,
+                                   Consumer<IdentitySectionContext> build,
+                                   @Nullable IdentitySection.ActionHandler handler)
+
+void registerMeditationAura(CultivationMeditationAura)   // + unregisterMeditationAura(String)
+CultivationMeditationAura getMeditationAura(accessor, ref) | getMeditationAura(@Nullable String key)
+boolean setMeditationAura(store, ref, @Nullable String auraKey)   // null clears to the built-in look
+
+void registerOffRingRoot(DaoRoot)                   // + unregisterOffRingRoot(DaoElement)
+                                                      // claims one of DaoElement's off-ring slots (DUCK)
+DaoRoot getOffRingRoot(DaoElement)  boolean isOffRingRootClaimed(DaoElement)
+
+void registerPaletteLock(CultivationPaletteLock)    // + unregisterPaletteLock(CultivationPaletteLock)
+                                                      // forces a palette on some players, overriding their own pick
+CultivationPaletteLock resolveActivePaletteLock(accessor, ref)
 
 // A title is PURELY cosmetic. Its two gates ask different questions:
 //   .permission(node) / .visible(Predicate<PlayerRef>)  may they SEE it   -> hidden if false
@@ -438,7 +459,10 @@ Builder.semantic(Semantic, int rgb)
 `DaoComprehensionEvents`, `ForgingEvents`, `TalismanEvents`, `WeaponSpiritEvents`,
 `BreedingEvents`, `MeridianEvents`, `PartyEvents`, `PartnerEvents`, `OathEvents`,
 `CampaignEvents`, `QuestEvents`, `DepthsEvents`, `SecretRealmEvents`,
-`TreasureEvents`, `MarketEvents`, `TideEvents`, `RivalEvents`, `WorldBossEvents`.
+`TreasureEvents`, `MarketEvents`, `TideEvents`, `RivalEvents`, `WorldBossEvents` —
+plus two more in 0.10.0: `AlchemyEvents` (the Pill Cauldron refining ritual,
+including Fire Watch tending prompts) and `RiftEvents` (the Void Rift world
+event). 35 classes, 291 listeners total.
 See [docs/events-reference.md](docs/events-reference.md) for what each covers.
 
 Every listener is `ClassName.onSomething(Consumer<SomethingEvent>)`, and nearly

@@ -4,6 +4,7 @@ import com.hypixel.hytale.component.ComponentAccessor;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import plugin.siren.ECS.Dao.DaoElement;
+import plugin.siren.Utils.Config.BeastSpecies;
 
 import javax.annotation.Nonnull;
 import java.util.List;
@@ -191,6 +192,27 @@ public interface CultivationModifierSource {
     /** Whether this cultivator may meditate while standing in lava. */
     default boolean canMeditateInLava(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref){
         return false;
+    }
+
+    // --- Items ------------------------------------------------------------------
+
+    /** Scales a talisman's potency (its grade's magnitude multiplier) on top of {@code TalismanManager#getPotency(TalismanGrade)}. */
+    default float talismanPotencyMultiplier(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref){
+        return 1f;
+    }
+
+    /**
+     * Scales a summoned beast's bonus multiplier on top of what its own
+     * species/element-resonance already grants - see
+     * {@code BeastManager#getBonusMultiplier}, the one chokepoint every
+     * guardian/warden/gatherer contribution is scaled through.
+     *
+     * @param ownerRef the beast's owner, not the beast itself.
+     * @param species the summoned beast's species.
+     */
+    default float beastBonusMultiplier(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ownerRef,
+                                        @Nonnull BeastSpecies species){
+        return 1f;
     }
 
     // --- Presentation ---------------------------------------------------------

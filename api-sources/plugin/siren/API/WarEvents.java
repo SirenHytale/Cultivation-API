@@ -13,18 +13,26 @@ import java.util.function.Consumer;
  * in this package shares.
  *
  * <p>The hall actually changing hands is {@link SectEvents}'
- * {@code SectHallCaptureEvent}, fired from inside the capture below - veto
- * THAT one to let a siege be won without the hall moving.</p>
+ * {@code SectHallCaptureEvent} - {@code WarManager} never fires it (the
+ * Sect Siege hardening pass's SUPPRESS mode never moves a hall at all), but
+ * a future capture mode could without touching either event here: veto THAT
+ * one to let a siege be won without the hall moving.</p>
  */
 public final class WarEvents {
     private WarEvents(){}
 
-    /** Why a siege ended without the attacker taking the hall. */
+    /** Why a siege ended without the attacker triggering SUPPRESS. */
     public enum SiegeFailReason {
-        /** The war window ran out before the attacker held the hall long enough. */
+        /** The CONTEST window ran out before the attacker held the hall long enough. */
         LAPSED,
-        /** The defending sect (or its hall) no longer existed when the hold completed. */
-        DEFENDER_GONE
+        /** The attacking or defending sect (or the defender's hall) no longer existed when checked. */
+        DEFENDER_GONE,
+        /** MUSTER's deadline passed without both sides meeting their minimum presence - a total no-op, no cooldown for the defender. */
+        MUSTER_FAILED,
+        /** CONTEST hard-stopped because live defender presence in the hall's own world stayed at zero past the grace period - resolves in the defender's favor with no loss. */
+        DEFENDER_ABSENT,
+        /** An admin or the Wars-Enabled master switch cancelled the siege outright - no consequence to either side, and the attacker's declaration cost is refunded. */
+        ABORTED
     }
 
     // --- Post-events ---

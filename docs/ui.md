@@ -445,3 +445,63 @@ every render, so a row belonging to a subsystem the server owner switched off
 can hide itself. Unlike a config section, the Players tab's own fixed rows are
 not part of this registry at all — an addon row always appears below them
 regardless of `getSortOrder()`.
+
+## Identity sections (0.10.0)
+
+A third (or fourth, …) tab on Cultivation's **Identity page**, alongside the
+built-in Race and Titles tabs. Race and Titles are not entries in this
+registry — they keep the partial-update logic specific to their own content —
+but every registered section gets a tab button alongside them, always
+rendering after both built-ins.
+
+```java
+CultivationAPI.registerIdentitySection(CultivationAPI.newIdentitySection(
+        "MyMod:classes", Message.translation("server.mymod.identity.classesTab"), 1000,
+        context -> {
+            context.getCommandBuilder().append(
+                    CultivationAPI.document(context.getPalette(), "Pages/MyMod/ClassCard.ui"),
+                    context.selector("#ClassList"));
+            context.bindAction(CustomUIEventBindingType.Activating, "#SelectButton", "select");
+        },
+        (context, action, value) -> {
+            if("select".equals(action)) {
+                ClassManager.applySelection(context.getStore(), context.getRef(), context.getPlayerRef());
+            }
+        }));
+```
+
+`newIdentitySection` builds one from a build callback and an optional action
+handler without implementing `IdentitySection` directly; implement the
+interface yourself if you need `isVisible` or a non-default `getSortOrder`
+too. `build` runs exactly once per page open — never on every tab switch,
+which only flips `.Visible`/`.Disabled` — so register every event binding
+inside `build`, not lazily on first click.
+
+### Addressing your own widgets
+
+`IdentitySectionContext.getContainerSelector()` is this section's own indexed
+slot in the page's `#RegisteredSectionList` — append into it exactly as
+`RaceCard.ui` is appended into `#RaceList`, and address anything inside
+through `context.selector(childSelector)` rather than a bare id. UI ids are
+global to the loaded page, and another registered section's content sits in
+the same document.
+
+`context.bindAction(type, childSelector, action)` and
+`context.bindValueAction(childSelector, action)` route a click or a pushed
+value back to `handleAction` (or the `ActionHandler` passed to
+`newIdentitySection`), keyed by this section's own id so the host page
+dispatches to the right section without a per-section codec field. Use
+`bindAction` for a plain click; `bindValueAction` for a dropdown or text field
+whose current value should arrive with it.
+
+### Threading, and a section that throws
+
+`build`, `handleAction` and `isVisible` all run on the viewing player's own
+world thread — read that player's components freely, never write to the Store
+from inside them. A section that throws is caught and logged by the host page
+rather than taking the whole Identity page down for every player, the same
+guard `CultivationNav` puts around an addon's own nav page.
+
+Namespace `getId()` with your mod's name, the same convention every other id
+in this API follows — it must not equal `"race"` or `"titles"`, the two ids
+the built-in tabs have always used.

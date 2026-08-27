@@ -30,10 +30,8 @@ import java.util.function.Consumer;
  * when a ritual begins; {@code TalismanInscribeSystem} fires the Inscribe-
  * Complete pair when one resolves (naturally or by interruption - see that
  * system's own remarks on why {@code PreInscribeCompleteEvent} only fires on a
- * NATURAL completion, never an interruption). The Use pair is NOT fired by
- * anything in this engine slice - using a talisman is slice S2's
- * use-interaction, which should fire {@link #firePreTalismanUse}/
- * {@link #fireTalismanUse} itself once it exists; see the handoff doc.</p>
+ * NATURAL completion, never an interruption). {@code TalismanUseInteraction}
+ * fires the Use pair every time a charge is spent.</p>
  */
 public final class TalismanEvents {
     private TalismanEvents(){}
@@ -61,8 +59,7 @@ public final class TalismanEvents {
 
     /**
      * A talisman was used and its effect applied. {@code remainingCharges} is
-     * what is left AFTER this use - the stack is gone once it reaches 0. Not
-     * fired by anything in this engine slice; see this class's own doc.
+     * what is left AFTER this use - the stack is gone once it reaches 0.
      */
     public record TalismanUseEvent(@Nonnull Ref<EntityStore> ref, @Nonnull PlayerRef player,
                                    @Nonnull String talismanId, @Nonnull TalismanGrade grade, int remainingCharges) {}
@@ -133,7 +130,7 @@ public final class TalismanEvents {
         public void setAffinityFraction(float value){ this.affinityFraction = value; }
     }
 
-    /** A talisman is about to be used. Cancel to refuse it (the charge is not spent). Not fired by this engine slice; see this class's own doc. */
+    /** A talisman is about to be used. Cancel to refuse it (the charge is not spent). */
     public static final class PreTalismanUseEvent extends CancellableEvent {
         private final Ref<EntityStore> ref;
         private final PlayerRef player;

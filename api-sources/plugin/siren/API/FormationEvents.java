@@ -33,6 +33,9 @@ public final class FormationEvents {
     public record FormationTrapStrikeEvent(@Nonnull Ref<EntityStore> ref, @Nullable PlayerRef player,
                                            @Nonnull String world, int chunkX, int chunkZ, float damage) {}
 
+    /** An altar-anchored formation's tier just changed. Purely informational - the tier is already live on {@code formation} by the time this fires. */
+    public record FormationTierChangeEvent(@Nonnull Formation formation, int fromTier, int toTier) {}
+
     // --- Pre-events ---
 
     /** An array is about to be laid. Cancel to refuse it (reported as the ground being warded); {@link #setRadiusChunks} to change how far it reaches. */
@@ -114,6 +117,24 @@ public final class FormationEvents {
         public void setDamage(float damage){ this.damage = damage; }
     }
 
+    /** An altar-anchored formation's tier is about to change. Cancel to refuse the change entirely; {@link #setToTier} to dampen (but not fully block) a rise - see FormationManager.applyTier for how a downgrade-disallowing caller clamps a dampened value back. */
+    public static final class PreFormationTierChangeEvent extends CancellableEvent {
+        private final Formation formation;
+        private final int fromTier;
+        private int toTier;
+
+        public PreFormationTierChangeEvent(@Nonnull Formation formation, int fromTier, int toTier){
+            this.formation = formation;
+            this.fromTier = fromTier;
+            this.toTier = toTier;
+        }
+
+        @Nonnull public Formation formation(){ return this.formation; }
+        public int fromTier(){ return this.fromTier; }
+        public int toTier(){ return this.toTier; }
+        public void setToTier(int toTier){ this.toTier = toTier; }
+    }
+
     // --- Listener registration ---
 
     private static final List<Consumer<FormationPlaceEvent>> PLACE = EventBus.newListenerList();
@@ -122,6 +143,8 @@ public final class FormationEvents {
     private static final List<Consumer<PreFormationRemoveEvent>> PRE_REMOVE = EventBus.newListenerList();
     private static final List<Consumer<FormationTrapStrikeEvent>> TRAP_STRIKE = EventBus.newListenerList();
     private static final List<Consumer<PreFormationTrapStrikeEvent>> PRE_TRAP_STRIKE = EventBus.newListenerList();
+    private static final List<Consumer<FormationTierChangeEvent>> TIER_CHANGE = EventBus.newListenerList();
+    private static final List<Consumer<PreFormationTierChangeEvent>> PRE_TIER_CHANGE = EventBus.newListenerList();
 
     public static void onFormationPlace(@Nonnull Consumer<FormationPlaceEvent> listener){ PLACE.add(listener); }
     public static void onPreFormationPlace(@Nonnull Consumer<PreFormationPlaceEvent> listener){ PRE_PLACE.add(listener); }
@@ -129,6 +152,8 @@ public final class FormationEvents {
     public static void onPreFormationRemove(@Nonnull Consumer<PreFormationRemoveEvent> listener){ PRE_REMOVE.add(listener); }
     public static void onFormationTrapStrike(@Nonnull Consumer<FormationTrapStrikeEvent> listener){ TRAP_STRIKE.add(listener); }
     public static void onPreFormationTrapStrike(@Nonnull Consumer<PreFormationTrapStrikeEvent> listener){ PRE_TRAP_STRIKE.add(listener); }
+    public static void onFormationTierChange(@Nonnull Consumer<FormationTierChangeEvent> listener){ TIER_CHANGE.add(listener); }
+    public static void onPreFormationTierChange(@Nonnull Consumer<PreFormationTierChangeEvent> listener){ PRE_TIER_CHANGE.add(listener); }
 
     // --- Internal dispatch (called by this mod's own systems; not API) ---
 
@@ -138,4 +163,6 @@ public final class FormationEvents {
     public static boolean firePreFormationRemove(@Nonnull PreFormationRemoveEvent event){ return EventBus.fire(PRE_REMOVE, event, "PreFormationRemoveEvent"); }
     public static void fireFormationTrapStrike(@Nonnull FormationTrapStrikeEvent event){ EventBus.dispatch(TRAP_STRIKE, event, "FormationTrapStrikeEvent"); }
     public static boolean firePreFormationTrapStrike(@Nonnull PreFormationTrapStrikeEvent event){ return EventBus.fire(PRE_TRAP_STRIKE, event, "PreFormationTrapStrikeEvent"); }
+    public static void fireFormationTierChange(@Nonnull FormationTierChangeEvent event){ EventBus.dispatch(TIER_CHANGE, event, "FormationTierChangeEvent"); }
+    public static boolean firePreFormationTierChange(@Nonnull PreFormationTierChangeEvent event){ return EventBus.fire(PRE_TIER_CHANGE, event, "PreFormationTierChangeEvent"); }
 }

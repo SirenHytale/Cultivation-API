@@ -1,7 +1,7 @@
 # Events
 
-Cultivation exposes **261 listener hooks** across 33 subsystems — 147
-post-events and 114 cancellable pre-events. This page covers the rules that apply
+Cultivation exposes **291 listener hooks** across 35 subsystems — 166
+post-events and 125 cancellable pre-events. This page covers the rules that apply
 to all of them. For the full catalog — every event, its payload, and what each
 field means — see **[the event reference](events-reference.md)**.
 

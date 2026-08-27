@@ -27,7 +27,9 @@ public final class BeastEvents {
         /** Subdued and tamed in the wild. */
         TAME,
         /** Hatched from a Spirit Beast Egg. */
-        HATCH
+        HATCH,
+        /** Claimed from a stocked Spirit Beast Den - see SpiritDenManager.claim. */
+        DEN
     }
 
     /** Why a companion's body left the world. */
@@ -76,6 +78,10 @@ public final class BeastEvents {
     /** A companion was summoned in its rideable body. */
     public record BeastMountEvent(@Nonnull Ref<EntityStore> owner, @Nullable PlayerRef player,
                                   @Nonnull SpiritBeastComponent beast, @Nonnull BeastSpecies species) {}
+
+    /** A Spirit Beast Den rolled a brood, now waiting to be claimed once due. See SpiritDenManager.ensureBrood. */
+    public record BeastDenBroodEvent(@Nonnull String world, int x, int y, int z,
+                                     @Nonnull BeastSpecies species, int appraisalScore) {}
 
     // --- Pre-events ---
 
@@ -285,6 +291,38 @@ public final class BeastEvents {
         @Nonnull public BeastSpecies species(){ return this.species; }
     }
 
+    /**
+     * A Spirit Beast Den is about to roll a brood. Cancel to leave the den
+     * without one (it will simply try again the next time its appraisal
+     * sweep calls SpiritDenManager.ensureBrood) - nothing has been persisted
+     * yet, so a veto here costs the keeper nothing.
+     */
+    public static final class PreBeastDenBroodEvent extends CancellableEvent {
+        private final String world;
+        private final int x;
+        private final int y;
+        private final int z;
+        private final BeastSpecies species;
+        private final int appraisalScore;
+
+        public PreBeastDenBroodEvent(@Nonnull String world, int x, int y, int z,
+                                     @Nonnull BeastSpecies species, int appraisalScore){
+            this.world = world;
+            this.x = x;
+            this.y = y;
+            this.z = z;
+            this.species = species;
+            this.appraisalScore = appraisalScore;
+        }
+
+        @Nonnull public String world(){ return this.world; }
+        public int x(){ return this.x; }
+        public int y(){ return this.y; }
+        public int z(){ return this.z; }
+        @Nonnull public BeastSpecies species(){ return this.species; }
+        public int appraisalScore(){ return this.appraisalScore; }
+    }
+
     // --- Listener registration ---
 
     private static final List<Consumer<BeastTameAttemptEvent>> TAME = EventBus.newListenerList();
@@ -305,6 +343,8 @@ public final class BeastEvents {
     private static final List<Consumer<PreBeastMountEvent>> PRE_MOUNT = EventBus.newListenerList();
     private static final List<Consumer<BeastAdvanceEvent>> ADVANCE = EventBus.newListenerList();
     private static final List<Consumer<PreBeastAdvanceEvent>> PRE_ADVANCE = EventBus.newListenerList();
+    private static final List<Consumer<BeastDenBroodEvent>> DEN_BROOD = EventBus.newListenerList();
+    private static final List<Consumer<PreBeastDenBroodEvent>> PRE_DEN_BROOD = EventBus.newListenerList();
 
     public static void onBeastTameAttempt(@Nonnull Consumer<BeastTameAttemptEvent> listener){ TAME.add(listener); }
     public static void onPreBeastTameAttempt(@Nonnull Consumer<PreBeastTameAttemptEvent> listener){ PRE_TAME.add(listener); }
@@ -324,6 +364,8 @@ public final class BeastEvents {
     public static void onPreBeastEvolve(@Nonnull Consumer<PreBeastEvolveEvent> listener){ PRE_EVOLVE.add(listener); }
     public static void onBeastMount(@Nonnull Consumer<BeastMountEvent> listener){ MOUNT.add(listener); }
     public static void onPreBeastMount(@Nonnull Consumer<PreBeastMountEvent> listener){ PRE_MOUNT.add(listener); }
+    public static void onBeastDenBrood(@Nonnull Consumer<BeastDenBroodEvent> listener){ DEN_BROOD.add(listener); }
+    public static void onPreBeastDenBrood(@Nonnull Consumer<PreBeastDenBroodEvent> listener){ PRE_DEN_BROOD.add(listener); }
 
     // --- Internal dispatch (called by this mod's own systems; not API) ---
 
@@ -345,4 +387,6 @@ public final class BeastEvents {
     public static boolean firePreBeastEvolve(@Nonnull PreBeastEvolveEvent event){ return EventBus.fire(PRE_EVOLVE, event, "PreBeastEvolveEvent"); }
     public static void fireBeastMount(@Nonnull BeastMountEvent event){ EventBus.dispatch(MOUNT, event, "BeastMountEvent"); }
     public static boolean firePreBeastMount(@Nonnull PreBeastMountEvent event){ return EventBus.fire(PRE_MOUNT, event, "PreBeastMountEvent"); }
+    public static void fireBeastDenBrood(@Nonnull BeastDenBroodEvent event){ EventBus.dispatch(DEN_BROOD, event, "BeastDenBroodEvent"); }
+    public static boolean firePreBeastDenBrood(@Nonnull PreBeastDenBroodEvent event){ return EventBus.fire(PRE_DEN_BROOD, event, "PreBeastDenBroodEvent"); }
 }

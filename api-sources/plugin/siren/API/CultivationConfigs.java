@@ -3,6 +3,7 @@ package plugin.siren.API;
 import com.hypixel.hytale.server.core.util.Config;
 import plugin.siren.Cultivation;
 import plugin.siren.Utils.Config.AlchemyConfig;
+import plugin.siren.Utils.Config.AllianceConfig;
 import plugin.siren.Utils.Config.BeastConfig;
 import plugin.siren.Utils.Config.BodyTemperingConfig;
 import plugin.siren.Utils.Config.BreakthroughConfig;
@@ -249,6 +250,16 @@ public final class CultivationConfigs {
         return Cultivation.getDuelConfig();
     }
 
+    /**
+     * Inter-sect diplomacy - the NON_AGGRESSION/TRADE/ALLIANCE relation
+     * ladder and the separate unilateral Rivalry table. See
+     * {@link plugin.siren.Utils.Sect.AllianceManager} and {@link SectRelationKind}.
+     */
+    @Nonnull
+    public static Config<AllianceConfig> alliance() {
+        return Cultivation.getAllianceConfig();
+    }
+
     /** The ad-hoc party system - max size and invite expiry. See PartyManager. */
     public static Config<plugin.siren.Utils.Config.PartyConfig> party() {
         return Cultivation.getPartyConfig();
@@ -439,6 +450,7 @@ public final class CultivationConfigs {
         dwelling().save();
         war().save();
         duel().save();
+        alliance().save();
         party().save();
         dungeon().save();
         rival().save();

@@ -127,6 +127,19 @@ Three more enums are declared **on the `*Events` class itself** rather than in
 (`EXPIRED`/`ITEM`/`COMPANION`). These are listed with their full javadoc in
 [the event reference](events-reference.md) rather than duplicated here.
 
+### New in 0.10.0
+
+One new standalone enum lives directly in `plugin.siren.API` rather than
+`Utils`/`ECS`, since it is part of the public signature of `SectEvents`'
+alliance/rivalry payloads, not an internal detail one happens to carry:
+
+| Enum | Package | Constants |
+| --- | --- | --- |
+| `SectRelationKind` | `plugin.siren.API` | `NON_AGGRESSION`, `TRADE`, `ALLIANCE` — each a strict superset of the one before it; see [Sect diplomacy in the event reference](events-reference.md#sects) |
+
+One more is declared on its owning `*Events` class, same shape as the three
+0.9.x ones above: `AlchemyEvents.RefineOutcome` (`SUCCESS`/`FAILED`/`BOTCH`).
+
 ---
 
 ## Object types
@@ -280,6 +293,22 @@ serves.
 
 > `Ref` has no `equals()`. When an art has to skip its owner, or tell one
 > entity from another, compare `getIndex()`.
+
+### New in 0.10.0
+
+Six more types live directly in `plugin.siren.API`, each built the same
+builder-or-interface shape as `StoreBenefit`/`PlayerAdminAction` above. Full
+detail on each is in [Registries](registries.md) or [UI integration](ui.md),
+not duplicated here:
+
+| Type | Shape | See |
+| --- | --- | --- |
+| `DaoRoot` | Builder (`DaoRoot.builder(DaoElement)`) | [Off-ring Dao roots](registries.md#off-ring-dao-roots-0100) |
+| `CultivationPaletteLock` | Functional interface | [Palette locks](registries.md#palette-locks-0100) |
+| `CultivationMeditationAura` | Builder (`CultivationMeditationAura.builder(String key)`) | [Meditation auras](registries.md#meditation-auras-0100) |
+| `IdentitySection` | Interface (or `CultivationAPI.newIdentitySection(...)`) | [Identity sections](ui.md#identity-sections-0100) |
+| `IdentitySectionContext` | Handed in, not built | [Identity sections](ui.md#identity-sections-0100) |
+| `MarketCategory` | Static factory (`MarketCategory.of(...)`) | filters the Auction House's category row; shaped like `CodexCategory` plus an `ItemStack` predicate |
 
 ---
 

@@ -93,6 +93,33 @@ public final class SectEvents {
     /** A won siege transferred a hall. The defender is now hall-less. */
     public record SectHallCaptureEvent(@Nonnull Sect attacker, @Nonnull Sect defender, @Nonnull String world, int chunkX, int chunkZ, int veinTier) {}
 
+    /** Two sects formed a mutual Alliance - see AllianceManager.acceptAlliance. {@code actor} is whoever accepted the proposal. */
+    public record SectAllianceFormedEvent(@Nonnull UUID actor, @Nonnull Sect sectA, @Nonnull Sect sectB) {}
+
+    /** A standing Alliance ended - either side's leader may break one unilaterally, see AllianceManager.breakAlliance. {@code actor} is whoever broke it. */
+    public record SectAllianceBrokenEvent(@Nonnull UUID actor, @Nonnull Sect sectA, @Nonnull Sect sectB) {}
+
+    /**
+     * A NON_AGGRESSION or TRADE relation formed or ended between two sects -
+     * never fired for ALLIANCE (see {@link SectAllianceFormedEvent}/{@link
+     * SectAllianceBrokenEvent}, which cover that rung specifically, so an
+     * addon already listening for those - a Discord-bridge mod, for instance -
+     * is not double-posted). {@code actor} is whoever accepted the proposal
+     * (formed) or broke the relation (not formed). {@code formed} is true when
+     * the relation just started, false when it just ended.
+     */
+    public record SectRelationChangedEvent(@Nonnull UUID actor, @Nonnull Sect sectA, @Nonnull Sect sectB,
+                                            @Nonnull SectRelationKind kind, boolean formed) {}
+
+    /** A sect's Library started researching a new subject (replacing whatever, if anything, it was researching before). */
+    public record SectLibraryResearchStartEvent(@Nonnull UUID actor, @Nonnull Sect sect, @Nonnull String techniqueId) {}
+
+    /** A sect's Library finished compiling an exclusive technique manual. */
+    public record SectLibraryCompileEvent(@Nonnull Sect sect, @Nonnull String techniqueId) {}
+
+    /** A member redeemed their own copy of a compiled Library manual. */
+    public record SectLibraryRedeemEvent(@Nonnull UUID member, @Nonnull Sect sect, @Nonnull String techniqueId, @Nonnull String manualItemId) {}
+
     // --- Pre-events ---
 
     /** A player is about to found a sect. Cancel to refuse (reported as a disabled/refused creation); {@link #setName} to force a different name - it is re-validated for shape and uniqueness afterward. */
@@ -411,6 +438,69 @@ public final class SectEvents {
         public int veinTier(){ return this.veinTier; }
     }
 
+    /** A sect's Library is about to start researching a new subject. Cancel to leave it researching whatever it was (or nothing). */
+    public static final class PreSectLibraryResearchStartEvent extends CancellableEvent {
+        private final UUID actor;
+        private final Sect sect;
+        private final String oldTechniqueId;
+        private final String newTechniqueId;
+
+        public PreSectLibraryResearchStartEvent(@Nonnull UUID actor, @Nonnull Sect sect,
+                                                 @Nonnull String oldTechniqueId, @Nonnull String newTechniqueId){
+            this.actor = actor;
+            this.sect = sect;
+            this.oldTechniqueId = oldTechniqueId;
+            this.newTechniqueId = newTechniqueId;
+        }
+
+        @Nonnull public UUID actor(){ return this.actor; }
+        @Nonnull public Sect sect(){ return this.sect; }
+        /** What the sect was researching before, or "" if nothing. */
+        @Nonnull public String oldTechniqueId(){ return this.oldTechniqueId; }
+        @Nonnull public String newTechniqueId(){ return this.newTechniqueId; }
+    }
+
+    /** A sect's Library is about to compile an exclusive technique. Cancel to hold it at the door - progress stays at/above cost and this fires again on the next settle. */
+    public static final class PreSectLibraryCompileEvent extends CancellableEvent {
+        private final Sect sect;
+        private final String techniqueId;
+
+        public PreSectLibraryCompileEvent(@Nonnull Sect sect, @Nonnull String techniqueId){
+            this.sect = sect;
+            this.techniqueId = techniqueId;
+        }
+
+        @Nonnull public Sect sect(){ return this.sect; }
+        @Nonnull public String techniqueId(){ return this.techniqueId; }
+    }
+
+    /**
+     * A member is about to redeem their copy of a compiled Library manual.
+     * Cancel to refuse it (not marked redeemed, so it may be retried);
+     * {@link #setManualItemId} to substitute a different item - mirrors
+     * {@code ItemEvents.PreLootDropEvent#setItemId}.
+     */
+    public static final class PreSectLibraryRedeemEvent extends CancellableEvent {
+        private final UUID member;
+        private final Sect sect;
+        private final String techniqueId;
+        private String manualItemId;
+
+        public PreSectLibraryRedeemEvent(@Nonnull UUID member, @Nonnull Sect sect,
+                                         @Nonnull String techniqueId, @Nonnull String manualItemId){
+            this.member = member;
+            this.sect = sect;
+            this.techniqueId = techniqueId;
+            this.manualItemId = manualItemId;
+        }
+
+        @Nonnull public UUID member(){ return this.member; }
+        @Nonnull public Sect sect(){ return this.sect; }
+        @Nonnull public String techniqueId(){ return this.techniqueId; }
+        @Nonnull public String manualItemId(){ return this.manualItemId; }
+        public void setManualItemId(@Nonnull String manualItemId){ this.manualItemId = manualItemId; }
+    }
+
     // --- Listener registration ---
 
     private static final List<Consumer<SectCreateEvent>> CREATE = EventBus.newListenerList();
@@ -444,6 +534,15 @@ public final class SectEvents {
     private static final List<Consumer<PreSectHallClaimEvent>> PRE_HALL_CLAIM = EventBus.newListenerList();
     private static final List<Consumer<SectHallCaptureEvent>> HALL_CAPTURE = EventBus.newListenerList();
     private static final List<Consumer<PreSectHallCaptureEvent>> PRE_HALL_CAPTURE = EventBus.newListenerList();
+    private static final List<Consumer<SectAllianceFormedEvent>> ALLIANCE_FORMED = EventBus.newListenerList();
+    private static final List<Consumer<SectAllianceBrokenEvent>> ALLIANCE_BROKEN = EventBus.newListenerList();
+    private static final List<Consumer<SectRelationChangedEvent>> RELATION_CHANGED = EventBus.newListenerList();
+    private static final List<Consumer<SectLibraryResearchStartEvent>> LIBRARY_RESEARCH_START = EventBus.newListenerList();
+    private static final List<Consumer<PreSectLibraryResearchStartEvent>> PRE_LIBRARY_RESEARCH_START = EventBus.newListenerList();
+    private static final List<Consumer<SectLibraryCompileEvent>> LIBRARY_COMPILE = EventBus.newListenerList();
+    private static final List<Consumer<PreSectLibraryCompileEvent>> PRE_LIBRARY_COMPILE = EventBus.newListenerList();
+    private static final List<Consumer<SectLibraryRedeemEvent>> LIBRARY_REDEEM = EventBus.newListenerList();
+    private static final List<Consumer<PreSectLibraryRedeemEvent>> PRE_LIBRARY_REDEEM = EventBus.newListenerList();
 
     public static void onSectCreate(@Nonnull Consumer<SectCreateEvent> listener){ CREATE.add(listener); }
     public static void onPreSectCreate(@Nonnull Consumer<PreSectCreateEvent> listener){ PRE_CREATE.add(listener); }
@@ -476,6 +575,15 @@ public final class SectEvents {
     public static void onPreSectHallClaim(@Nonnull Consumer<PreSectHallClaimEvent> listener){ PRE_HALL_CLAIM.add(listener); }
     public static void onSectHallCapture(@Nonnull Consumer<SectHallCaptureEvent> listener){ HALL_CAPTURE.add(listener); }
     public static void onPreSectHallCapture(@Nonnull Consumer<PreSectHallCaptureEvent> listener){ PRE_HALL_CAPTURE.add(listener); }
+    public static void onSectAllianceFormed(@Nonnull Consumer<SectAllianceFormedEvent> listener){ ALLIANCE_FORMED.add(listener); }
+    public static void onSectAllianceBroken(@Nonnull Consumer<SectAllianceBrokenEvent> listener){ ALLIANCE_BROKEN.add(listener); }
+    public static void onSectRelationChanged(@Nonnull Consumer<SectRelationChangedEvent> listener){ RELATION_CHANGED.add(listener); }
+    public static void onSectLibraryResearchStart(@Nonnull Consumer<SectLibraryResearchStartEvent> listener){ LIBRARY_RESEARCH_START.add(listener); }
+    public static void onPreSectLibraryResearchStart(@Nonnull Consumer<PreSectLibraryResearchStartEvent> listener){ PRE_LIBRARY_RESEARCH_START.add(listener); }
+    public static void onSectLibraryCompile(@Nonnull Consumer<SectLibraryCompileEvent> listener){ LIBRARY_COMPILE.add(listener); }
+    public static void onPreSectLibraryCompile(@Nonnull Consumer<PreSectLibraryCompileEvent> listener){ PRE_LIBRARY_COMPILE.add(listener); }
+    public static void onSectLibraryRedeem(@Nonnull Consumer<SectLibraryRedeemEvent> listener){ LIBRARY_REDEEM.add(listener); }
+    public static void onPreSectLibraryRedeem(@Nonnull Consumer<PreSectLibraryRedeemEvent> listener){ PRE_LIBRARY_REDEEM.add(listener); }
 
     // --- Internal dispatch (called by this mod's own systems; not API) ---
 
@@ -510,4 +618,13 @@ public final class SectEvents {
     public static boolean firePreSectHallClaim(@Nonnull PreSectHallClaimEvent event){ return EventBus.fire(PRE_HALL_CLAIM, event, "PreSectHallClaimEvent"); }
     public static void fireSectHallCapture(@Nonnull SectHallCaptureEvent event){ EventBus.dispatch(HALL_CAPTURE, event, "SectHallCaptureEvent"); }
     public static boolean firePreSectHallCapture(@Nonnull PreSectHallCaptureEvent event){ return EventBus.fire(PRE_HALL_CAPTURE, event, "PreSectHallCaptureEvent"); }
+    public static void fireSectAllianceFormed(@Nonnull SectAllianceFormedEvent event){ EventBus.dispatch(ALLIANCE_FORMED, event, "SectAllianceFormedEvent"); }
+    public static void fireSectAllianceBroken(@Nonnull SectAllianceBrokenEvent event){ EventBus.dispatch(ALLIANCE_BROKEN, event, "SectAllianceBrokenEvent"); }
+    public static void fireSectRelationChanged(@Nonnull SectRelationChangedEvent event){ EventBus.dispatch(RELATION_CHANGED, event, "SectRelationChangedEvent"); }
+    public static void fireSectLibraryResearchStart(@Nonnull SectLibraryResearchStartEvent event){ EventBus.dispatch(LIBRARY_RESEARCH_START, event, "SectLibraryResearchStartEvent"); }
+    public static boolean firePreSectLibraryResearchStart(@Nonnull PreSectLibraryResearchStartEvent event){ return EventBus.fire(PRE_LIBRARY_RESEARCH_START, event, "PreSectLibraryResearchStartEvent"); }
+    public static void fireSectLibraryCompile(@Nonnull SectLibraryCompileEvent event){ EventBus.dispatch(LIBRARY_COMPILE, event, "SectLibraryCompileEvent"); }
+    public static boolean firePreSectLibraryCompile(@Nonnull PreSectLibraryCompileEvent event){ return EventBus.fire(PRE_LIBRARY_COMPILE, event, "PreSectLibraryCompileEvent"); }
+    public static void fireSectLibraryRedeem(@Nonnull SectLibraryRedeemEvent event){ EventBus.dispatch(LIBRARY_REDEEM, event, "SectLibraryRedeemEvent"); }
+    public static boolean firePreSectLibraryRedeem(@Nonnull PreSectLibraryRedeemEvent event){ return EventBus.fire(PRE_LIBRARY_REDEEM, event, "PreSectLibraryRedeemEvent"); }
 }

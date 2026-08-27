@@ -9,9 +9,9 @@
       "Url": "https://example.com/"
     }
   ],
-  "ServerVersion": "0.5.x",
+  "ServerVersion": ">=0.6.0-pre.0 <0.7.0",
   "Dependencies": {
-    "Siren:Cultivation": ">=0.9.1"
+    "Siren:Cultivation": ">=0.10.0"
   },
   "OptionalDependencies": {},
   "LoadBefore": {},
