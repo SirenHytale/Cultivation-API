@@ -165,6 +165,26 @@ public final class CultivationEvents {
     public record AscensionLegacyEvent(@Nonnull Ref<EntityStore> ref, @Nullable PlayerRef player,
                                        boolean sectBeneficiary, boolean sectFallback, @Nullable String sectName) {}
 
+    /**
+     * A cultivator completed Reincarnation (转世) - the alternate capstone
+     * alongside Ascension. {@code fromRealm}/{@code toRealm} are the realm
+     * given up and the realm landed at after the partial reset; {@code
+     * bloodlinePointsGranted} is what was just added to their {@code
+     * ReincarnationLedger} entry (cumulative, not their new total).
+     *
+     * <p>Deliberately its own event rather than a {@link BreakthroughEvent}
+     * or {@link AscensionEvent} with a special flag - a Reincarnation is
+     * neither, and a listener that treats it as one would credit the wrong
+     * thing.</p>
+     */
+    public record ReincarnationEvent(@Nonnull Ref<EntityStore> ref, @Nullable PlayerRef player,
+                                     @Nonnull CultivationRealm fromRealm, @Nonnull CultivationRealm toRealm,
+                                     int bloodlinePointsGranted) {}
+
+    /** A cultivator's Reincarnation attempt ended in failure. */
+    public record ReincarnationFailedEvent(@Nonnull Ref<EntityStore> ref, @Nullable PlayerRef player,
+                                           boolean abandoned) {}
+
     /** A player was demoted a sub-stage for abandoning a ritual (or for Qi Deviation). Banked Qi has been wiped and the granting skill points revoked. */
     public record DemotionEvent(@Nonnull Ref<EntityStore> ref, @Nullable PlayerRef player, @Nonnull CultivationRealm realm,
                                 @Nonnull CultivationStage oldStage, @Nonnull CultivationStage newStage, boolean wasBreakthrough) {}
@@ -551,6 +571,25 @@ public final class CultivationEvents {
         public boolean prestiged(){ return this.prestiged; }
     }
 
+    /**
+     * A cultivator is about to begin Reincarnation. Cancelling keeps them at
+     * their current realm untried - the one hook a server needs to gate this
+     * ending behind something of its own (a quest, an item, a date), the same
+     * role {@link PreAscensionEvent} plays for the other capstone.
+     */
+    public static final class PreReincarnationEvent extends CancellableEvent {
+        private final Ref<EntityStore> ref;
+        private final PlayerRef player;
+
+        public PreReincarnationEvent(@Nonnull Ref<EntityStore> ref, @Nullable PlayerRef player){
+            this.ref = ref;
+            this.player = player;
+        }
+
+        @Nonnull public Ref<EntityStore> ref(){ return this.ref; }
+        @Nullable public PlayerRef player(){ return this.player; }
+    }
+
     public static final class PreRitualStartEvent extends CancellableEvent {
         private final Ref<EntityStore> ref;
         private final PlayerRef player;
@@ -679,6 +718,9 @@ public final class CultivationEvents {
     private static final List<Consumer<AscensionFailedEvent>> ASCENSION_FAILED = EventBus.newListenerList();
     private static final List<Consumer<AscensionLegacyEvent>> ASCENSION_LEGACY = EventBus.newListenerList();
     private static final List<Consumer<PreAscensionEvent>> PRE_ASCENSION = EventBus.newListenerList();
+    private static final List<Consumer<ReincarnationEvent>> REINCARNATION = EventBus.newListenerList();
+    private static final List<Consumer<ReincarnationFailedEvent>> REINCARNATION_FAILED = EventBus.newListenerList();
+    private static final List<Consumer<PreReincarnationEvent>> PRE_REINCARNATION = EventBus.newListenerList();
     private static final List<Consumer<PreRitualStartEvent>> PRE_RITUAL_START = EventBus.newListenerList();
     private static final List<Consumer<DemotionEvent>> DEMOTION = EventBus.newListenerList();
     private static final List<Consumer<PreDemotionEvent>> PRE_DEMOTION = EventBus.newListenerList();
@@ -720,6 +762,9 @@ public final class CultivationEvents {
     public static void onAscensionFailed(@Nonnull Consumer<AscensionFailedEvent> listener){ ASCENSION_FAILED.add(listener); }
     public static void onAscensionLegacy(@Nonnull Consumer<AscensionLegacyEvent> listener){ ASCENSION_LEGACY.add(listener); }
     public static void onPreAscension(@Nonnull Consumer<PreAscensionEvent> listener){ PRE_ASCENSION.add(listener); }
+    public static void onReincarnation(@Nonnull Consumer<ReincarnationEvent> listener){ REINCARNATION.add(listener); }
+    public static void onReincarnationFailed(@Nonnull Consumer<ReincarnationFailedEvent> listener){ REINCARNATION_FAILED.add(listener); }
+    public static void onPreReincarnation(@Nonnull Consumer<PreReincarnationEvent> listener){ PRE_REINCARNATION.add(listener); }
     public static void onPreRitualStart(@Nonnull Consumer<PreRitualStartEvent> listener){ PRE_RITUAL_START.add(listener); }
     public static void onDemotion(@Nonnull Consumer<DemotionEvent> listener){ DEMOTION.add(listener); }
     public static void onPreDemotion(@Nonnull Consumer<PreDemotionEvent> listener){ PRE_DEMOTION.add(listener); }
@@ -763,6 +808,9 @@ public final class CultivationEvents {
     public static void fireAscensionFailed(@Nonnull AscensionFailedEvent event){ EventBus.dispatch(ASCENSION_FAILED, event, "AscensionFailedEvent"); }
     public static void fireAscensionLegacy(@Nonnull AscensionLegacyEvent event){ EventBus.dispatch(ASCENSION_LEGACY, event, "AscensionLegacyEvent"); }
     public static boolean firePreAscension(@Nonnull PreAscensionEvent event){ return EventBus.fire(PRE_ASCENSION, event, "PreAscensionEvent"); }
+    public static void fireReincarnation(@Nonnull ReincarnationEvent event){ EventBus.dispatch(REINCARNATION, event, "ReincarnationEvent"); }
+    public static void fireReincarnationFailed(@Nonnull ReincarnationFailedEvent event){ EventBus.dispatch(REINCARNATION_FAILED, event, "ReincarnationFailedEvent"); }
+    public static boolean firePreReincarnation(@Nonnull PreReincarnationEvent event){ return EventBus.fire(PRE_REINCARNATION, event, "PreReincarnationEvent"); }
     public static boolean firePreRitualStart(@Nonnull PreRitualStartEvent event){ return EventBus.fire(PRE_RITUAL_START, event, "PreRitualStartEvent"); }
     public static void fireDemotion(@Nonnull DemotionEvent event){ EventBus.dispatch(DEMOTION, event, "DemotionEvent"); }
     public static boolean firePreDemotion(@Nonnull PreDemotionEvent event){ return EventBus.fire(PRE_DEMOTION, event, "PreDemotionEvent"); }
