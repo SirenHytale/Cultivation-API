@@ -23,8 +23,9 @@ import java.util.function.Consumer;
  * <p>The other subsystems have their own classes in this package:
  * {@link SectEvents}, {@link WarEvents}, {@link DuelEvents},
  * {@link FormationEvents}, {@link DwellingEvents}, {@link BeastEvents},
- * {@link TechniqueEvents}, {@link DaoEvents} and {@link ItemEvents}. All of
- * them follow exactly the conventions described here.</p>
+ * {@link TechniqueEvents}, {@link DaoEvents}, {@link ItemEvents} and
+ * {@link SoulEscapeEvents}. All of them follow exactly the conventions
+ * described here.</p>
  *
  * <p><b>Pre vs post.</b> Nearly everything is exposed twice. A {@code Pre*}
  * event fires BEFORE the change, extends {@link CancellableEvent}, and lets a
@@ -194,6 +195,52 @@ public final class CultivationEvents {
 
     /** A player respecced their skill tree; every node was cleared and {@code refundedPoints} handed back. */
     public record RespecEvent(@Nonnull Ref<EntityStore> ref, @Nullable PlayerRef player, int refundedPoints) {}
+
+    /**
+     * One cultivator killed another, and the kill is worth something. The
+     * generic player-versus-player hook: everything the mod itself pays out for
+     * a kill - Devil-path Qi, Dao deeds, the Wu Xing reward, a shed manual - is
+     * credited immediately after this fires.
+     *
+     * <p><b>Only fires for a kill that PAYS.</b> {@code CultivationDeathSystem}
+     * runs its own anti-farm gate ({@code Pk-Same-Victim-Cooldown-Seconds} and
+     * {@code Pk-Min-Victim-Realm} - see {@code isFarmedKill}) first, and a
+     * farmed kill returns before this event exists. That ordering is the whole
+     * point: a listener running BEFORE the gate would pay out on exactly the
+     * kills the gate exists to make worthless, and no later {@code return} can
+     * take back a credit already made. An addon that rewards kills therefore
+     * inherits the mod's own farm protection for free - and must not go looking
+     * for an earlier hook to "catch every death", because every death is not
+     * what this event means.</p>
+     *
+     * <p>Also never fires for a self-inflicted death, an environmental one, a
+     * kill whose killer has no {@link PlayerRef}, or a kill a fleeing Nascent
+     * Soul landed (see {@code SoulEscapeManager} - such a kill credits nobody
+     * at all, by design).</p>
+     *
+     * <p><b>No {@code Pre} twin, deliberately.</b> The only cancellable thing
+     * at this point is the kill itself, which belongs to the damage pipeline
+     * and is long since resolved by the time anything here runs. Every consumer
+     * is a reward path, and a reward path must be gated by its own rules rather
+     * than by vetoing somebody else's event.</p>
+     *
+     * @param killer        the slayer. Never the victim - a self-kill returns before this.
+     * @param killerPlayer  the slayer's {@link PlayerRef}; always valid at the moment this fires.
+     * @param victim        the fallen cultivator.
+     * @param victimPlayer  the fallen cultivator's {@link PlayerRef}, or null if the
+     *                      component could not be read - the kill is still a player kill
+     *                      (the death system already established that), so this is a
+     *                      read failure rather than "an NPC died".
+     * @param sanctionedDuel true when this death resolved a sanctioned duel (plain
+     *                       or Dao). The mod excludes its own general PvP reward on
+     *                       those - a duel already has its own stakes - and any
+     *                       addon paying for kills should do the same, or two
+     *                       accounts can farm each other through a duel that pays
+     *                       both ways.
+     */
+    public record PlayerKillEvent(@Nonnull Ref<EntityStore> killer, @Nonnull PlayerRef killerPlayer,
+                                  @Nonnull Ref<EntityStore> victim, @Nullable PlayerRef victimPlayer,
+                                  boolean sanctionedDuel) {}
 
     // --- Pre-event payloads (cancellable; numbers are re-tunable) ---
 
@@ -728,6 +775,7 @@ public final class CultivationEvents {
     private static final List<Consumer<PreQiDeviationEvent>> PRE_QI_DEVIATION = EventBus.newListenerList();
     private static final List<Consumer<RespecEvent>> RESPEC = EventBus.newListenerList();
     private static final List<Consumer<PreRespecEvent>> PRE_RESPEC = EventBus.newListenerList();
+    private static final List<Consumer<PlayerKillEvent>> PLAYER_KILL = EventBus.newListenerList();
 
     public static void onBreakthrough(@Nonnull Consumer<BreakthroughEvent> listener){ BREAKTHROUGH.add(listener); }
     public static void onPreBreakthrough(@Nonnull Consumer<PreBreakthroughEvent> listener){ PRE_BREAKTHROUGH.add(listener); }
@@ -772,6 +820,8 @@ public final class CultivationEvents {
     public static void onPreQiDeviation(@Nonnull Consumer<PreQiDeviationEvent> listener){ PRE_QI_DEVIATION.add(listener); }
     public static void onRespec(@Nonnull Consumer<RespecEvent> listener){ RESPEC.add(listener); }
     public static void onPreRespec(@Nonnull Consumer<PreRespecEvent> listener){ PRE_RESPEC.add(listener); }
+    /** See {@link PlayerKillEvent} - fires only for a kill that PASSED the anti-farm gate, and has no {@code Pre} twin. */
+    public static void onPlayerKill(@Nonnull Consumer<PlayerKillEvent> listener){ PLAYER_KILL.add(listener); }
 
     // --- Internal dispatch (called by this mod's own systems; not API) ---
 
@@ -818,4 +868,5 @@ public final class CultivationEvents {
     public static boolean firePreQiDeviation(@Nonnull PreQiDeviationEvent event){ return EventBus.fire(PRE_QI_DEVIATION, event, "PreQiDeviationEvent"); }
     public static void fireRespec(@Nonnull RespecEvent event){ EventBus.dispatch(RESPEC, event, "RespecEvent"); }
     public static boolean firePreRespec(@Nonnull PreRespecEvent event){ return EventBus.fire(PRE_RESPEC, event, "PreRespecEvent"); }
+    public static void firePlayerKill(@Nonnull PlayerKillEvent event){ EventBus.dispatch(PLAYER_KILL, event, "PlayerKillEvent"); }
 }

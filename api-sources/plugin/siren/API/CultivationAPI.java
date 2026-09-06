@@ -40,6 +40,7 @@ import plugin.siren.ECS.Technique.TechniqueEffect;
 import plugin.siren.ECS.Technique.TechniqueGate;
 import plugin.siren.ECS.SkillTree.SkillTreeStat;
 import plugin.siren.Utils.BodyTemperingManager;
+import plugin.siren.Utils.Lifespan.LifespanManager;
 import plugin.siren.Utils.CultivationModifiers;
 import plugin.siren.Utils.CultivationManager;
 import plugin.siren.Utils.DaoManager;
@@ -63,6 +64,8 @@ import plugin.siren.Utils.Sect.Sect;
 import plugin.siren.Utils.Sect.SectManager;
 import plugin.siren.Utils.UI.Admin.AdminPlayerActions;
 import plugin.siren.Utils.UI.CultivationNav;
+import plugin.siren.Utils.UI.CultivationSheetToggle;
+import plugin.siren.Utils.UI.PaletteDocumentAudit;
 import plugin.siren.Utils.Update.BuildIntegrity;
 import plugin.siren.Utils.Update.CompatChecker;
 import plugin.siren.Utils.Update.UpdateChecker;
@@ -96,6 +99,8 @@ import plugin.siren.Utils.Config.MasteryStageRule;
 import plugin.siren.Utils.Config.SectBuildingType;
 import plugin.siren.Utils.LifeBound.LifeBoundTraits;
 import plugin.siren.Utils.WeaponSpirit.WeaponSpiritManager;
+import plugin.siren.Utils.WeaponSpirit.WeaponSpiritTemperament;
+import plugin.siren.Utils.WeaponSpirit.WeaponSpiritVoice;
 import plugin.siren.Utils.TechniqueMasteryManager;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 import java.util.Collection;
@@ -256,6 +261,20 @@ public class CultivationAPI {
      * every theme-page build and theme-change attempt.
      */
     private static final List<CultivationPaletteLock> PALETTE_LOCKS = new CopyOnWriteArrayList<>();
+
+    /**
+     * Every registered {@link CultivationPaletteDefault}, in registration order
+     * and paired with the key it was registered under so it can be withdrawn
+     * again. Copy-on-write for the same reason as the registries above - but read
+     * harder than any of them, since it is consulted on every palette resolution
+     * of every player who has not chosen a look, which is at least once per page
+     * build. {@link #resolvePaletteDefault} short-circuits on an empty list, so a
+     * server with none registered pays nothing at all.
+     */
+    private static final List<KeyedPaletteDefault> PALETTE_DEFAULTS = new CopyOnWriteArrayList<>();
+
+    /** One entry of {@link #PALETTE_DEFAULTS}: the withdrawal key and the rule itself. */
+    private record KeyedPaletteDefault(@Nonnull String key, @Nonnull CultivationPaletteDefault rule){}
 
     // --- Component type getters ---
 
@@ -1037,6 +1056,25 @@ public class CultivationAPI {
         return BodyTemperingManager.getMaxLevel();
     }
 
+    /**
+     * @return this cultivator's Tempering Stage (锻体境), 0..9 - a pure function
+     * of their body-tempering level (D2), 0 while not yet tempered (level under
+     * 11 at the default Max-Level). Nothing resets this (D3): it reads
+     * correctly the instant a save loads, with no migration.
+     *
+     * @see BodyTemperingEvents.StageBreakthroughEvent for hooking a crossing.
+     */
+    public static int getTemperingStage(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref){
+        BodyTemperingComponent component = accessor.getComponent(ref, BodyTemperingComponent.getComponentType());
+        return component == null ? 0 : BodyTemperingManager.getTemperingStage(component);
+    }
+
+    /** @return the flat max-health bonus this cultivator's current Tempering Stage grants. 0 while untempered. */
+    public static float getTemperingHealthBonus(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref){
+        BodyTemperingComponent component = accessor.getComponent(ref, BodyTemperingComponent.getComponentType());
+        return component == null ? 0f : BodyTemperingManager.getTemperingHealthBonus(component);
+    }
+
     /** @return how far through the current level this body is, 0..1. Always 1 at the ceiling. */
     public static float getBodyTemperingProgress(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref){
         BodyTemperingComponent component = accessor.getComponent(ref, BodyTemperingComponent.getComponentType());
@@ -1092,6 +1130,66 @@ public class CultivationAPI {
         }
 
         return BodyTemperingManager.addXp(accessor, ref, component, playerRef, amount);
+    }
+
+    // --- Lifespan (寿元) ---
+
+    /** @return whether Lifespan is switched on server-wide. Default OFF. */
+    public static boolean isLifespanEnabled(){
+        return LifespanManager.isEnabled();
+    }
+
+    /** @return this cultivator's current online-play-hour budget, keyed to the highest realm they have ever reached. 0 if not yet tracked. */
+    public static float getLifespanBudgetHours(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref){
+        return LifespanManager.getBudgetHours(accessor, ref);
+    }
+
+    /** @return how many hours of the budget above this cultivator has spent, online, since Lifespan started tracking them. */
+    public static float getLifespanUsedHours(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref){
+        return LifespanManager.getUsedHours(accessor, ref);
+    }
+
+    /** @return hours remaining before Withering, floored at 0. */
+    public static float getLifespanRemainingHours(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref){
+        return LifespanManager.getRemainingHours(accessor, ref);
+    }
+
+    /** @return remaining hours as a 0..1 fraction of the current budget - 1 for a fresh/untracked cultivator. */
+    public static float getLifespanRemainingFraction(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref){
+        return LifespanManager.getRemainingFraction(accessor, ref);
+    }
+
+    /** @return the highest warning tier already shown (0..3) for the current countdown. */
+    public static int getLifespanWarnTier(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref){
+        return LifespanManager.getWarnTier(accessor, ref);
+    }
+
+    /** @return whether this cultivator is currently in the post-expiry Withering grace state. */
+    public static boolean isWithering(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref){
+        return LifespanManager.isWithering(accessor, ref);
+    }
+
+    /** @return online minutes of grace left before {@code Lifespan-Expiry-Action} runs, or 0 if not currently Withering. */
+    public static float getLifespanGraceMinutesRemaining(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref){
+        return LifespanManager.getGraceMinutesRemaining(accessor, ref);
+    }
+
+    /**
+     * Grants bonus hours on top of this cultivator's current realm-mark
+     * budget - for {@link plugin.siren.API.LifespanEvents.ExtendSource#PILL}/
+     * {@link plugin.siren.API.LifespanEvents.ExtendSource#ADMIN} sources only
+     * (a realm breakthrough's own budget rise is automatic - see {@code
+     * LifespanManager}'s own doc on why {@code BREAKTHROUGH} never comes
+     * through here). Fires {@link plugin.siren.API.LifespanEvents.PreLifespanExtendEvent}
+     * then {@link plugin.siren.API.LifespanEvents.LifespanExtendEvent}, clears
+     * Withering if the grant brings remaining hours back above 0.
+     *
+     * @return the hours actually granted - 0 if Lifespan is disabled, there is
+     * no component, or a listener cancelled/zeroed the grant.
+     */
+    public static float extendLifespan(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref,
+                                       float hours, @Nonnull plugin.siren.API.LifespanEvents.ExtendSource source){
+        return LifespanManager.extendLifespan(accessor, ref, hours, source);
     }
 
     // --- Update checking ---
@@ -1577,6 +1675,311 @@ public class CultivationAPI {
         return Math.min(cap, TechniqueComponent.PRESET_CEILING);
     }
 
+    /**
+     * @return what this cultivator's keybind layouts are called, in the order
+     * {@code TechniqueComponent.getPresets()} holds them - so the index of a name
+     * here is the index {@link #exportTechniquePreset(ComponentAccessor, Ref, int)}
+     * takes. Empty if they have no technique component yet.
+     *
+     * <p>Names are not unique: nothing stops a cultivator calling two layouts the
+     * same, so a list rather than a set, and a caller matching by name should
+     * expect to find more than one.</p>
+     *
+     * <p>Read-only, on the world thread that owns this player.</p>
+     */
+    @Nonnull
+    public static List<String> getTechniquePresetNames(@Nonnull ComponentAccessor<EntityStore> accessor,
+                                                       @Nonnull Ref<EntityStore> ref){
+        TechniqueComponent component = accessor.getComponent(ref, TechniqueComponent.getComponentType());
+        if(component == null){
+            return List.of();
+        }
+
+        List<String> names = new ArrayList<>();
+        for(TechniqueComponent.Preset preset : component.getPresets()){
+            names.add(preset.getName());
+        }
+        return names;
+    }
+
+    /**
+     * Copies one of this cultivator's keybind layouts out as a detached, portable
+     * {@link TechniquePresetSnapshot}.
+     *
+     * <p>Read-only: nothing about the player changes, and the snapshot confers
+     * nothing on whoever receives it - see {@link #importTechniquePreset} for the
+     * filter that decides what actually survives the trip back in.</p>
+     *
+     * <p>Runs on the world thread that owns this player. The {@code accessor} may
+     * be a {@code CommandBuffer} as well as a {@code Store}; this path only
+     * reads.</p>
+     *
+     * @param presetIndex the layout to copy, as indexed by
+     *                    {@code TechniqueComponent.getPresets()}
+     * @return the snapshot, or null if this player has no technique component yet
+     * or {@code presetIndex} names no layout of theirs
+     */
+    @Nullable
+    public static TechniquePresetSnapshot exportTechniquePreset(@Nonnull ComponentAccessor<EntityStore> accessor,
+                                                                @Nonnull Ref<EntityStore> ref, int presetIndex){
+        TechniqueComponent component = accessor.getComponent(ref, TechniqueComponent.getComponentType());
+        if(component == null){
+            return null;
+        }
+
+        List<TechniqueComponent.Preset> presets = component.getPresets();
+        if(presetIndex < 0 || presetIndex >= presets.size()){
+            return null;
+        }
+
+        return snapshotOf(presets.get(presetIndex), authorNameOf(accessor, ref));
+    }
+
+    /**
+     * The same copy, addressed by the layout's name instead of its index, matched
+     * ignoring case.
+     *
+     * <p>Names are not unique - nothing stops a cultivator calling two layouts
+     * the same - so this returns the FIRST match in list order. A caller that
+     * needs to be exact should walk {@code TechniqueComponent.getPresets()}
+     * itself and use the index form.</p>
+     *
+     * @return the snapshot, or null if this player has no technique component yet
+     * or no layout of theirs goes by that name
+     */
+    @Nullable
+    public static TechniquePresetSnapshot exportTechniquePreset(@Nonnull ComponentAccessor<EntityStore> accessor,
+                                                                @Nonnull Ref<EntityStore> ref, @Nonnull String presetName){
+        TechniqueComponent component = accessor.getComponent(ref, TechniqueComponent.getComponentType());
+        if(component == null){
+            return null;
+        }
+
+        for(TechniqueComponent.Preset preset : component.getPresets()){
+            if(preset.getName().equalsIgnoreCase(presetName)){
+                return snapshotOf(preset, authorNameOf(accessor, ref));
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Adds a keybind layout to this cultivator from a snapshot, keeping only the
+     * arts they may actually fire.
+     *
+     * <h2>The filter is the point</h2>
+     *
+     * <p>A snapshot is a piece of paper, not a licence. Slot by slot, an art is
+     * kept only if it is a technique this server registers, its
+     * {@code TechniqueRule} is enabled, and
+     * {@code TechniqueUnlockManager.knows} says this cultivator has come by it -
+     * the same three questions the keybinds page asks before it offers an art in
+     * its dropdown. Anything else is dropped: the slot keeps the author's key,
+     * its modifier is forced to {@code NONE} by the component's own
+     * empty-slot-is-a-switched-off-slot rule, and the refusal is counted under
+     * {@link TechniquePresetSnapshot.ImportResult#droppedUnknown()} (this server
+     * does not register the art, or this cultivator has not come by it) or
+     * {@link TechniquePresetSnapshot.ImportResult#droppedDisabled()} (the server
+     * owner has switched that technique off), so the caller can say <i>why</i>
+     * some arts did not make it and not only that they did not.</p>
+     *
+     * <p><b>This filter lives here, never in the addon carrying the snapshot.</b>
+     * Nothing on this path grants, learns, or sanctions anything - it will not
+     * call {@code grantSanctioned}, and it cannot be asked to. An import can only
+     * ever point a key at an art the cultivator already had, so a snapshot is
+     * never a way around a {@code *-Only} restriction, a disabled technique, or
+     * simply not having learned it (M-052, M-067). An addon that re-implemented
+     * the check would be one build away from disagreeing with this one.</p>
+     *
+     * <h2>What it does not do</h2>
+     *
+     * <p>It does not switch the player onto the new layout - they stay on the one
+     * they were playing, and a caller that wants otherwise can call
+     * {@code TechniqueComponent.setActivePreset} with the returned index.</p>
+     *
+     * <h2>The name</h2>
+     *
+     * <p>{@code newName} (or the snapshot's own name, when it is null or blank)
+     * is de-duplicated against the layouts this cultivator already has - a
+     * clashing name gets " (2)", " (3)" and so on - and only then trimmed and cut
+     * to {@link TechniqueComponent#PRESET_NAME_MAX_LENGTH}, the same clamp
+     * {@code /cultivation preset new} and rename apply. That order is deliberate:
+     * the suffix is part of the name being proposed, not decoration added
+     * afterwards. It also means a name already at the clamp cannot grow a suffix,
+     * so the duplicate stands - preset names are not unique-constrained anywhere
+     * in Cultivation and a name is not worth refusing an import over. Whatever it
+     * ended up as comes back as
+     * {@link TechniquePresetSnapshot.ImportResult#finalName()}; a name that
+     * sanitises away to nothing gets the component's own "Preset N".</p>
+     *
+     * <p>Nothing is written until every refusal has been decided, so an import
+     * that comes back {@link TechniquePresetSnapshot.ImportResult.Status#AT_CAP}
+     * or {@link TechniquePresetSnapshot.ImportResult.Status#EMPTY_AFTER_FILTER}
+     * has changed nothing at all and the snapshot is still good.</p>
+     *
+     * <p>Runs on the world thread that owns this player. The {@code accessor} may
+     * be a {@code CommandBuffer} as well as a {@code Store} - the component is
+     * fetched through {@code TechniqueManager.getOrCreate}, which puts a missing
+     * one through the accessor rather than the Store.</p>
+     *
+     * @param newName what to call the new layout, or null to keep the snapshot's
+     * @return what happened, with the index and final name of the new layout, how
+     * many of its slots carry an art, and how many arts the filter refused for
+     * each of the two reasons
+     */
+    @Nonnull
+    public static TechniquePresetSnapshot.ImportResult importTechniquePreset(
+            @Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref,
+            @Nonnull TechniquePresetSnapshot snapshot, @Nullable String newName){
+
+        if(!TechniqueManager.isSystemEnabled()){
+            return new TechniquePresetSnapshot.ImportResult(
+                    TechniquePresetSnapshot.ImportResult.Status.DISABLED, -1, "", 0, 0, 0);
+        }
+
+        // Decided before anything is written, so both refusals below leave the
+        // cultivator exactly as they were.
+        String[] kept = new String[TechniqueComponent.BIND_COUNT];
+        int keptCount = 0;
+        int droppedUnknown = 0;
+        int droppedDisabled = 0;
+        for(int slot = 0; slot < TechniqueComponent.BIND_COUNT; slot++){
+            String id = snapshot.slots().get(slot).techniqueId();
+            if(id == null){
+                continue;
+            }
+
+            Technique technique = Technique.fromId(id);
+            if(technique == null){
+                droppedUnknown++;
+                continue;
+            }
+
+            if(!TechniqueManager.getRule(technique).isEnabled()){
+                droppedDisabled++;
+                continue;
+            }
+
+            if(!TechniqueUnlockManager.knows(accessor, ref, technique)){
+                droppedUnknown++;
+                continue;
+            }
+
+            // The canonical id, not whatever spelling the snapshot carried - a
+            // serialised slip may name an art by its display name.
+            kept[slot] = technique.getId();
+            keptCount++;
+        }
+
+        if(keptCount == 0){
+            return new TechniquePresetSnapshot.ImportResult(
+                    TechniquePresetSnapshot.ImportResult.Status.EMPTY_AFTER_FILTER, -1, "",
+                    0, droppedUnknown, droppedDisabled);
+        }
+
+        TechniqueComponent component = TechniqueManager.getOrCreate(accessor, ref);
+        String proposed = newName == null || newName.isBlank() ? snapshot.name() : newName;
+        String cleaned = uniquePresetName(component, proposed);
+
+        // addPreset consults the live cap itself and refuses before adding, so
+        // this is the refusal - not a second copy of the cap rule.
+        int index = component.addPreset(cleaned.isEmpty() ? null : cleaned);
+        if(index < 0){
+            return new TechniquePresetSnapshot.ImportResult(
+                    TechniquePresetSnapshot.ImportResult.Status.AT_CAP, -1, "",
+                    keptCount, droppedUnknown, droppedDisabled);
+        }
+
+        for(int slot = 0; slot < TechniqueComponent.BIND_COUNT; slot++){
+            TechniquePresetSnapshot.Slot source = snapshot.slots().get(slot);
+            component.setBind(index, slot, kept[slot], source.modifier(), source.key());
+        }
+
+        // Counted off the written layout rather than trusted from above: a
+        // snapshot naming one art twice has the earlier slot cleared by the
+        // component's one-slot-per-art rule, and the caller should be told what
+        // the cultivator actually ended up with. Same for the name - addPreset
+        // sanitises again and falls back to "Preset N" for an empty one.
+        TechniqueComponent.Preset written = component.getPresets().get(index);
+        int imported = 0;
+        for(int slot = 0; slot < TechniqueComponent.BIND_COUNT; slot++){
+            if(written.getTechnique(slot) != null){
+                imported++;
+            }
+        }
+
+        return new TechniquePresetSnapshot.ImportResult(
+                TechniquePresetSnapshot.ImportResult.Status.ADDED, index, written.getName(),
+                imported, droppedUnknown, droppedDisabled);
+    }
+
+    /**
+     * {@code proposed}, made not to collide with a layout this cultivator already
+     * has - " (2)", " (3)" and so on - and only then sanitised, so the suffix goes
+     * through the same clamp as the rest of the name rather than being bolted on
+     * after it.
+     *
+     * <p>Bounded by {@link TechniqueComponent#PRESET_CEILING}, which is as many
+     * layouts as can exist: past that there is nothing left to collide with. If
+     * every candidate still collides - which only happens when the name is
+     * already at the clamp, so the suffix is cut straight back off - the last one
+     * is used as-is. Preset names are not unique-constrained anywhere in
+     * Cultivation, and a duplicate name is a far smaller thing than a refused
+     * import.</p>
+     */
+    @Nonnull
+    private static String uniquePresetName(@Nonnull TechniqueComponent component, @Nullable String proposed){
+        String cleaned = TechniqueComponent.sanitisePresetName(proposed);
+        if(cleaned.isEmpty() || !presetNameTaken(component, cleaned)){
+            return cleaned;
+        }
+
+        for(int suffix = 2; suffix <= TechniqueComponent.PRESET_CEILING + 1; suffix++){
+            String candidate = TechniqueComponent.sanitisePresetName(proposed + " (" + suffix + ")");
+            if(!presetNameTaken(component, candidate)){
+                return candidate;
+            }
+        }
+
+        return cleaned;
+    }
+
+    /** @return true if one of this cultivator's layouts already goes by that name, ignoring case. */
+    private static boolean presetNameTaken(@Nonnull TechniqueComponent component, @Nonnull String name){
+        for(TechniqueComponent.Preset preset : component.getPresets()){
+            if(preset.getName().equalsIgnoreCase(name)){
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** One preset as a detached snapshot, slot for slot. */
+    @Nonnull
+    private static TechniquePresetSnapshot snapshotOf(@Nonnull TechniqueComponent.Preset preset,
+                                                      @Nonnull String authorName){
+        List<TechniquePresetSnapshot.Slot> slots = new ArrayList<>(TechniqueComponent.BIND_COUNT);
+        for(int slot = 0; slot < TechniqueComponent.BIND_COUNT; slot++){
+            slots.add(new TechniquePresetSnapshot.Slot(
+                    preset.getModifier(slot), preset.getKey(slot), preset.getTechnique(slot)));
+        }
+
+        return new TechniquePresetSnapshot(preset.getName(), authorName, slots);
+    }
+
+    /** @return the owning player's name for the snapshot's author label, or "" if there is none. */
+    @Nonnull
+    private static String authorNameOf(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref){
+        PlayerRef playerRef = accessor.getComponent(ref, PlayerRef.getComponentType());
+        if(playerRef == null || !playerRef.isValid()){
+            return "";
+        }
+
+        String username = playerRef.getUsername();
+        return username == null ? "" : username;
+    }
+
     // --- Cultivation profiles ---
 
     /**
@@ -1737,6 +2140,13 @@ public class CultivationAPI {
     public static void registerPalette(@Nonnull CultivationPalette palette){
         PALETTES.removeIf(existing -> existing.getKey().equals(palette.getKey()));
         PALETTES.add(palette);
+
+        // Says in the console how far this palette's declared list has drifted
+        // from the documents actually installed. Here rather than in Cultivation's
+        // own startup so it covers every palette on equal terms, including one an
+        // addon registers minutes later. Once per registration, and the jar is
+        // enumerated once for the whole server.
+        PaletteDocumentAudit.report(palette);
     }
 
     /**
@@ -1781,6 +2191,23 @@ public class CultivationAPI {
      * <p>Returns null too when the stored id names a palette nobody registered -
      * the mod that provided it has been removed - so a player is never stuck
      * wearing a look that no longer exists.</p>
+     *
+     * <p>Three things are asked, in this order. A registered
+     * {@link CultivationPaletteLock} wins outright, since it takes the choice
+     * away. Otherwise this player's own stored choice is used. Only when there is
+     * no choice at all - the id is absent or empty - is a registered
+     * {@link CultivationPaletteDefault} asked to fill the gap.</p>
+     *
+     * <p>Two stored ids resolve to Cultivation's own look and never reach a
+     * default: {@link CultivationPalette#DEFAULT_KEY}, and
+     * {@link CultivationPalette#NONE_KEY} - which is what a player who has
+     * explicitly turned a suggested look down carries, and the whole reason that
+     * literal exists. Ask {@link #getExplicitPaletteKey} to tell the two apart
+     * from the outside.</p>
+     *
+     * <p>A player with no settings component yet - one whose components are still
+     * arriving - is on the default look and no default rule is asked, the same
+     * reading every other call site takes of that state.</p>
      */
     @Nullable
     public static CultivationPalette getPalette(@Nonnull ComponentAccessor<EntityStore> store, @Nonnull Ref<EntityStore> ref){
@@ -1798,11 +2225,137 @@ public class CultivationAPI {
         }
 
         String key = settings.getPaletteId();
-        if(key == null || key.isEmpty() || CultivationPalette.DEFAULT_KEY.equals(key)){
+
+        // Turned a suggested look down: Cultivation's own, and no default asked.
+        if(CultivationPalette.NONE_KEY.equals(key)){
+            return null;
+        }
+
+        if(key == null || key.isEmpty()){
+            String suggested = resolvePaletteDefault(store, ref);
+            return suggested == null ? null : getPalette(suggested);
+        }
+
+        if(CultivationPalette.DEFAULT_KEY.equals(key)){
             return null;
         }
 
         return getPalette(key);
+    }
+
+    /**
+     * The palette id this player actually has stored, before any lock or default
+     * is applied - null when they have never chosen at all.
+     *
+     * <p>Lets a caller tell the three states {@link #getPalette(ComponentAccessor, Ref)}
+     * flattens into "the default look" apart: null is <i>no choice</i> (a
+     * registered {@link CultivationPaletteDefault} may still be filling it in),
+     * {@link CultivationPalette#NONE_KEY} is <i>chose Cultivation's own,
+     * explicitly</i>, and {@link CultivationPalette#DEFAULT_KEY} is the same
+     * thing said the older way. Anything else is a real palette id, which may
+     * name a palette nobody currently registers.</p>
+     *
+     * <p>Read-only, and cheap: one component read.</p>
+     */
+    @Nullable
+    public static String getExplicitPaletteKey(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref){
+        CultivationSettingsComponent settings = accessor.getComponent(ref, CultivationSettingsComponent.getComponentType());
+        if(settings == null){
+            return null;
+        }
+
+        String key = settings.getPaletteId();
+        return key == null || key.isEmpty() ? null : key;
+    }
+
+    /**
+     * The key the first registered {@link CultivationPaletteDefault} names for
+     * this player, already checked against the palette registry - or null if none
+     * of them has an opinion, or every opinion names a palette nobody has (yet)
+     * registered, in which case every caller falls through to Cultivation's own
+     * look exactly as an unclaimed palette id does everywhere else in this API.
+     *
+     * <p>Mirrors {@link #resolveActivePaletteLock}, and answers regardless of
+     * what this player has stored: it is "what would be suggested", which is what
+     * the settings page needs in order to offer
+     * {@link CultivationPalette#NONE_KEY} only when there is something to turn
+     * down. {@link #getPalette(ComponentAccessor, Ref)} is the one that decides
+     * whether the suggestion applies.</p>
+     *
+     * <p>{@link CultivationPalette#isAvailableTo} is deliberately NOT re-checked
+     * on the answer. That is a listing and equip gate: it runs when a look is
+     * offered in the picker and again when one is applied, never on every later
+     * read - exactly as {@link CultivationTitle#isUnlockedFor} is checked on
+     * equip and not on every draw ({@code CultivationPalette#isAvailableTo}, and
+     * the note on {@link #getTitle(Store, Ref)}). This sits on the per-draw path,
+     * so re-running a permission lookup here would put one on each themed
+     * document of every page build and every HUD refresh. The rule gates itself;
+     * see {@link CultivationPaletteDefault}.</p>
+     */
+    @Nullable
+    public static String resolvePaletteDefault(@Nonnull ComponentAccessor<EntityStore> accessor,
+                                               @Nonnull Ref<EntityStore> ref){
+        if(PALETTE_DEFAULTS.isEmpty()){
+            return null;
+        }
+
+        for(KeyedPaletteDefault entry : PALETTE_DEFAULTS){
+            String key = entry.rule().defaultPaletteKey(accessor, ref);
+            if(key == null || key.isEmpty()
+                    || CultivationPalette.DEFAULT_KEY.equals(key) || CultivationPalette.NONE_KEY.equals(key)){
+                continue;
+            }
+
+            if(getPalette(key) != null){
+                return key;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Registers a rule that supplies a default look for players who have not
+     * chosen one - a race pack styling its own newcomers, say.
+     *
+     * <p>The soft counterpart to {@link #registerPaletteLock}: a lock overrides a
+     * player's choice, a default only fills the gap where there is none. More
+     * than one may be registered; the first to return a key naming a registered
+     * palette wins, in registration order. Registering the same key twice
+     * replaces the first (and moves it to the back of the order), so this is safe
+     * across a reload.</p>
+     *
+     * <p>Call from your plugin's {@code setup()} and withdraw it in
+     * {@code shutdown()} with {@link #unregisterPaletteDefault}. Load order does
+     * not matter: nothing reads the registry until a page is built, and a key
+     * whose palette is not registered yet is simply skipped.</p>
+     *
+     * <p>Registering one also puts a "None" row in the settings page's theme
+     * dropdown for the players it answers for, so a suggested look is always
+     * something they can turn down - see {@link CultivationPalette#NONE_KEY}.</p>
+     *
+     * @param key an id for your mod, e.g. {@code "jadeSlip"}
+     * @see CultivationPaletteDefault for the threading, cost and gating contract
+     * - in particular that {@link CultivationPalette#isAvailableTo} is not
+     * re-checked on the answer
+     */
+    public static void registerPaletteDefault(@Nonnull String key, @Nonnull CultivationPaletteDefault rule){
+        PALETTE_DEFAULTS.removeIf(existing -> existing.key().equals(key));
+        PALETTE_DEFAULTS.add(new KeyedPaletteDefault(key, rule));
+    }
+
+    /**
+     * Withdraws a default palette rule - for a plugin unloading cleanly.
+     *
+     * <p>Players who were being drawn in its look are not migrated and do not
+     * need to be: nothing was ever written to them, so they simply return to
+     * Cultivation's own look the next time a page is built. A player who had
+     * turned the suggestion down keeps {@link CultivationPalette#NONE_KEY}
+     * stored, which resolves to that same look, so nothing changes for them
+     * either.</p>
+     */
+    public static void unregisterPaletteDefault(@Nonnull String key){
+        PALETTE_DEFAULTS.removeIf(existing -> existing.key().equals(key));
     }
 
     /**
@@ -1827,6 +2380,81 @@ public class CultivationAPI {
     @Nonnull
     public static String document(@Nullable CultivationPalette palette, @Nonnull String basePath){
         return palette == null ? basePath : palette.resolveDocument(basePath);
+    }
+
+    /**
+     * Sets this player's chosen palette and puts their HUD back in it, the whole
+     * sequence the settings page's theme dropdown performs.
+     *
+     * <p>Mirrors {@link #setMeditationAura}: the key is re-validated against the
+     * registry and against {@link CultivationPalette#isAvailableTo} rather than
+     * trusted, because whatever asked for it - a client event, an addon acting on
+     * one - is not the authority on what this player may wear. It additionally
+     * refuses while a {@link CultivationPaletteLock} applies, since that player's
+     * own settings do not control their look at all until the lock lifts.</p>
+     *
+     * <p>Unlike an aura, a palette decides which <i>document</i> every menu and
+     * the HUD are drawn from, so saving the id is not the whole job: the HUD
+     * layer already on screen has to come down and go back up in the new one.
+     * That is {@code CultivationSheetToggle.rebuildAfterPaletteChange}, the same
+     * call the settings page makes, shared so the two cannot drift (M-049). It
+     * puts nothing on screen that was not already there. Open menu pages are NOT
+     * redrawn - the settings page reopens itself after calling this because it
+     * knows it is the page in front of the player; nothing here can know that,
+     * and swapping a page out from under an addon's own UI would be worse than
+     * leaving it in the old colors until it is next opened.</p>
+     *
+     * <p>Runs on the world thread that owns this player: it reads components and
+     * sends HUD packets.</p>
+     *
+     * @param paletteKey the key to switch to; null, empty or {@link
+     *                   CultivationPalette#DEFAULT_KEY} returns to Cultivation's
+     *                   own crimson-and-gold look and lets a registered
+     *                   {@link CultivationPaletteDefault} suggest again, while
+     *                   {@link CultivationPalette#NONE_KEY} returns to it and
+     *                   stops any default suggesting
+     * @return true if the choice was applied - false if this player has no
+     * settings component yet, if a palette lock currently applies to them, or if
+     * {@code paletteKey} names a palette nobody registered or that this player is
+     * not offered
+     */
+    public static boolean setPalette(@Nonnull Store<EntityStore> store, @Nonnull Ref<EntityStore> ref,
+                                     @Nullable String paletteKey){
+        CultivationSettingsComponent settings = store.getComponent(ref, CultivationSettingsComponent.getComponentType());
+        if(settings == null){
+            return false;
+        }
+
+        // A registered lock ignores the submitted value entirely, exactly as the
+        // settings page's own handler does - this player's settings do not
+        // control their look while it applies.
+        if(resolveActivePaletteLock(store, ref) != null){
+            return false;
+        }
+
+        PlayerRef playerRef = store.getComponent(ref, PlayerRef.getComponentType());
+        boolean toNone = CultivationPalette.NONE_KEY.equals(paletteKey);
+        boolean toDefault = !toNone && (paletteKey == null || paletteKey.isEmpty()
+                || CultivationPalette.DEFAULT_KEY.equals(paletteKey));
+
+        CultivationPalette chosen = null;
+        if(!toDefault && !toNone){
+            chosen = getPalette(paletteKey);
+            if(chosen == null || playerRef == null || !playerRef.isValid() || !chosen.isAvailableTo(playerRef)){
+                return false;
+            }
+        }
+
+        settings.setPaletteId(toNone ? CultivationPalette.NONE_KEY : toDefault ? null : chosen.getKey());
+
+        // Nothing to redraw for an entity that is not a live player - the write
+        // above still stands, and their HUD is built in the new look whenever
+        // they next have one.
+        if(playerRef != null && playerRef.isValid()){
+            CultivationSheetToggle.rebuildAfterPaletteChange(store, ref, playerRef);
+        }
+
+        return true;
     }
 
     // --- Meditation auras ---
@@ -2931,15 +3559,52 @@ public class CultivationAPI {
     // sect is this player in" meant an addon had to shadow the whole registry
     // itself; these close that gap.
 
-    /** @return the sect this player belongs to, or null. */
+    /**
+     * @return the sect this player belongs to, or null.
+     *
+     * <p>Null for EVERYONE while {@code Sects-Enabled} is off, which is what
+     * {@link #isSectSystemEnabled} promises just below: the roster is still in
+     * memory (nothing is deleted by switching the system off, so switching it
+     * back on restores every sect intact), but from outside there are no sects to
+     * be in and this must not say otherwise. {@code SectManager.getSectOf} itself
+     * is deliberately NOT gated - Cultivation's own internals read the roster
+     * while the system is off, to persist and re-index it - so this gate belongs
+     * on the public door, not on the store.</p>
+     */
     @Nullable
     public static Sect getSect(@Nonnull UUID player){
+        if(!SectManager.isEnabled()){
+            return null;
+        }
+
         return SectManager.getSectOf(player);
     }
 
-    /** @return the sect of this name (case-insensitively), or null. */
+    /**
+     * @return whether sects are switched on at all ({@code Sects-Enabled}).
+     *
+     * <p>Ask before building anything on top of sects. With this false there are
+     * no sects to be in, {@link #getSect} answers null for everyone, and a
+     * feature that hangs off sect membership should stand down and SAY SO, naming
+     * the key - the same discipline {@link #isSeasonEnabled} asks for.</p>
+     */
+    public static boolean isSectSystemEnabled(){
+        return SectManager.isEnabled();
+    }
+
+    /**
+     * @return the sect of this name (case-insensitively), or null.
+     *
+     * <p>Null for every name while {@code Sects-Enabled} is off, for the same
+     * reason and with the same internal-versus-public split as {@link #getSect}
+     * just above.</p>
+     */
     @Nullable
     public static Sect getSectByName(@Nonnull String name){
+        if(!SectManager.isEnabled()){
+            return null;
+        }
+
         return SectManager.getByName(name);
     }
 
@@ -2982,6 +3647,100 @@ public class CultivationAPI {
     public static float getKarma(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref){
         DaoComponent dao = accessor.getComponent(ref, DaoComponent.getComponentType());
         return dao == null ? 0f : dao.getKarma();
+    }
+
+    /**
+     * @return this cultivator's Merit (功德) - the virtue ledger sitting
+     * beside, and fully independent of, Karma above. See {@code
+     * plugin.siren.Utils.Merit.MeritManager} for the mechanic itself.
+     */
+    public static float getMerit(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref){
+        return plugin.siren.Utils.Merit.MeritManager.getMerit(accessor, ref);
+    }
+
+    /**
+     * Raw, addon-facing Merit credit (or, with a negative amount, correction) -
+     * no deed, no cooldown, no soft-Path throttle; the caller is responsible
+     * for deciding the amount is fair. Runs the same rank-up/technique-grant
+     * consequences a gated gain would. See {@code
+     * plugin.siren.Utils.Merit.MeritManager#addMerit}.
+     */
+    public static void addMerit(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref,
+                                @Nullable PlayerRef playerRef, float amount){
+        plugin.siren.Utils.Merit.MeritManager.addMerit(accessor, ref, playerRef, amount);
+    }
+
+    // --- Seasons and the ranking index ---
+    //
+    // The read side of the two server-wide indexes {@link SeasonEvents} and the
+    // rankings are built on. Both are thin delegates rather than partial
+    // reimplementations: a caller that re-derived "which season is running"
+    // from a config file plus a timestamp would drift the first time the boot
+    // self-heal closed an overdue season.
+
+    /**
+     * @return the season currently running, or 0 when seasons have never
+     * started - which means either {@code Season-Enabled} is off, or the very
+     * first tick has not happened yet. Ask this from your own {@code setup()}
+     * rather than waiting for {@link SeasonEvents.SeasonOpenEvent}: the boot
+     * self-heal's own open fires before any addon has registered a listener.
+     * See {@link SeasonEvents}' class doc.
+     */
+    public static int getCurrentSeasonId(){
+        return plugin.siren.Utils.Season.SeasonManager.currentSeasonId();
+    }
+
+    /**
+     * @return whether the shared season cadence is switched on at all
+     * ({@code Season-Enabled}). A feature that hangs off a season boundary
+     * should stand down and SAY SO when this is false, naming the key, rather
+     * than inventing a cadence of its own - two clocks on one server is a
+     * worse answer than one honest "this is off".
+     */
+    public static boolean isSeasonEnabled(){
+        return plugin.siren.Utils.Season.SeasonManager.isEnabled();
+    }
+
+    /**
+     * @return true if this account holds ANY of the four season championships -
+     * Path War, cultivation, Dao mastery or sect - as of the last season that
+     * closed.
+     *
+     * <p>One question rather than four because that is how a feature almost
+     * always wants it ("was this cultivator somebody, last season?"), and because
+     * the set of boards is Cultivation's to grow: a fifth championship added
+     * later is picked up here without every addon having to learn about it. A
+     * feature that genuinely cares <i>which</i> board should ask
+     * {@code SeasonManager} directly rather than have this answer widened into a
+     * list.</p>
+     *
+     * <p>False the whole time {@code Season-Enabled} is off - no season has
+     * closed, so nobody is a champion of one. Cheap: four set lookups, no I/O.</p>
+     */
+    public static boolean isSeasonChampion(@Nonnull UUID uuid){
+        return plugin.siren.Utils.Season.SeasonManager.isPathWarSeasonChampion(uuid)
+                || plugin.siren.Utils.Season.SeasonManager.isCultivationSeasonChampion(uuid)
+                || plugin.siren.Utils.Season.SeasonManager.isDaoMasterySeasonChampion(uuid)
+                || plugin.siren.Utils.Season.SeasonManager.isSectSeasonChampion(uuid);
+    }
+
+    /**
+     * @return an unsorted, immutable snapshot of every recorded ranking row -
+     * one per account this server has ever seen cultivate, online or not.
+     *
+     * <p>For FILTERING (by realm, by recency, by whatever a feature cares
+     * about), which is why it is unsorted: the ranking sort is wasted work on
+     * a filter pass, and re-sorting a filtered subset yourself is cheaper than
+     * sorting the whole board first. The rows are a copy taken at call time -
+     * a snapshot, not a live view.</p>
+     *
+     * <p>Test/sandbox profiles never enter this index at all (see {@code
+     * CultivationLeaderboard.record}), so a filter over it cannot pick one up
+     * by accident.</p>
+     */
+    @Nonnull
+    public static List<plugin.siren.Utils.CultivationLeaderboard.Entry> getLeaderboardSnapshot(){
+        return plugin.siren.Utils.CultivationLeaderboard.snapshot();
     }
 
     // --- Personal Dao registry (Sword/Slaughter/Space, plus whatever an addon registers) ---
@@ -3403,5 +4162,53 @@ public class CultivationAPI {
     @Nullable
     public static String getWeaponSpiritBondedTechnique(@Nullable ItemStack stack){
         return WeaponSpiritManager.getBondedTechniqueId(stack);
+    }
+
+    /** @return this spirit's resolved {@link WeaponSpiritTemperament}, or null if not yet awakened. */
+    @Nullable
+    public static WeaponSpiritTemperament getWeaponSpiritTemperament(@Nullable ItemStack stack){
+        return WeaponSpiritManager.getTemperament(stack);
+    }
+
+    /**
+     * @return this spirit's CURRENT Devotion (0-{@code WeaponSpirit-Devotion-Max}),
+     * decay already applied live - the number a presentation surface should
+     * show, never {@code WeaponSpiritMetadata#getDevotion()}'s raw field.
+     */
+    public static float getWeaponSpiritDevotion(@Nullable ItemStack stack){
+        return WeaponSpiritManager.getDevotion(stack, Cultivation.getWeaponSpiritConfig().get());
+    }
+
+    /** @return the configured ceiling {@link #getWeaponSpiritDevotion} is measured against ({@code WeaponSpirit-Devotion-Max}). */
+    public static float getWeaponSpiritDevotionMax(){
+        return Cultivation.getWeaponSpiritConfig().get().getWeaponSpiritDevotionMax();
+    }
+
+    /** @return the player-chosen name for this spirit, or blank if never named (or not awakened). */
+    @Nonnull
+    public static String getWeaponSpiritName(@Nullable ItemStack stack){
+        return WeaponSpiritManager.getSpiritName(stack);
+    }
+
+    /**
+     * @return which level 2-4 perk this spirit's NEXT level would unlock
+     * (2 = WHETTED, 3 = WATCHFUL, 4 = SWIFT), or 0 if already at
+     * {@code WeaponSpirit-Max-Level} (nothing further to unlock) or not yet
+     * awakened. A presentation card can use this to show "next: WATCHFUL at
+     * level 3" without duplicating the level-to-perk mapping
+     * {@code WeaponSpiritPerkManager} owns.
+     */
+    public static int getWeaponSpiritNextPerkLevel(@Nullable ItemStack stack){
+        int level = WeaponSpiritManager.getLevel(stack);
+        if(level <= 0 || level >= 4){
+            return 0;
+        }
+        return level + 1;
+    }
+
+    /** @return the last (up to 5) composed Weapon Spirit voice lines this player has been sent this session, oldest first. Never null; empty if none yet. */
+    @Nonnull
+    public static List<Message> getWeaponSpiritRecentVoiceLines(@Nonnull UUID player){
+        return WeaponSpiritVoice.getRecentLines(player);
     }
 }

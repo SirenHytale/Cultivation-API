@@ -34,7 +34,21 @@ public final class ItemEvents {
         /** A Spirit Stone - the abode upkeep currency. */
         SPIRIT_STONE,
         /** A cultivation manual. */
-        MANUAL
+        MANUAL,
+        /**
+         * A crafting material found in a Buried Cache or a Ruin Vault - see
+         * {@code plugin.siren.Utils.Treasure.TreasureCacheManager}. Read
+         * {@code itemId} for which; the pool is server-configured, so this
+         * constant names where a drop came from rather than what it is.
+         *
+         * <p>Added after {@link #CULTIVATION_CORE}..{@link #MANUAL}. Nothing
+         * switches exhaustively over this enum inside the mod, but if YOUR
+         * addon does, add a {@code default} arm - a switch EXPRESSION compiled
+         * against the four-constant version throws {@code
+         * IncompatibleClassChangeError} at runtime here rather than failing to
+         * compile.</p>
+         */
+        TREASURE_MATERIAL
     }
 
     /** How a refinement attempt resolved. */

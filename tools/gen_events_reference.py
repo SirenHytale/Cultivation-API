@@ -251,6 +251,24 @@ EVENT_FILES: list[tuple[str, str, str]] = [
         "- only the open itself is cancellable.",
     ),
     (
+        "SeasonEvents",
+        "Seasons (0.10.2)",
+        "The shared season cadence opening and closing a season. Post-only - a "
+        "season boundary is a deterministic outcome of one timestamp and one "
+        "config value, with nothing usefully vetoable. **The boot self-heal's "
+        "own open cannot reach an addon listener** (Cultivation's `setup()` "
+        "runs first), so ask `CultivationAPI.getCurrentSeasonId()` for the "
+        "current season rather than waiting for the event.",
+    ),
+    (
+        "BountyEvents",
+        "Bounty Board (0.10.2)",
+        "A contract being posted to the board through `BountyManager.post` - "
+        "the rotation's own generated contracts deliberately do NOT fire it - "
+        "and a completed contract paying out. The claim is cancellable; a "
+        "PARTIAL claim (a reward that did not fit) never fires the post-event.",
+    ),
+    (
         "StoreBenefitEvents",
         "Treasure Pavilion benefits",
         "Entitlements bought on xianxia.dev arriving and leaving. **These fire "

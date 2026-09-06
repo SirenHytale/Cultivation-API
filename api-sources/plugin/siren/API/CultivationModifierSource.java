@@ -215,6 +215,64 @@ public interface CultivationModifierSource {
         return 1f;
     }
 
+    /**
+     * Scales the CHANCE that a cultivation drop rolls at all - the luck
+     * channel. Above 1 is luckier; 0 means this cultivator never finds that
+     * kind of thing.
+     *
+     * <p>Applied to the roll itself, before the random compare, and the product
+     * is clamped into {@code [0,1]} - so no stack of sources can push a chance
+     * past certainty, and a 100% chance stays 100% rather than overflowing into
+     * a second drop. It scales the PROBABILITY, never the quantity: doubling
+     * luck doubles how often a manual is found, never how many fall at once.</p>
+     *
+     * <p>Consulted at four roll sites today: a manual from a demonic
+     * cultivator, a manual shed by a slain cultivator
+     * ({@link ItemEvents.LootType#MANUAL}), the Spirit Stone kill drop
+     * ({@link ItemEvents.LootType#SPIRIT_STONE}), and a treasure cache's
+     * material roll ({@link ItemEvents.LootType#TREASURE_MATERIAL}). The
+     * cultivation-core kill drop is NOT one of them - it rolls WHICH tier of
+     * core rather than whether one falls, so a luck multiplier has nothing to
+     * scale there; use {@code ItemEvents.PreLootDropEvent} to re-price that.
+     * Spirit-herb scatter and forage sites are likewise excluded on purpose:
+     * both roll world-scoped, with no player identity in hand at roll time.</p>
+     *
+     * @param type which kind of drop is being rolled for. Switch on it to make
+     *             a bloodline lucky with manuals but not with stones; return
+     *             the same number for every type for flat luck. Add a {@code
+     *             default} arm rather than switching exhaustively - this enum
+     *             gains constants (see {@link ItemEvents.LootType}).
+     */
+    default float lootRollMultiplier(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref,
+                                      @Nonnull ItemEvents.LootType type){
+        return 1f;
+    }
+
+    /**
+     * A PERCENTAGE knocked off the banked Qi this cultivator's next rank-up
+     * costs. 0 is no opinion; 10 means "10% cheaper".
+     *
+     * <p>The one channel here that is SUMMED across sources rather than
+     * multiplied, because it feeds a block that is already additive: the skill
+     * tree's Qi Cost Reduction and Cultivation Legacy's heir buff are added
+     * together and the total is clamped ONCE against
+     * {@code Legacy-Min-Qi-Cost-Floor-Percent}. Chaining multiplicative passes
+     * instead would let two individually sane 40% discounts compound into 64%
+     * with no single number ever looking unreasonable. Whatever you return
+     * joins that sum and is bound by that same floor - so a source cannot make
+     * a breakthrough free however large a number it returns, and two sources
+     * cannot either.</p>
+     *
+     * <p><b>Inert under a replacement {@code ProgressionProvider}.</b> A
+     * provider owns its own curve and its own discounts, and Cultivation
+     * returns that provider's number before this block is reached. Say so in
+     * your own UI rather than showing a bonus that is silently doing
+     * nothing.</p>
+     */
+    default float qiRequirementReductionPercent(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref){
+        return 0f;
+    }
+
     // --- Presentation ---------------------------------------------------------
 
     /**

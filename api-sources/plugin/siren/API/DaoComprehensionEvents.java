@@ -131,7 +131,25 @@ public final class DaoComprehensionEvents {
         @Nonnull public PersonalDao dao(){ return this.dao; }
     }
 
-    /** A Dao Enlightenment is about to fire. Cancel to refuse it (as if the roll never happened); {@link #setComprehensionGain}/{@link #setQiGain} to re-scale the reward. */
+    /**
+     * A Dao Enlightenment is about to fire. Cancel to refuse it (as if the roll
+     * never happened); {@link PreDaoEnlightenmentEvent#setComprehensionGain}/
+     * {@link PreDaoEnlightenmentEvent#setQiGain} to re-scale the reward.
+     *
+     * <p><b>{@code setQiGain} can lower the Qi burst but cannot raise it past the
+     * server's absolute cap.</b> {@code Dao-Enlightenment-Qi-Max-Base} x
+     * {@code Dao-Enlightenment-Qi-Max-Growth-Per-Realm ^ realmIndex} is applied
+     * both before this event is fired and again immediately after
+     * {@code qiGain()} is read back, so it is a hard rail rather than a default -
+     * a listener that sets 10,000,000 on a Qi Gathering cultivator still grants
+     * the cap. This is deliberate: an enlightenment is the mod's largest one-shot
+     * Qi reward and an unbounded one reads to a player as a bug, not a blessing.
+     * A server that genuinely wants no ceiling sets {@code Dao-Enlightenment-Qi-Max-Base}
+     * to 0, which is the operator's decision to make, not a listener's.</p>
+     *
+     * <p>{@code setComprehensionGain} is not capped this way - comprehension is
+     * clamped to the subject's own {@code getMaxComprehension()} downstream.</p>
+     */
     public static final class PreDaoEnlightenmentEvent extends CancellableEvent {
         private final PlayerRef player;
         private final DaoComprehensionComponent comprehension;

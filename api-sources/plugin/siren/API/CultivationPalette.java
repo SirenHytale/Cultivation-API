@@ -12,6 +12,7 @@ import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
@@ -95,6 +96,43 @@ public final class CultivationPalette {
      * the mod that registered theirs is uninstalled.
      */
     public static final String DEFAULT_KEY = "cultivation:default";
+
+    /**
+     * Stored in place of a palette id by a player who has explicitly turned down
+     * a look that was being chosen for them - see
+     * {@link CultivationPaletteDefault}.
+     *
+     * <p>It is not a palette and nothing registers it. It exists only because
+     * "no palette id" has to mean two different things once a registered default
+     * exists: <i>never chose</i> (so suggest one) and <i>chose Cultivation's
+     * own</i> (so do not). A null id is the first; this literal is the second,
+     * and {@link CultivationAPI#getPalette(com.hypixel.hytale.component.ComponentAccessor,
+     * com.hypixel.hytale.component.Ref)} answers null for it without asking any
+     * default. A server with no default registered never writes it and never
+     * shows it in the picker.</p>
+     */
+    public static final String NONE_KEY = "cultivation:none";
+
+    /**
+     * The classpath prefix every {@code .ui} document a palette names sits under,
+     * so a {@link Builder#documentRoot} plus a file name can be asked of the class
+     * loader directly. Matches the jar layout exactly - an entry reads
+     * {@code Common/UI/Custom/Pages/CultivationLight/MeritPage.ui} - with the
+     * leading slash {@code Class.getResource} wants for an absolute lookup.
+     */
+    private static final String UI_RESOURCE_ROOT = "/Common/UI/Custom/";
+
+    /**
+     * Whether one themed document is actually on the classpath, remembered per
+     * path.
+     *
+     * <p>Static and shared across palettes because the answer is a property of the
+     * installed jars, not of any one palette, and because it cannot change while
+     * the server runs: a jar's entries are fixed once it is open. Bounded by the
+     * number of palettes times the number of documents - low four figures at the
+     * outside - so it never needs eviction.</p>
+     */
+    private static final ConcurrentHashMap<String, Boolean> RESOURCE_PRESENT = new ConcurrentHashMap<>();
 
     /**
      * A meaning a color carries, for the few strings Java colors itself.
@@ -271,16 +309,47 @@ public final class CultivationPalette {
 
     /**
      * The document this palette wants drawn in place of {@code basePath}, or
-     * {@code basePath} itself when it ships no variant for it.
+     * {@code basePath} itself when no variant of it can be shown to exist.
      *
-     * <p>Falling back rather than guessing is the whole point. A path that does
-     * not resolve fails the entire UI load on the client - not just the one
+     * <p>Falling back rather than guessing is still the whole point. A path that
+     * does not resolve fails the entire UI load on the client - not just the one
      * element - and no validator in this workspace checks {@code append()} paths,
-     * so a typo would reach players silently. A palette therefore only ever
-     * redirects documents it has explicitly declared through
-     * {@link Builder#documents}, which its generator writes from the files it
-     * actually emitted. A page added to Cultivation after a palette was generated
-     * simply keeps its default look until that palette is regenerated.</p>
+     * so a typo would reach players silently.</p>
+     *
+     * <h2>The order, and why it is still never a guess</h2>
+     *
+     * <ol>
+     *   <li>No {@link Builder#documentRoot} at all - this palette re-grades
+     *       nothing, so {@code basePath} is the answer.</li>
+     *   <li>The themed file is <b>on the classpath</b>
+     *       ({@link #shipsDocument}) - draw it. A resource the class loader hands
+     *       back is by definition loadable: this is the opposite of guessing a
+     *       path, it is asking the jar.</li>
+     *   <li>The file name was <b>declared</b> through {@link Builder#documents} -
+     *       draw it. Kept for the palette whose copies ship in its <i>own</i>
+     *       jar rather than Cultivation's, which Cultivation's class loader
+     *       cannot see unless that mod is a declared dependency. Such a palette
+     *       behaves exactly as it did before this check existed.</li>
+     *   <li>Otherwise the default look.</li>
+     * </ol>
+     *
+     * <h2>What the presence check fixes</h2>
+     *
+     * <p>Every built-in palette's recolored copies are generated <i>into
+     * Cultivation's own resources</i> and therefore ship in Cultivation's jar,
+     * while the declared list is compiled into the addon jar that registers the
+     * palette. Those two travel separately. When Cultivation gained a page - the
+     * Merit page is the one a player found - the copies shipped with the next
+     * Cultivation build, but an addon built before it still declared the old
+     * list, so exactly the new pages fell back to the default look while every
+     * other page in the same menu was themed. Asking the jar first makes the
+     * declared list an optimisation and a fallback rather than the gate, so a
+     * theme addon no longer has to be rebuilt in lockstep with the base mod.</p>
+     *
+     * <p>A page added to Cultivation whose copies were never <i>generated</i>
+     * still keeps its default look - that is a real gap, and
+     * {@code PaletteDocumentAudit} names it in the console at boot rather than
+     * leaving it to be noticed in game.</p>
      *
      * @param basePath a document path as the base mod names it, e.g.
      *                 {@code "Pages/Cultivation/CultivationStatsPage.ui"}
@@ -291,10 +360,52 @@ public final class CultivationPalette {
             return basePath;
         }
 
-        int slash = basePath.lastIndexOf('/');
-        String fileName = slash < 0 ? basePath : basePath.substring(slash + 1);
+        String fileName = fileNameOf(basePath);
+
+        if (isResourcePresent(UI_RESOURCE_ROOT + this.documentRoot + fileName)) {
+            return this.documentRoot + fileName;
+        }
 
         return this.documents.contains(fileName) ? this.documentRoot + fileName : basePath;
+    }
+
+    /**
+     * Whether this palette's variant of one document is really there - that is,
+     * whether the class loader can hand back
+     * {@code Common/UI/Custom/<documentRoot><fileName>}.
+     *
+     * <p>Answers about the <i>installed jars</i>, not about what the palette
+     * claims, which is what makes it worth exposing: a generator or an audit can
+     * tell a document that was written from one that was only declared. False for
+     * a palette with no {@link Builder#documentRoot}, and false for a palette
+     * whose copies live in a jar Cultivation's class loader cannot reach - see
+     * {@link #resolveDocument} for why that case still renders correctly.</p>
+     *
+     * @param document a bare file name ({@code "MeritPage.ui"}) or a full base
+     *                 path; only the part after the last slash is used.
+     */
+    public boolean shipsDocument(@Nonnull String document) {
+        if (this.documentRoot == null) {
+            return false;
+        }
+
+        return isResourcePresent(UI_RESOURCE_ROOT + this.documentRoot + fileNameOf(document));
+    }
+
+    @Nonnull
+    private static String fileNameOf(@Nonnull String path) {
+        int slash = path.lastIndexOf('/');
+        return slash < 0 ? path : path.substring(slash + 1);
+    }
+
+    /**
+     * One classpath probe, memoised. {@code Class.getResource} walks the plugin
+     * class loader (server jar, then this mod's own jar, then any bridged
+     * dependency), which is a real lookup - cheap once, not free per page build.
+     */
+    private static boolean isResourcePresent(@Nonnull String resourcePath) {
+        return RESOURCE_PRESENT.computeIfAbsent(resourcePath,
+                path -> CultivationPalette.class.getResource(path) != null);
     }
 
     /**
@@ -331,6 +442,22 @@ public final class CultivationPalette {
     @Nonnull
     public Set<String> getDocuments() {
         return this.documents;
+    }
+
+    /**
+     * The folder this palette's document variants live in, relative to
+     * {@code Common/UI/Custom/} and ending in a slash - or null for a palette
+     * that re-grades no documents at all.
+     *
+     * <p>An addon shipping its own pages needs this to know where to put them:
+     * the alternative is asking {@link #resolveDocument} about a document every
+     * palette is known to carry and reading the folder back off the answer,
+     * which is what {@code SoulRingsPalettePages} and {@code ClassesPalettePages}
+     * do today. Both still work; this is simply the direct question.</p>
+     */
+    @Nullable
+    public String getDocumentRoot() {
+        return this.documentRoot;
     }
 
     /**
@@ -424,8 +551,17 @@ public final class CultivationPalette {
 
         /**
          * The document file names this palette ships - bare names, no folders
-         * ({@code "CultivationStatsPage.ui"}). Anything not listed keeps its
-         * default look rather than resolving to a file that might not exist.
+         * ({@code "CultivationStatsPage.ui"}).
+         *
+         * <p>Since 0.10.2 this is a <i>fallback</i> rather than the gate: a file
+         * that is actually on the classpath under {@link #documentRoot} is drawn
+         * whether or not it is listed here, so a theme addon does not go stale
+         * the moment Cultivation adds a page. What this list still buys is the
+         * palette whose copies ship in its own jar, which Cultivation's class
+         * loader cannot see. Naming a file nobody wrote is still the one
+         * dangerous mistake - it fails the whole UI load client-side - which is
+         * why every generator in this workspace emits this list rather than
+         * letting it be typed. See {@link CultivationPalette#resolveDocument}.</p>
          */
         @Nonnull
         public Builder documents(@Nonnull Set<String> documents) {

@@ -1,7 +1,7 @@
 # Event reference
 
 Every event Cultivation fires, grouped by the class that declares it.
-**291 listener hooks** across 35 subsystems.
+**305 listener hooks** across 37 subsystems.
 
 > Generated from `api-sources/` by `tools/gen_events_reference.py`. Do not edit
 > by hand — re-run the script instead. The prose in each entry is the javadoc on
@@ -301,6 +301,36 @@ A cultivator's Ascension completed with the LEGACY ending - `/ascend legacy sect
 | `sectFallback()` | `boolean` |
 | `sectName()` | `String` |
 
+### `ReincarnationEvent`
+
+```java
+CultivationEvents.onReincarnation(event -> { /* ... */ });
+```
+
+A cultivator completed Reincarnation (转世) - the alternate capstone alongside Ascension. `fromRealm`/`toRealm` are the realm given up and the realm landed at after the partial reset; `bloodlinePointsGranted` is what was just added to their `ReincarnationLedger` entry (cumulative, not their new total). Deliberately its own event rather than a `BreakthroughEvent` or `AscensionEvent` with a special flag - a Reincarnation is neither, and a listener that treats it as one would credit the wrong thing.
+
+| Accessor | Type |
+| --- | --- |
+| `ref()` | `Ref<EntityStore>` |
+| `player()` | `PlayerRef` |
+| `fromRealm()` | `CultivationRealm` |
+| `toRealm()` | `CultivationRealm` |
+| `bloodlinePointsGranted()` | `int` |
+
+### `ReincarnationFailedEvent`
+
+```java
+CultivationEvents.onReincarnationFailed(event -> { /* ... */ });
+```
+
+A cultivator's Reincarnation attempt ended in failure.
+
+| Accessor | Type |
+| --- | --- |
+| `ref()` | `Ref<EntityStore>` |
+| `player()` | `PlayerRef` |
+| `abandoned()` | `boolean` |
+
 ### `DemotionEvent`
 
 ```java
@@ -347,6 +377,22 @@ A player respecced their skill tree; every node was cleared and `refundedPoints`
 | `ref()` | `Ref<EntityStore>` |
 | `player()` | `PlayerRef` |
 | `refundedPoints()` | `int` |
+
+### `PlayerKillEvent`
+
+```java
+CultivationEvents.onPlayerKill(event -> { /* ... */ });
+```
+
+One cultivator killed another, and the kill is worth something. The generic player-versus-player hook: everything the mod itself pays out for a kill - Devil-path Qi, Dao deeds, the Wu Xing reward, a shed manual - is credited immediately after this fires. **Only fires for a kill that PAYS.** `CultivationDeathSystem` runs its own anti-farm gate (`Pk-Same-Victim-Cooldown-Seconds` and `Pk-Min-Victim-Realm` - see `isFarmedKill`) first, and a farmed kill returns before this event exists. That ordering is the whole point: a listener running BEFORE the gate would pay out on exactly the kills the gate exists to make worthless, and no later `return` can take back a credit already made. An addon that rewards kills therefore inherits the mod's own farm protection for free - and must not go looking for an earlier hook to "catch every death", because every death is not what this event means. Also never fires for a self-inflicted death, an environmental one, a kill whose killer has no `PlayerRef`, or a kill a fleeing Nascent Soul landed (see `SoulEscapeManager` - such a kill credits nobody at all, by design). **No `Pre` twin, deliberately.** The only cancellable thing at this point is the kill itself, which belongs to the damage pipeline and is long since resolved by the time anything here runs. Every consumer is a reward path, and a reward path must be gated by its own rules rather than by vetoing somebody else's event. @param killer the slayer. Never the victim - a self-kill returns before this. @param killerPlayer the slayer's `PlayerRef`; always valid at the moment this fires. @param victim the fallen cultivator. @param victimPlayer the fallen cultivator's `PlayerRef`, or null if the component could not be read - the kill is still a player kill (the death system already established that), so this is a read failure rather than "an NPC died". @param sanctionedDuel true when this death resolved a sanctioned duel (plain or Dao). The mod excludes its own general PvP reward on those - a duel already has its own stakes - and any addon paying for kills should do the same, or two accounts can farm each other through a duel that pays both ways.
+
+| Accessor | Type |
+| --- | --- |
+| `killer()` | `Ref<EntityStore>` |
+| `killerPlayer()` | `PlayerRef` |
+| `victim()` | `Ref<EntityStore>` |
+| `victimPlayer()` | `PlayerRef` |
+| `sanctionedDuel()` | `boolean` |
 
 **Pre-events** — fired before the change; `setCancelled(true)` vetoes it, and any setter below re-tunes the numbers the mod then uses.
 
@@ -592,6 +638,19 @@ A cultivator is about to begin the Ascension Capstone. Cancelling keeps them at 
 | `ref()` | `Ref<EntityStore>` | read |
 | `player()` | `PlayerRef` | read (may be null) |
 | `prestiged()` | `boolean` | read |
+
+### `PreReincarnationEvent`
+
+```java
+CultivationEvents.onPreReincarnation(event -> { /* ... */ });
+```
+
+A cultivator is about to begin Reincarnation. Cancelling keeps them at their current realm untried - the one hook a server needs to gate this ending behind something of its own (a quest, an item, a date), the same role `PreAscensionEvent` plays for the other capstone.
+
+| Member | Type | |
+| --- | --- | --- |
+| `ref()` | `Ref<EntityStore>` | read |
+| `player()` | `PlayerRef` | read (may be null) |
 
 ### `PreRitualStartEvent`
 
@@ -1058,7 +1117,7 @@ A Personal Dao is about to manifest. Cancel to leave it comprehended but unmanif
 DaoComprehensionEvents.onPreDaoEnlightenment(event -> { /* ... */ });
 ```
 
-A Dao Enlightenment is about to fire. Cancel to refuse it (as if the roll never happened); `setComprehensionGain`/`setQiGain` to re-scale the reward.
+A Dao Enlightenment is about to fire. Cancel to refuse it (as if the roll never happened); `PreDaoEnlightenmentEvent#setComprehensionGain`/ `PreDaoEnlightenmentEvent#setQiGain` to re-scale the reward. **`setQiGain` can lower the Qi burst but cannot raise it past the server's absolute cap.** `Dao-Enlightenment-Qi-Max-Base` x `Dao-Enlightenment-Qi-Max-Growth-Per-Realm ^ realmIndex` is applied both before this event is fired and again immediately after `qiGain()` is read back, so it is a hard rail rather than a default - a listener that sets 10,000,000 on a Qi Gathering cultivator still grants the cap. This is deliberate: an enlightenment is the mod's largest one-shot Qi reward and an unbounded one reads to a player as a bug, not a blessing. A server that genuinely wants no ceiling sets `Dao-Enlightenment-Qi-Max-Base` to 0, which is the operator's decision to make, not a listener's. `setComprehensionGain` is not capped this way - comprehension is clamped to the subject's own `getMaxComprehension()` downstream.
 
 | Member | Type | |
 | --- | --- | --- |
@@ -1330,7 +1389,7 @@ An art is about to rise a rung. Cancel to hold it where it is - the XP and the s
 
 **Enums declared here**
 
-- `ItemEvents.LootType` — What a cultivation drop is. Values: `CULTIVATION_CORE`, `BEAST_EGG`, `SPIRIT_STONE`, `MANUAL`
+- `ItemEvents.LootType` — What a cultivation drop is. Values: `CULTIVATION_CORE`, `BEAST_EGG`, `SPIRIT_STONE`, `MANUAL`, `TREASURE_MATERIAL`
 - `ItemEvents.RefinementOutcome` — How a refinement attempt resolved. Values: `SUCCESS`, `DESTROYED`, `DEMOTED`, `FAILED`
 
 **Post-events** — fired once the change is committed; cannot be cancelled.
@@ -4497,6 +4556,48 @@ The Traveling Merchant's visit ended and the NPC despawned.
 | --- | --- |
 | `world()` | `String` |
 
+### `AuctionBidPlacedEvent`
+
+```java
+MarketEvents.onAuctionBidPlaced(event -> { /* ... */ });
+```
+
+A bid was placed on a timed auction and is now the standing high bid.
+
+| Accessor | Type |
+| --- | --- |
+| `listing()` | `AuctionListing` |
+| `bidder()` | `UUID` |
+| `amount()` | `long` |
+
+### `AuctionOutbidEvent`
+
+```java
+MarketEvents.onAuctionOutbid(event -> { /* ... */ });
+```
+
+A standing high bidder was outbid, or their bid lost to an early buyout - their stones just landed in their claimable parcels (see `/market claim`), even while offline.
+
+| Accessor | Type |
+| --- | --- |
+| `listing()` | `AuctionListing` |
+| `outbidBidder()` | `UUID` |
+| `refundedAmount()` | `long` |
+
+### `AuctionClosedEvent`
+
+```java
+MarketEvents.onAuctionClosed(event -> { /* ... */ });
+```
+
+A timed auction closed with at least one bid - the highest bidder won the item and the seller was credited `sellerProceeds` after the house cut. Mirrors `AuctionListingSoldEvent`'s shape for the timed path; a zero-bid close fires the existing `AuctionListingExpiredEvent` instead, unchanged.
+
+| Accessor | Type |
+| --- | --- |
+| `listing()` | `AuctionListing` |
+| `winner()` | `UUID` |
+| `sellerProceeds()` | `long` |
+
 **Pre-events** — fired before the change; `setCancelled(true)` vetoes it, and any setter below re-tunes the numbers the mod then uses.
 
 ### `PreAuctionListEvent`
@@ -4527,6 +4628,20 @@ A player is about to buy a listing. Cancel to refuse it - nothing has moved yet,
 | --- | --- | --- |
 | `buyer()` | `UUID` | read |
 | `listing()` | `AuctionListing` | read |
+
+### `PreAuctionBidEvent`
+
+```java
+MarketEvents.onPreAuctionBid(event -> { /* ... */ });
+```
+
+A player is about to bid on a timed auction. Cancel to refuse it - nothing has moved yet, and the previous high bidder (if any) has not been refunded. Deliberately no setter, unlike `PreAuctionListEvent`'s `setPrice` - a listener silently changing the amount a player just committed to would be a surprise. Add one only if a real addon need shows up; until then, the supported way to re-tune a bid is to cancel it.
+
+| Member | Type | |
+| --- | --- | --- |
+| `bidder()` | `UUID` | read |
+| `listing()` | `AuctionListing` | read |
+| `amount()` | `long` | read |
 
 
 ---
@@ -4835,6 +4950,106 @@ A Void Rift is about to begin its OPENING phase. Cancel to abandon this open ent
 | --- | --- | --- |
 | `worldName()` | `String` | read |
 | `position()` | `Vector3d` | read |
+
+
+---
+
+## Seasons (0.10.2)
+
+`plugin.siren.API.SeasonEvents` — The shared season cadence opening and closing a season. Post-only - a season boundary is a deterministic outcome of one timestamp and one config value, with nothing usefully vetoable. **The boot self-heal's own open cannot reach an addon listener** (Cultivation's `setup()` runs first), so ask `CultivationAPI.getCurrentSeasonId()` for the current season rather than waiting for the event.
+
+**Post-events** — fired once the change is committed; cannot be cancelled.
+
+### `SeasonOpenEvent`
+
+```java
+SeasonEvents.onSeasonOpen(event -> { /* ... */ });
+```
+
+A new season has opened and its start timestamp is already persisted. `seasonId` is the season now RUNNING (the closing one's id plus one, or 1 on a fresh install), and `startedAtMillis` is the wall clock the new season's length is measured from. On a rollover this fires immediately after `SeasonCloseEvent` for `seasonId - 1`. On a fresh install (or the first tick after `Season-Enabled` is turned on) it fires alone - there was no previous season to close.
+
+| Accessor | Type |
+| --- | --- |
+| `seasonId()` | `int` |
+| `startedAtMillis()` | `long` |
+
+### `SeasonCloseEvent`
+
+```java
+SeasonEvents.onSeasonClose(event -> { /* ... */ });
+```
+
+A season has closed: every Hall of Fame history row and champion-uuid set for it is already written to disk, and the leaderboards' season baselines are about to be invalidated by the next open. `seasonId` is the season that just ENDED. Fired after that persist and before `PathWarManager.resetSeasonTotals()`, so a listener still sees the closing season's Path War totals intact. Reads of `CultivationLeaderboard.seasonDelta` are likewise still answering for the closing season at this point - `SeasonOpenEvent` has not bumped the id yet.
+
+| Accessor | Type |
+| --- | --- |
+| `seasonId()` | `int` |
+| `closedAtMillis()` | `long` |
+
+
+---
+
+## Bounty Board (0.10.2)
+
+`plugin.siren.API.BountyEvents` — A contract being posted to the board through `BountyManager.post` - the rotation's own generated contracts deliberately do NOT fire it - and a completed contract paying out. The claim is cancellable; a PARTIAL claim (a reward that did not fit) never fires the post-event.
+
+**Post-events** — fired once the change is committed; cannot be cancelled.
+
+### `BountyPostedEvent`
+
+```java
+BountyEvents.onBountyPosted(event -> { /* ... */ });
+```
+
+A contract was explicitly posted to the board - it is already in the board list and already persisted. `bounty` is the live board object, not a copy. Read it; do not mutate it. Its id is what every later `accept`/`claim`/`takeDown` call refers to.
+
+| Accessor | Type |
+| --- | --- |
+| `bounty()` | `Bounty` |
+
+### `BountyClaimedEvent`
+
+```java
+BountyEvents.onBountyClaimed(event -> { /* ... */ });
+```
+
+A contract was fully claimed - every promised reward component landed and the acceptance has been marked claimed. Never fires for a `BountyManager.Result#PARTIAL` claim, which leaves the acceptance completed-but-unclaimed for a retry. @param rewardQi the Qi the contract promised, exactly as the board row advertised it. What the cultivator's own multipliers turned that into is `CultivationEvents.QiGainEvent`'s business, not this event's.
+
+| Accessor | Type |
+| --- | --- |
+| `bountyId()` | `String` |
+| `claimantUuid()` | `UUID` |
+| `rewardQi()` | `float` |
+
+**Pre-events** — fired before the change; `setCancelled(true)` vetoes it, and any setter below re-tunes the numbers the mod then uses.
+
+### `PreBountyClaimEvent`
+
+```java
+BountyEvents.onPreBountyClaim(event -> { /* ... */ });
+```
+
+A completed contract is about to pay out. Cancel to refuse the claim outright - nothing has been granted and nothing marked claimed yet, so the acceptance simply stays completed-but-unclaimed and the player may try again. Fired inside `BountyManager.claim` once the claimant has been confirmed to actually HOLD a live acceptance of that contract, and before every other guard. A listener therefore only ever sees attempts that could really have paid out - never a mistyped id or a stale UI row - while still seeing the "tried to collect early" case, because a not-yet-completed acceptance is one the player holds. Without that ordering, every listener's first job would be re-deriving a fact the board already knows, and any that skipped it would count rate limits and audit rows against attempts that could never have paid anything. There is deliberately nothing re-tunable here: the reward is a property of the posted contract, and re-pricing it at claim time would let two claims of the same contract pay differently.
+
+| Member | Type | |
+| --- | --- | --- |
+| `bountyId()` | `String` | read |
+| `claimantUuid()` | `UUID` | read |
+
+### `PreBountyCreditEvent`
+
+```java
+BountyEvents.onPreBountyCredit(event -> { /* ... */ });
+```
+
+A player kill is about to move a `BountyType.SLAY` contract's progress. Cancel to skip THIS acceptance entirely - no progress is recorded, the contract is not completed, and nothing is said to the killer. Why this exists: one verdict, two consumers A SLAY decree has two halves that must never disagree. The contract is the MONEY (a board reward the killer earns by holding the contract) and whatever posted it usually also runs a STORY of its own (a title, a transfer, a season award). Those two are decided by different rules running in different places, and when they disagree the result is either a payable contract standing against a state that no longer justifies it - an unbounded faucet - or a reward destroyed underneath the player who just earned it. This event is the single verdict both halves obey. The poster listens here, applies exactly the rules it applies to its own reward (pair cooldowns, per-season caps, sandbox and admin-bypass exclusions, whatever it has), and cancels when its own answer is "no". The board then pays only what the poster would itself have paid. A poster that refuses its own reward but lets this event through has re-created the faucet on purpose. Retiring the contract afterwards is `BountyManager.retire`'s job, NOT this event's: `takeDown(id, true)` from inside a credit path destroys the reward the killer just earned. See `BountyManager.retire`'s own javadoc. Fired once per matching LIVE acceptance, after every board-side gate (`isEnabled`, still-on-the-board, unexpired, target matches the victim, the killer is not the contract's own quarry, and the killer is neither on a sandbox profile nor admin-bypassing) and before any progress is written. Read `PreBountyCreditEvent#bounty()`; do not mutate it. Note the class-level lock-order warning above - this one fires from a kill hook, so a listener that blocks stalls a world thread mid-death.
+
+| Member | Type | |
+| --- | --- | --- |
+| `bountyId()` | `String` | read |
+| `killerUuid()` | `UUID` | read |
+| `victimUuid()` | `UUID` | read |
+| `bounty()` | `Bounty` | read |
 
 
 ---
