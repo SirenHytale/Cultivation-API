@@ -26,6 +26,7 @@ import plugin.siren.Utils.Config.MarketConfig;
 import plugin.siren.Utils.Config.MasterDiscipleConfig;
 import plugin.siren.Utils.Config.OathConfig;
 import plugin.siren.Utils.Config.PartnerConfig;
+import plugin.siren.Utils.Config.PathWarConfig;
 import plugin.siren.Utils.Config.QiDeviationConfig;
 import plugin.siren.Utils.Config.RaceConfig;
 import plugin.siren.Utils.Config.RaceSystemConfig;
@@ -33,10 +34,12 @@ import plugin.siren.Utils.Config.RefinementConfig;
 import plugin.siren.Utils.Config.RivalConfig;
 import plugin.siren.Utils.Config.SectConfig;
 import plugin.siren.Utils.Config.SecretRealmConfig;
+import plugin.siren.Utils.Season.SeasonConfig;
 import plugin.siren.Utils.Config.SkillTreeConfig;
 import plugin.siren.Utils.Config.SpiritCoreConfig;
 import plugin.siren.Utils.Config.SpiritVeinConfig;
 import plugin.siren.Utils.Config.TalismanConfig;
+import plugin.siren.Utils.Config.TeaConfig;
 import plugin.siren.Utils.Config.TechniqueConfig;
 import plugin.siren.Utils.Config.TideConfig;
 import plugin.siren.Utils.Config.TreasureConfig;
@@ -45,6 +48,7 @@ import plugin.siren.Utils.Config.UpdateConfig;
 import plugin.siren.Utils.Config.WebStoreConfig;
 import plugin.siren.Utils.Config.WeaponSpiritConfig;
 import plugin.siren.Utils.Config.WarConfig;
+import plugin.siren.Utils.Config.WeiqiConfig;
 import plugin.siren.ECS.Races.PlayerRace;
 
 import javax.annotation.Nonnull;
@@ -182,6 +186,18 @@ public final class CultivationConfigs {
         return Cultivation.getTalismanConfig();
     }
 
+    /**
+     * The Teleportation Array network - the master switch, the realm gate,
+     * per-destination-kind toggles (Dwelling/Sect-Hall/Secret-Realm/Sea/Heaven),
+     * the Qi cost/cooldown model for its two activation surfaces (the placed
+     * Array Platform and the reusable Array Compass), and the Platform/hall/
+     * dwelling activation radius. See {@link plugin.siren.Utils.Array.ArrayManager}.
+     */
+    @Nonnull
+    public static Config<plugin.siren.Utils.Config.ArrayConfig> array() {
+        return Cultivation.getArrayConfig();
+    }
+
     /** Forging - the Forge Anchor ritual, the material ladder, the grade roll. */
     @Nonnull
     public static Config<ForgingConfig> forging() {
@@ -315,6 +331,18 @@ public final class CultivationConfigs {
         return Cultivation.getPartnerConfig();
     }
 
+    /** The Tea Ceremony (茶道) - rounds, timing windows, herb cost, harmony bands, and the post-ceremony Qi buff. See {@link plugin.siren.Utils.Tea.TeaCeremonyManager}. */
+    @Nonnull
+    public static Config<TeaConfig> tea() {
+        return Cultivation.getTeaConfig();
+    }
+
+    /** Weiqi (围棋) - the master switch, turn/reconnect timing, and the Merit payout for a finished match. See {@link plugin.siren.Utils.Weiqi.WeiqiManager}. */
+    @Nonnull
+    public static Config<WeiqiConfig> weiqi() {
+        return Cultivation.getWeiqiConfig();
+    }
+
     /**
      * Secret Realms and the ascension-gated Immortal Court (仙庭) tier on top
      * of them - schedule cadence, duration, Qi multipliers, beast-stocking
@@ -391,6 +419,27 @@ public final class CultivationConfigs {
         return Cultivation.getCelestialConfig();
     }
 
+    /**
+     * Path War (道途之战) - the server-wide, standing Righteous vs Devil
+     * kill-count contest: scoring, its own anti-farm floor/cooldown, the
+     * Heavenly Schism celestial window's own weight/duration/weather, and the
+     * veteran/champion title thresholds. See {@link plugin.siren.Utils.PathWar.PathWarManager}.
+     */
+    @Nonnull
+    public static Config<PathWarConfig> pathWar() {
+        return Cultivation.getPathWarConfig();
+    }
+
+    /**
+     * The Seasonal Cycle: the master switch, season length, and the Hall of
+     * Fame's own top-N-per-ladder/history-cap tuning. See {@link
+     * plugin.siren.Utils.Season.SeasonManager}.
+     */
+    @Nonnull
+    public static Config<SeasonConfig> season() {
+        return Cultivation.getSeasonConfig();
+    }
+
     // --- Compatibility ---
 
     /**
@@ -439,6 +488,7 @@ public final class CultivationConfigs {
         manual().save();
         alchemy().save();
         talisman().save();
+        array().save();
         forging().save();
         refinement().save();
         lifeBound().save();
@@ -459,6 +509,8 @@ public final class CultivationConfigs {
         dreamTrial().save();
         campaign().save();
         oath().save();
+        tea().save();
+        weiqi().save();
         market().save();
         tide().save();
         partner().save();
@@ -466,6 +518,8 @@ public final class CultivationConfigs {
         qiDeviation().save();
         tournament().save();
         celestial().save();
+        pathWar().save();
+        season().save();
         endlessLeveling().save();
         update().save();
     }

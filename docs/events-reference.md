@@ -1,7 +1,7 @@
 # Event reference
 
 Every event Cultivation fires, grouped by the class that declares it.
-**305 listener hooks** across 37 subsystems.
+**368 listener hooks** across 51 subsystems.
 
 > Generated from `api-sources/` by `tools/gen_events_reference.py`. Do not edit
 > by hand — re-run the script instead. The prose in each entry is the javadoc on
@@ -715,6 +715,300 @@ A player is about to respec their skill tree. Cancel to refuse; adjust `setRefun
 | `player()` | `PlayerRef` | read (may be null) |
 | `refundedPoints()` | `int` | read |
 | `setRefundedPoints(int)` | `void` | re-tune |
+
+
+---
+
+## Lifespan (0.10.2)
+
+`plugin.siren.API.LifespanEvents` — Lifespan (寿元), the per-profile online-play-hour budget keyed to the highest realm ever reached: extending it, withering, restoring and expiring. Extend and expire are cancellable. Default-off on the server.
+
+**Enums declared here**
+
+- `LifespanEvents.ExtendSource` — Where an `LifespanExtendEvent`/`PreLifespanExtendEvent` came from. Values: `BREAKTHROUGH`, `PILL`, `ADMIN`
+
+**Post-events** — fired once the change is committed; cannot be cancelled.
+
+### `LifespanExtendEvent`
+
+```java
+LifespanEvents.onExtend(event -> { /* ... */ });
+```
+
+Bonus hours were actually banked (or, for `ExtendSource#BREAKTHROUGH`, the realm-mark budget rose). `hours` is what actually applied, after any `PreLifespanExtendEvent` scaling.
+
+| Accessor | Type |
+| --- | --- |
+| `ref()` | `Ref<EntityStore>` |
+| `player()` | `PlayerRef` |
+| `hours()` | `float` |
+| `source()` | `ExtendSource` |
+
+### `LifespanWitherEvent`
+
+```java
+LifespanEvents.onWither(event -> { /* ... */ });
+```
+
+A cultivator's Lifespan budget hit 0 and they entered the Withering grace state.
+
+| Accessor | Type |
+| --- | --- |
+| `ref()` | `Ref<EntityStore>` |
+| `player()` | `PlayerRef` |
+
+### `LifespanRestoreEvent`
+
+```java
+LifespanEvents.onRestore(event -> { /* ... */ });
+```
+
+A cultivator's Lifespan clock was reset to a fresh budget - a real Reincarnation, a real Ascension, `LifespanConfig.ExpiryAction#NOTHING` clearing Withering, or Mortal Passing's own reset (which additionally fires `LifespanExpireEvent`).
+
+| Accessor | Type |
+| --- | --- |
+| `ref()` | `Ref<EntityStore>` |
+| `player()` | `PlayerRef` |
+
+### `LifespanExpireEvent`
+
+```java
+LifespanEvents.onExpire(event -> { /* ... */ });
+```
+
+A cultivator's Withering grace ran out and `Lifespan-Expiry-Action` is about to run. NOT cancellable through this event - by the time this fires the grace period has already elapsed; use `PreLifespanExpireEvent` to veto Withering itself, further upstream.
+
+| Accessor | Type |
+| --- | --- |
+| `ref()` | `Ref<EntityStore>` |
+| `player()` | `PlayerRef` |
+| `action()` | `LifespanConfig.ExpiryAction` |
+
+**Pre-events** — fired before the change; `setCancelled(true)` vetoes it, and any setter below re-tunes the numbers the mod then uses.
+
+### `PreLifespanExtendEvent`
+
+```java
+LifespanEvents.onPreExtend(event -> { /* ... */ });
+```
+
+About to grant bonus hours (`ExtendSource#PILL`/`ExtendSource#ADMIN` only - a `ExtendSource#BREAKTHROUGH` realm-mark rise has already happened by the time Lifespan notices it and fires only the post event). Cancel to refuse the grant outright, or scale `setHours` to change how much is actually banked.
+
+| Member | Type | |
+| --- | --- | --- |
+| `ref()` | `Ref<EntityStore>` | read |
+| `player()` | `PlayerRef` | read (may be null) |
+| `source()` | `ExtendSource` | read |
+| `hours()` | `float` | read |
+| `setHours(float)` | `void` | re-tune |
+
+### `PreLifespanExpireEvent`
+
+```java
+LifespanEvents.onPreExpire(event -> { /* ... */ });
+```
+
+A cultivator's Lifespan budget is about to reach 0 and enter Withering. Cancelling here vetoes Withering entirely for this crossing - the clock stays at 0 and this fires again the next tick, so an addon meaning to grant a reprieve should also extend the budget (or it will simply be asked again immediately).
+
+| Member | Type | |
+| --- | --- | --- |
+| `ref()` | `Ref<EntityStore>` | read |
+| `player()` | `PlayerRef` | read (may be null) |
+
+
+---
+
+## Legacy (0.10.1)
+
+`plugin.siren.API.LegacyEvents` — A retiring cultivator's breakthrough-cost-reduction buff reaching the chosen heir. The payout is cancellable.
+
+**Post-events** — fired once the change is committed; cannot be cancelled.
+
+### `LegacyPayoutEvent`
+
+```java
+LegacyEvents.onLegacyPayout(event -> { /* ... */ });
+```
+
+A legacy buff has actually reached (or been queued for) an heir - the reduction described here is the FINAL amount, after the recent-profile scale-down for an immediate payout, or the pre-scale base amount for a queued one (see `queued`). @param queued true if this was deferred to the offline-heir mailbox rather than applied immediately - the reduction/expiry here are the values as queued, not yet scaled for profile age; that scaling only happens at actual delivery and is not separately observable through this event.
+
+| Accessor | Type |
+| --- | --- |
+| `benefactorUuid()` | `UUID` |
+| `benefactorName()` | `String` |
+| `heirUuid()` | `UUID` |
+| `reductionPercent()` | `float` |
+| `expiresAtMillis()` | `long` |
+| `sourceProfileName()` | `String` |
+| `queued()` | `boolean` |
+
+**Pre-events** — fired before the change; `setCancelled(true)` vetoes it, and any setter below re-tunes the numbers the mod then uses.
+
+### `PreLegacyPayoutEvent`
+
+```java
+LegacyEvents.onPreLegacyPayout(event -> { /* ... */ });
+```
+
+A legacy buff is about to be granted or queued. Cancel to refuse it outright - nothing has been written or queued yet. A listener may also rescale `setReductionPercent` / `setExpiresAtMillis` before dispatch finishes; whatever is left in those fields is what actually gets granted or queued.
+
+| Member | Type | |
+| --- | --- | --- |
+| `benefactorUuid()` | `UUID` | read |
+| `benefactorName()` | `String` | read |
+| `heirUuid()` | `UUID` | read |
+| `retiringRealmOrdinal()` | `int` | read |
+| `sourceProfileName()` | `String` | read |
+| `reductionPercent()` | `float` | read |
+| `expiresAtMillis()` | `long` | read |
+| `setReductionPercent(float)` | `void` | re-tune |
+| `setExpiresAtMillis(long)` | `void` | re-tune |
+
+
+---
+
+## Nascent Soul Escape (0.10.2)
+
+`plugin.siren.API.SoulEscapeEvents` — The fatal-blow reprieve (元婴遁走), the chase, and its four resolutions: extinguished, survived, timed out, forfeited. Players are UUIDs, since the killer may be offline by the time the session resolves.
+
+**Enums declared here**
+
+- `SoulEscapeEvents.SanctuaryKind` — Mirrors `SoulSanctuary.Kind` - kept as its own enum here so this event never has to import Utils.SoulEscape just to name a sanctuary. Values: 
+- `SoulEscapeEvents.ForfeitReason` — How a fleeing soul's window ended without ever resolving into a survive/extinguish/timeout. Values: 
+
+**Post-events** — fired once the change is committed; cannot be cancelled.
+
+### `SoulEscapeBeginEvent`
+
+```java
+SoulEscapeEvents.onSoulEscapeBegin(event -> { /* ... */ });
+```
+
+| Accessor | Type |
+| --- | --- |
+| `soul()` | `UUID` |
+| `killer()` | `UUID` |
+| `realm()` | `CultivationRealm` |
+| `windowSeconds()` | `float` |
+| `qiSpent()` | `float` |
+| `lifespanHoursSpent()` | `float` |
+
+### `SoulEscapeSurviveEvent`
+
+```java
+SoulEscapeEvents.onSoulEscapeSurvive(event -> { /* ... */ });
+```
+
+| Accessor | Type |
+| --- | --- |
+| `soul()` | `UUID` |
+| `killer()` | `UUID` |
+| `kind()` | `SanctuaryKind` |
+| `world()` | `String` |
+| `chunkX()` | `int` |
+| `chunkZ()` | `int` |
+| `weakenedMinutes()` | `float` |
+| `meritToKiller()` | `float` |
+
+### `SoulEscapeExtinguishEvent`
+
+```java
+SoulEscapeEvents.onSoulEscapeExtinguish(event -> { /* ... */ });
+```
+
+| Accessor | Type |
+| --- | --- |
+| `soul()` | `UUID` |
+| `extinguisher()` | `UUID` |
+| `extraKarma()` | `float` |
+| `extraYinShift()` | `float` |
+
+### `SoulEscapeTimeoutEvent`
+
+```java
+SoulEscapeEvents.onSoulEscapeTimeout(event -> { /* ... */ });
+```
+
+| Accessor | Type |
+| --- | --- |
+| `soul()` | `UUID` |
+| `killer()` | `UUID` |
+
+### `SoulEscapeForfeitEvent`
+
+```java
+SoulEscapeEvents.onSoulEscapeForfeit(event -> { /* ... */ });
+```
+
+| Accessor | Type |
+| --- | --- |
+| `soul()` | `UUID` |
+| `killer()` | `UUID` |
+| `reason()` | `ForfeitReason` |
+
+**Pre-events** — fired before the change; `setCancelled(true)` vetoes it, and any setter below re-tunes the numbers the mod then uses.
+
+### `PreSoulEscapeBeginEvent`
+
+```java
+SoulEscapeEvents.onPreSoulEscapeBegin(event -> { /* ... */ });
+```
+
+The fatal blow is about to be cancelled and the soul about to start fleeing. Cancel -> no escape, nothing charged, the blow stays fatal.
+
+| Member | Type | |
+| --- | --- | --- |
+| `soul()` | `UUID` | read |
+| `killer()` | `UUID` | read (may be null) |
+| `realm()` | `CultivationRealm` | read |
+| `windowSeconds()` | `float` | read |
+| `qiCostPercent()` | `float` | read |
+| `lifespanHours()` | `float` | read |
+| `setWindowSeconds(float)` | `void` | re-tune |
+| `setQiCostPercent(float)` | `void` | re-tune |
+| `setLifespanHours(float)` | `void` | re-tune |
+
+### `PreSoulExtinguishEvent`
+
+```java
+SoulEscapeEvents.onPreSoulExtinguish(event -> { /* ... */ });
+```
+
+A blow just landed on a fleeing soul. Cancel -> this blow does nothing; the soul keeps fleeing.
+
+| Member | Type | |
+| --- | --- | --- |
+| `soul()` | `UUID` | read |
+| `extinguisher()` | `UUID` | read |
+| `hitsSoFar()` | `int` | read |
+| `hitsRequired()` | `int` | read |
+| `extraKarma()` | `float` | read |
+| `extraYinShift()` | `float` | read |
+| `setExtraKarma(float)` | `void` | re-tune |
+| `setExtraYinShift(float)` | `void` | re-tune |
+
+### `PreSoulSurviveEvent`
+
+```java
+SoulEscapeEvents.onPreSoulSurvive(event -> { /* ... */ });
+```
+
+A fleeing soul just entered sanctuary. Cancel -> the sanctuary does not count; the session is re-inserted and the soul keeps fleeing.
+
+| Member | Type | |
+| --- | --- | --- |
+| `soul()` | `UUID` | read |
+| `killer()` | `UUID` | read (may be null) |
+| `kind()` | `SanctuaryKind` | read |
+| `world()` | `String` | read |
+| `chunkX()` | `int` | read |
+| `chunkZ()` | `int` | read |
+| `restoreHealthPercent()` | `float` | read |
+| `weakenedMinutes()` | `float` | read |
+| `spareMerit()` | `float` | read |
+| `setRestoreHealthPercent(float)` | `void` | re-tune |
+| `setWeakenedMinutes(float)` | `void` | re-tune |
+| `setSpareMerit(float)` | `void` | re-tune |
 
 
 ---
@@ -2962,6 +3256,7 @@ A member is about to redeem their copy of a compiled Library manual. Cancel to r
 **Enums declared here**
 
 - `WarEvents.SiegeFailReason` — Why a siege ended without the attacker triggering SUPPRESS. Values: `LAPSED`, `DEFENDER_GONE`, `MUSTER_FAILED`, `DEFENDER_ABSENT`, `ABORTED`
+- `WarEvents.BannerBreakSide` — Which side of a siege a Siege Banner's breaker belonged to - see `SiegeBannerBreakEvent`. Values: 
 
 **Post-events** — fired once the change is committed; cannot be cancelled.
 
@@ -3006,6 +3301,32 @@ A siege ended with the hall still in its defender's hands. Sect objects are null
 | `siege()` | `Siege` |
 | `reason()` | `SiegeFailReason` |
 
+### `SiegeBannerPlaceEvent`
+
+```java
+WarEvents.onSiegeBannerPlace(event -> { /* ... */ });
+```
+
+Formations 2.0: a Siege Banner was placed and is now standing.
+
+| Accessor | Type |
+| --- | --- |
+| `banner()` | `SiegeBanner` |
+
+### `SiegeBannerBreakEvent`
+
+```java
+WarEvents.onSiegeBannerBreak(event -> { /* ... */ });
+```
+
+Formations 2.0: a Siege Banner was broken - by anyone, no protection. `breakerSide` tells which side (if any) the breaker belonged to.
+
+| Accessor | Type |
+| --- | --- |
+| `banner()` | `SiegeBanner` |
+| `breaker()` | `UUID` |
+| `breakerSide()` | `BannerBreakSide` |
+
 **Pre-events** — fired before the change; `setCancelled(true)` vetoes it, and any setter below re-tunes the numbers the mod then uses.
 
 ### `PreWarDeclareEvent`
@@ -3037,6 +3358,294 @@ A siege is about to be won. Cancel to leave it running - the attacker keeps hold
 | `defender()` | `Sect` | read |
 | `siege()` | `Siege` | read |
 
+### `PreWarReinforcementRewardEvent`
+
+```java
+WarEvents.onPreWarReinforcementReward(event -> { /* ... */ });
+```
+
+An allied sect's reinforcement of a successfully-defended (LAPSED) siege is about to be rewarded - see `WarManager#failSiege`'s LAPSED branch, the only place this fires. Cancel to withhold THIS specific ally's reward without affecting any other qualifying ally on the same siege (each reinforcing sect gets its own event); `setContributionPerMember` to rescale the payout for this reward only, mirroring `PreWarDeclareEvent#setWindowMillis`'s re-tuning pattern.
+
+| Member | Type | |
+| --- | --- | --- |
+| `reinforcingSect()` | `Sect` | read |
+| `defender()` | `Sect` | read |
+| `siege()` | `Siege` | read |
+| `contributionPerMember()` | `int` | read |
+| `setContributionPerMember(int)` | `void` | re-tune |
+
+### `PreSiegeBannerPlaceEvent`
+
+```java
+WarEvents.onPreSiegeBannerPlace(event -> { /* ... */ });
+```
+
+Formations 2.0: a Siege Banner is about to be placed. Cancel to refuse it (reported to the placer as something preventing the placement). Fired from `SiegeBannerManager.tryPlace` BEFORE any monitor is taken - no lock is held during dispatch (see that class's "Locking" doc). A listener may therefore safely read `WarManager` state; the registration cap and siege liveness are re-checked authoritatively after this event, inside the synchronized registration step.
+
+| Member | Type | |
+| --- | --- | --- |
+| `attackerSect()` | `String` | read |
+| `defenderSect()` | `String` | read |
+| `world()` | `String` | read |
+| `x()` | `int` | read |
+| `y()` | `int` | read |
+| `z()` | `int` | read |
+
+
+---
+
+## Sect Guardians (0.10.2)
+
+`plugin.siren.API.GuardianEvents` — Stationing a guardian NPC at a sect hall, one falling, and the last one falling. Stationing is cancellable.
+
+**Post-events** — fired once the change is committed; cannot be cancelled.
+
+### `SectGuardianStationedEvent`
+
+```java
+GuardianEvents.onSectGuardianStationed(event -> { /* ... */ });
+```
+
+A member successfully stationed a new guardian post at their sect's hall - the post is purchased; the live NPC body itself appears on `SectGuardianSystem`'s next heartbeat once its chunk is resident.
+
+| Accessor | Type |
+| --- | --- |
+| `sect()` | `Sect` |
+| `actor()` | `PlayerRef` |
+| `postIndex()` | `int` |
+
+### `SectGuardianFellEvent`
+
+```java
+GuardianEvents.onSectGuardianFell(event -> { /* ... */ });
+```
+
+One living guardian died. `killerPlayerRef` is null when the killing blow never resolved to a player (environmental damage, a formation trap, or the killer despawned before resolution). `consumed` is true when the killer was the owning sect's own member or an ally - that post is gone for good (no respawn, no refund); false means the normal Guardian-Respawn-Seconds timer was armed instead.
+
+| Accessor | Type |
+| --- | --- |
+| `sect()` | `Sect` |
+| `postIndex()` | `int` |
+| `killerPlayerRef()` | `PlayerRef` |
+| `consumed()` | `boolean` |
+
+### `SectGuardiansFallenEvent`
+
+```java
+GuardianEvents.onSectGuardiansFallen(event -> { /* ... */ });
+```
+
+The LAST living guardian at this sect's hall just died (or vanished into a permanent consumed state) - no living guardian remains at this instant. Purely informational: no hold-time bonus, no penalty (see `SectGuardianManager`'s own class javadoc for why).
+
+| Accessor | Type |
+| --- | --- |
+| `sect()` | `Sect` |
+
+**Pre-events** — fired before the change; `setCancelled(true)` vetoes it, and any setter below re-tunes the numbers the mod then uses.
+
+### `PreSectGuardianStationEvent`
+
+```java
+GuardianEvents.onPreSectGuardianStation(event -> { /* ... */ });
+```
+
+A member is about to station a new guardian post. Cancel to refuse it (reported to the actor as the station attempt simply failing) - fired AFTER every gate in `SectGuardianManager#station` passes but BEFORE the contribution cost is spent, so a veto never costs the actor anything.
+
+| Member | Type | |
+| --- | --- | --- |
+| `sect()` | `Sect` | read |
+| `actor()` | `PlayerRef` | read |
+| `postIndex()` | `int` | read |
+
+
+---
+
+## Dao Sermons (0.10.2)
+
+`plugin.siren.API.SermonEvents` — A cultivator lecturing (讲道) at their own sect's hall, a meditating listener's first qualifying pulse, and how the sermon ends. Starting one is cancellable.
+
+**Post-events** — fired once the change is committed; cannot be cancelled.
+
+### `SermonStartEvent`
+
+```java
+SermonEvents.onSermonStart(event -> { /* ... */ });
+```
+
+A sect member successfully started a sermon at their own sect's hall.
+
+| Accessor | Type |
+| --- | --- |
+| `sect()` | `Sect` |
+| `lecturer()` | `PlayerRef` |
+| `element()` | `DaoElement` |
+| `endsAtMillis()` | `long` |
+
+### `SermonListenerQualifiedEvent`
+
+```java
+SermonEvents.onSermonListenerQualified(event -> { /* ... */ });
+```
+
+One listener's FIRST qualifying pulse of this sermon - fired once per (sermon, listener) pair, never again for the same pair even across a diminished-rate or hard-stop transition. `lecturerUuid` rather than a `PlayerRef`/`Sect` - the lecturer may be resolved on a different call path than the listener's own tick that fires this.
+
+| Accessor | Type |
+| --- | --- |
+| `lecturerUuid()` | `UUID` |
+| `listener()` | `PlayerRef` |
+| `element()` | `DaoElement` |
+| `amountApplied()` | `float` |
+
+### `SermonEndEvent`
+
+```java
+SermonEvents.onSermonEnd(event -> { /* ... */ });
+```
+
+A sermon ended - naturally (duration elapsed), early (`/cultivation sermon stop`), or abnormally (lecturer left the hall chunk/world, hall lost, sect besieged, feature disabled). `forfeited` is true only for the disconnect path (`SermonManager#forget`) - see that method's own doc for why a disconnect forfeits the Merit a graceful stop still pays out.
+
+| Accessor | Type |
+| --- | --- |
+| `lecturerUuid()` | `UUID` |
+| `sectName()` | `String` |
+| `qualifiedListenerCount()` | `int` |
+| `meritAwarded()` | `float` |
+| `forfeited()` | `boolean` |
+
+**Pre-events** — fired before the change; `setCancelled(true)` vetoes it, and any setter below re-tunes the numbers the mod then uses.
+
+### `PreSermonStartEvent`
+
+```java
+SermonEvents.onPreSermonStart(event -> { /* ... */ });
+```
+
+A sect member is about to start a sermon. Cancel to refuse it (reported to the actor as the start attempt simply failing) - fired AFTER every gate in `SermonManager#start` passes but BEFORE the contribution cost is spent or the cooldown is stamped, so a veto never costs the actor anything.
+
+| Member | Type | |
+| --- | --- | --- |
+| `sect()` | `Sect` | read |
+| `lecturer()` | `PlayerRef` | read |
+| `element()` | `DaoElement` | read |
+
+
+---
+
+## Rogue Cultivators (0.10.2)
+
+`plugin.siren.API.RogueEvents` — A rogue cultivator NPC spawning and being slain. The spawn is cancellable.
+
+**Post-events** — fired once the change is committed; cannot be cancelled.
+
+### `RogueCultivatorSpawnedEvent`
+
+```java
+RogueEvents.onRogueCultivatorSpawned(event -> { /* ... */ });
+```
+
+A Rogue Cultivator has finished spawning and is tagged/live in the world.
+
+| Accessor | Type |
+| --- | --- |
+| `encounterId()` | `String` |
+| `npcRef()` | `Ref<EntityStore>` |
+| `worldName()` | `String` |
+| `realmOrdinal()` | `int` |
+| `daoElementName()` | `String` |
+
+### `RogueCultivatorSlainEvent`
+
+```java
+RogueEvents.onRogueCultivatorSlain(event -> { /* ... */ });
+```
+
+A Rogue Cultivator has been slain - any manual/core/Testament roll has already resolved by the time this fires.
+
+| Accessor | Type |
+| --- | --- |
+| `encounterId()` | `String` |
+| `killerUuid()` | `UUID` |
+| `worldName()` | `String` |
+| `manualAwarded()` | `boolean` |
+| `bonusCoreAwarded()` | `boolean` |
+| `testamentAwarded()` | `boolean` |
+
+**Pre-events** — fired before the change; `setCancelled(true)` vetoes it, and any setter below re-tunes the numbers the mod then uses.
+
+### `PreRogueCultivatorSpawnEvent`
+
+```java
+RogueEvents.onPreRogueCultivatorSpawn(event -> { /* ... */ });
+```
+
+A Rogue Cultivator is about to spawn near `anchorPosition` in `worldName`. Cancel to refuse the spawn entirely - the world's next-spawn-due clock still advances normally, exactly like a refused roll that found no valid ground.
+
+| Member | Type | |
+| --- | --- | --- |
+| `worldName()` | `String` | read |
+| `anchorPosition()` | `Vector3dc` | read |
+| `anchorPlayerUuid()` | `UUID` | read |
+| `realmOrdinal()` | `int` | read |
+| `daoElementName()` | `String` | read |
+| `setRealmOrdinal(int)` | `void` | re-tune |
+| `setDaoElementName(String)` | `void` | re-tune |
+
+
+---
+
+## Merit (0.10.2)
+
+`plugin.siren.API.MeritEvents` — Gaining Merit (功德) and ranking up on it. The gain is cancellable.
+
+**Post-events** — fired once the change is committed; cannot be cancelled.
+
+### `MeritGainEvent`
+
+```java
+MeritEvents.onMeritGain(event -> { /* ... */ });
+```
+
+Merit was actually credited - `total`/`multiplier` are the values AFTER the throttle and caps were applied.
+
+| Accessor | Type |
+| --- | --- |
+| `player()` | `PlayerRef` |
+| `deed()` | `MeritDeed` |
+| `amount()` | `float` |
+| `total()` | `float` |
+| `multiplier()` | `float` |
+
+### `MeritRankUpEvent`
+
+```java
+MeritEvents.onMeritRankUp(event -> { /* ... */ });
+```
+
+This player's Merit rank changed - fired once per crossing, de-duplicated the same way `DaoEvents.PathChangeEvent` is.
+
+| Accessor | Type |
+| --- | --- |
+| `player()` | `PlayerRef` |
+| `from()` | `MeritRank` |
+| `to()` | `MeritRank` |
+
+**Pre-events** — fired before the change; `setCancelled(true)` vetoes it, and any setter below re-tunes the numbers the mod then uses.
+
+### `PreMeritGainEvent`
+
+```java
+MeritEvents.onPreMeritGain(event -> { /* ... */ });
+```
+
+Merit is about to be credited for a deed. Cancel to pay nothing; `setAmount` to re-weigh the deed.
+
+| Member | Type | |
+| --- | --- | --- |
+| `player()` | `PlayerRef` | read (may be null) |
+| `deed()` | `MeritDeed` | read |
+| `amount()` | `float` | read |
+| `setAmount(float)` | `void` | re-tune |
+
 
 ---
 
@@ -3046,7 +3655,7 @@ A siege is about to be won. Cancel to leave it running - the attacker keeps hold
 
 **Enums declared here**
 
-- `DuelEvents.DuelEndReason` — How a duel stopped being active. Values: `DEATH`, `VOIDED`
+- `DuelEvents.DuelEndReason` — How a duel stopped being active. Values: `DEATH`, `YIELD`, `VOIDED`
 
 **Post-events** — fired once the change is committed; cannot be cancelled.
 
@@ -3097,7 +3706,7 @@ A duel is now live - both players are flagged as dueling.
 DuelEvents.onDuelEnd(event -> { /* ... */ });
 ```
 
-A duel ended. For DEATH, `winner`/`loser` are meaningful and the payout has been queued; for VOIDED they are simply the two participants and nothing changes hands.
+A duel ended. For DEATH/YIELD, `winner`/`loser` are meaningful and the payout has been queued; for VOIDED they are simply the two participants and nothing changes hands. @param killer for a DEATH, the uuid of the player whose own damage actually killed the loser, or null when the killing blow was not a player's (lava, a fall, drowning, a formation trap) or could not be attributed. Always null for YIELD and VOIDED. Added for Tournament Wagers, which must not pay out on a death the winner did not cause - see `WagerEvents.WagerVoidReason.NOT_OPPONENT_KILL`. It is a plain extra record component and every existing listener keeps compiling; the four-argument constructor below still exists for callers that genuinely have no attribution.
 
 | Accessor | Type |
 | --- | --- |
@@ -3105,6 +3714,7 @@ A duel ended. For DEATH, `winner`/`loser` are meaningful and the payout has been
 | `loser()` | `UUID` |
 | `wager()` | `int` |
 | `reason()` | `DuelEndReason` |
+| `killer()` | `UUID` |
 
 ### `DuelPayoutEvent`
 
@@ -3166,6 +3776,216 @@ A decided duel's wager is about to move. Cancel to let the winner take nothing; 
 | `loser()` | `UUID` | read |
 | `amount()` | `int` | read |
 | `setAmount(int)` | `void` | re-tune |
+
+
+---
+
+## Dao Duels (0.10.1)
+
+`plugin.siren.API.DaoDuelEvents` — The Spirit Stone escrow layered on top of `DuelEvents`' plain Qi-wager duels: the challenge and the payout are cancellable, and the end is reported once the escrow settles.
+
+**Enums declared here**
+
+- `DaoDuelEvents.DaoDuelEndReason` — How a decided Dao Duel was resolved. `DaoDuelManager`'s allowed `DuelManager` surface (`onDuelEnd` only, no `onDuelPayout`) never observes a yield directly, but `DuelYieldCmd` now calls `DaoDuelManager#reportYield` explicitly right after ending the underlying Qi duel (Fix 2 - see `DaoDuelManager`'s own class doc, "The known gap this still leaves: duel-yield"), which attributes the yielder as the loser and fires this event with `YIELD`. Values: `DEATH`, `YIELD`
+
+**Post-events** — fired once the change is committed; cannot be cancelled.
+
+### `DaoDuelEndEvent`
+
+```java
+DaoDuelEvents.onDaoDuelEnd(event -> { /* ... */ });
+```
+
+A decided Dao Duel's Spirit Stone pot has been settled - `spiritStoneAmountPaid` is what actually moved from the loser's escrow (plus any elemental bonus that could be charged) to the winner; the winner's own stake is always returned to them separately and is not counted here. `winnerElement`/`loserElement` may be null if a side had no chosen element at resolution time (only possible when `DaoDuel-Requires-Chosen-Element` is off) - `winnerCountered` is false whenever either is null. `decidedByOpponentDamage` is true ONLY when the loser died to the winner's own damage (their weapon, their technique, or their spirit beast, which is credited to its owner). It is false for a `DaoDuelEndReason#YIELD`, and false for a death to lava, a fall, drowning, a formation trap, a third party, or a source that could not be attributed. It exists for `TournamentWagerManager`, which pays real Spirit Stones to spectators and must not pay on a "win" the winner did not cause - the duel itself still resolves identically either way (see `DuelManager#endDuel(UUID, DuelEvents.DuelEndReason, UUID)`).
+
+| Accessor | Type |
+| --- | --- |
+| `winner()` | `UUID` |
+| `loser()` | `UUID` |
+| `spiritStoneAmountPaid()` | `long` |
+| `winnerElement()` | `DaoElement` |
+| `loserElement()` | `DaoElement` |
+| `winnerCountered()` | `boolean` |
+| `reason()` | `DaoDuelEndReason` |
+| `decidedByOpponentDamage()` | `boolean` |
+
+**Pre-events** — fired before the change; `setCancelled(true)` vetoes it, and any setter below re-tunes the numbers the mod then uses.
+
+### `PreDaoDuelChallengeEvent`
+
+```java
+DaoDuelEvents.onPreDaoDuelChallenge(event -> { /* ... */ });
+```
+
+A Dao Duel challenge is about to be issued (the Qi wager, if any, is handled entirely by `DuelEvents.PreDuelChallengeEvent` - this is the Spirit Stone side only). Cancel to refuse it; `setSpiritStoneAmount` to re-tune the stake (the configured maximum is re-checked afterward).
+
+| Member | Type | |
+| --- | --- | --- |
+| `challenger()` | `UUID` | read |
+| `challenged()` | `UUID` | read |
+| `spiritStoneAmount()` | `long` | read |
+| `setSpiritStoneAmount(long)` | `void` | re-tune |
+
+### `PreDaoDuelPayoutEvent`
+
+```java
+DaoDuelEvents.onPreDaoDuelPayout(event -> { /* ... */ });
+```
+
+A decided Dao Duel's Spirit Stone pot is about to move. Cancel to return the loser's stake to the loser untouched; `setAmount` to re-scale how much of the loser's escrowed stake is forfeited (capped by what was actually escrowed - the winner's own stake is unaffected either way, see `DaoDuelEndEvent`'s own doc).
+
+| Member | Type | |
+| --- | --- | --- |
+| `winner()` | `UUID` | read |
+| `loser()` | `UUID` | read |
+| `amount()` | `long` | read |
+| `setAmount(long)` | `void` | re-tune |
+
+
+---
+
+## Tournament Wagers (0.10.2)
+
+`plugin.siren.API.WagerEvents` — Spectators staking Spirit Stones on individual Dao Duel Tournament matches (a parimutuel market). *The two market-resolution events fire while the tournament's monitor is held* - zero locking and zero cross-manager calls in those listeners. Read the class javadoc first.
+
+**Enums declared here**
+
+- `WagerEvents.WagerVoidReason` — Why a market paid nobody and returned every stake untouched. Values: `FORFEIT`, `DOUBLE_ELIMINATION`, `VOIDED_DUEL`, `YIELD`, `NOT_OPPONENT_KILL`, `TOO_FEW_BETTORS`, `POOL_TOO_THIN`, `TOURNAMENT_RESET`, `ACCOUNTING_FAILURE`
+
+**Post-events** — fired once the change is committed; cannot be cancelled.
+
+### `WagerPlacedEvent`
+
+```java
+WagerEvents.onWagerPlaced(event -> { /* ... */ });
+```
+
+A spectator's Spirit Stones have been charged and their stake recorded. `backed` is the duelist they are backing.
+
+| Accessor | Type |
+| --- | --- |
+| `matchNumber()` | `int` |
+| `bettor()` | `UUID` |
+| `backed()` | `UUID` |
+| `amount()` | `long` |
+
+### `WagerMarketResolvedEvent`
+
+```java
+WagerEvents.onWagerMarketResolved(event -> { /* ... */ });
+```
+
+A market resolved and paid out. @param payouts bettor uuid to the TOTAL Spirit Stones handed back to them - their own returned stake plus their share of the losing pool. A bettor who backed the loser is present with a payout of 0 only if they are also in `stakes`; read `stakes` for what each one put in. Both maps are unmodifiable. @param stakes bettor uuid to what they originally staked. @param burned the house cut plus the indivisible remainder - Spirit Stones destroyed rather than paid to anyone. There is no house account and no organizer; see `TournamentWagerManager`'s own doc.
+
+| Accessor | Type |
+| --- | --- |
+| `matchNumber()` | `int` |
+| `winner()` | `UUID` |
+| `stakes()` | `Map<UUID, Long>` |
+| `payouts()` | `Map<UUID, Long>` |
+| `winnersPool()` | `long` |
+| `losersPool()` | `long` |
+| `burned()` | `long` |
+
+### `WagerMarketVoidedEvent`
+
+```java
+WagerEvents.onWagerMarketVoided(event -> { /* ... */ });
+```
+
+A market paid nobody; every stake in `refunds` was returned in full. Unmodifiable.
+
+| Accessor | Type |
+| --- | --- |
+| `matchNumber()` | `int` |
+| `reason()` | `WagerVoidReason` |
+| `refunds()` | `Map<UUID, Long>` |
+
+**Pre-events** — fired before the change; `setCancelled(true)` vetoes it, and any setter below re-tunes the numbers the mod then uses.
+
+### `PreWagerPlacedEvent`
+
+```java
+WagerEvents.onPreWagerPlaced(event -> { /* ... */ });
+```
+
+A spectator is about to be charged for a stake. Every configured gate (feature enabled, market open, not a duelist, not a live entrant, not a sect-mate, per-bet / per-tournament / per-pool limits) has ALREADY passed by the time this fires; cancelling refuses the bet with no Spirit Stones moved and nothing recorded. The amount is deliberately not settable. Re-tuning a stake here would silently move a player's stones by an amount they never typed, and the per-bet and per-pool ceilings have already been validated against the typed figure.
+
+| Member | Type | |
+| --- | --- | --- |
+| `matchNumber()` | `int` | read |
+| `bettor()` | `UUID` | read |
+| `backed()` | `UUID` | read |
+| `amount()` | `long` | read |
+
+
+---
+
+## Combat Depth (0.10.1)
+
+`plugin.siren.API.CombatDepthEvents` — Technique interrupts and the Wu Xing PvP reward a favorable elemental matchup pays out. Both are cancellable. Punish Windows fire no events of their own - they are a damage multiplier consumed inside the combat system.
+
+**Post-events** — fired once the change is committed; cannot be cancelled.
+
+### `TechniqueInterruptEvent`
+
+```java
+CombatDepthEvents.onTechniqueInterrupt(event -> { /* ... */ });
+```
+
+A charging cultivator's gathering was broken by a hard-enough hit. `damageAmount` is the (possibly re-scaled) figure `PreTechniqueInterruptEvent` settled on.
+
+| Accessor | Type |
+| --- | --- |
+| `ref()` | `Ref<EntityStore>` |
+| `player()` | `PlayerRef` |
+| `damageAmount()` | `float` |
+
+### `WuxingPvpRewardEvent`
+
+```java
+CombatDepthEvents.onWuxingPvpReward(event -> { /* ... */ });
+```
+
+A favorable-matchup PvP kill paid its Wu Xing reward.
+
+| Accessor | Type |
+| --- | --- |
+| `killer()` | `Ref<EntityStore>` |
+| `killerPlayer()` | `PlayerRef` |
+| `spiritStones()` | `int` |
+
+**Pre-events** — fired before the change; `setCancelled(true)` vetoes it, and any setter below re-tunes the numbers the mod then uses.
+
+### `PreTechniqueInterruptEvent`
+
+```java
+CombatDepthEvents.onPreTechniqueInterrupt(event -> { /* ... */ });
+```
+
+A charging cultivator's gathering is about to be broken by a hard-enough hit. Cancel to let the gathering continue uninterrupted; `setDamageAmount` re-scales the figure carried into the paired post-event (the interrupt itself still happens once this fires - the damage that triggered it has already landed).
+
+| Member | Type | |
+| --- | --- | --- |
+| `ref()` | `Ref<EntityStore>` | read |
+| `player()` | `PlayerRef` | read (may be null) |
+| `damageAmount()` | `float` | read |
+| `setDamageAmount(float)` | `void` | re-tune |
+
+### `PreWuxingPvpRewardEvent`
+
+```java
+CombatDepthEvents.onPreWuxingPvpReward(event -> { /* ... */ });
+```
+
+A favorable-matchup PvP kill is about to pay its Wu Xing reward. Cancel to deny it; `setSpiritStones` to re-scale how many are actually granted.
+
+| Member | Type | |
+| --- | --- | --- |
+| `killer()` | `Ref<EntityStore>` | read |
+| `killerPlayer()` | `PlayerRef` | read |
+| `spiritStones()` | `int` | read |
+| `setSpiritStones(int)` | `void` | re-tune |
 
 
 ---
@@ -3583,6 +4403,21 @@ A body gained a level. Fires once per level when a single blow crosses several.
 | `fromLevel()` | `int` |
 | `toLevel()` | `int` |
 
+### `StageBreakthroughEvent`
+
+```java
+BodyTemperingEvents.onStageBreakthrough(event -> { /* ... */ });
+```
+
+A body crossed into a new Tempering Stage (锻体境) - the 9-rung milestone derived from the level above (see `BodyTemperingManager.getTemperingStage`). Fires at most once per `addXp` call even if a single huge blow crossed several levels at once, since the stage is read once before and once after the whole level-up loop, not per level.
+
+| Accessor | Type |
+| --- | --- |
+| `ref()` | `Ref<EntityStore>` |
+| `player()` | `PlayerRef` |
+| `fromStage()` | `int` |
+| `toStage()` | `int` |
+
 **Pre-events** — fired before the change; `setCancelled(true)` vetoes it, and any setter below re-tunes the numbers the mod then uses.
 
 ### `PreXpGainEvent`
@@ -3615,6 +4450,21 @@ About to gain a level. Cancelling holds the body where it is; the XP stays banke
 | `player()` | `PlayerRef` | read (may be null) |
 | `fromLevel()` | `int` | read |
 | `toLevel()` | `int` | read |
+
+### `PreStageBreakthroughEvent`
+
+```java
+BodyTemperingEvents.onPreStageBreakthrough(event -> { /* ... */ });
+```
+
+About to celebrate a Tempering Stage breakthrough. Cancellable, but unlike `PreLevelUpEvent` cancelling this does NOT hold the body at its old stage - it can't, since the stage is derived from the level (already banked by the time this fires) rather than stored on its own. What cancelling suppresses is the CEREMONY: the title, sound, particle and broadcast a real stage breakthrough gets. Refuse it to run your own presentation instead of - or in place of - the built-in one.
+
+| Member | Type | |
+| --- | --- | --- |
+| `ref()` | `Ref<EntityStore>` | read |
+| `player()` | `PlayerRef` | read (may be null) |
+| `fromStage()` | `int` | read |
+| `toStage()` | `int` | read |
 
 
 ---
@@ -4429,6 +5279,110 @@ A Secret Realm site closed. `forced` is true only for an admin's immediate overr
 
 ---
 
+## Trial Pagoda (0.10.2)
+
+`plugin.siren.API.PagodaEvents` — Clearing a floor, a run ending, and the reward, which is cancellable.
+
+**Enums declared here**
+
+- `PagodaEvents.PagodaRunEndReason` — Why a run ended - mirrors `plugin.siren.Utils.Pagoda.PagodaRun.EndReason`, restated here as its own public enum so an addon never needs to import the internal run class. Values: 
+
+**Post-events** — fired once the change is committed; cannot be cancelled.
+
+### `PagodaFloorClearedEvent`
+
+```java
+PagodaEvents.onPagodaFloorCleared(event -> { /* ... */ });
+```
+
+A Trial Pagoda floor was cleared - `newRecord` is true only on a first clear (the highest-floor record actually advanced), false on a replay.
+
+| Accessor | Type |
+| --- | --- |
+| `playerUuid()` | `UUID` |
+| `floor()` | `int` |
+| `newRecord()` | `boolean` |
+
+### `PagodaRunEndedEvent`
+
+```java
+PagodaEvents.onPagodaRunEnded(event -> { /* ... */ });
+```
+
+A Trial Pagoda run ended, for any reason - `floorReached` is the floor the run was ON when it ended, not necessarily a cleared floor (a death mid-floor never advances the player's own record). Mirrors `DepthsEvents.DepthsRunEndEvent`'s own shape (no live component read needed to fire it).
+
+| Accessor | Type |
+| --- | --- |
+| `playerUuid()` | `UUID` |
+| `floorReached()` | `int` |
+| `reason()` | `PagodaRunEndReason` |
+
+**Pre-events** — fired before the change; `setCancelled(true)` vetoes it, and any setter below re-tunes the numbers the mod then uses.
+
+### `PrePagodaRewardEvent`
+
+```java
+PagodaEvents.onPrePagodaReward(event -> { /* ... */ });
+```
+
+A floor-clear reward is about to be granted. Cancel to grant nothing at all; the caller still advances the run and the record either way.
+
+| Member | Type | |
+| --- | --- | --- |
+| `playerUuid()` | `UUID` | read |
+| `floor()` | `int` | read |
+| `spiritStoneAmount()` | `long` | read |
+| `qiAmount()` | `float` | read |
+| `setSpiritStoneAmount(long)` | `void` | re-tune |
+| `setQiAmount(float)` | `void` | re-tune |
+
+
+---
+
+## Transmission Array (0.10.3)
+
+`plugin.siren.API.ArrayEvents` — Traveling through the Transmission Array network between a Cave Abode, a sect hall, a Secret Realm site, the Sea of Consciousness or the Heavenly Realm. The trip is cancellable.
+
+**Post-events** — fired once the change is committed; cannot be cancelled.
+
+### `ArrayTravelEvent`
+
+```java
+ArrayEvents.onArrayTravel(event -> { /* ... */ });
+```
+
+A cultivator successfully traveled through the array. `qiCost` is the FINAL amount actually charged (0 for an admin bypass).
+
+| Accessor | Type |
+| --- | --- |
+| `ref()` | `Ref<EntityStore>` |
+| `player()` | `PlayerRef` |
+| `destinationKind()` | `ArrayDestination.Kind` |
+| `destinationId()` | `String` |
+| `qiCost()` | `float` |
+
+**Pre-events** — fired before the change; `setCancelled(true)` vetoes it, and any setter below re-tunes the numbers the mod then uses.
+
+### `PreArrayTravelEvent`
+
+```java
+ArrayEvents.onPreArrayTravel(event -> { /* ... */ });
+```
+
+A cultivator is about to travel through the array. Cancel to refuse the trip (nothing is charged, nothing moves); `setQiCost` to re-price it - it is charged (and re-checked against the traveler's banked Qi) after this fires, mirroring `DaoEvents.PreDaoElementChangeEvent`'s own mutable-cost shape exactly.
+
+| Member | Type | |
+| --- | --- | --- |
+| `ref()` | `Ref<EntityStore>` | read (may be null) |
+| `player()` | `PlayerRef` | read (may be null) |
+| `destinationKind()` | `ArrayDestination.Kind` | read |
+| `destinationId()` | `String` | read |
+| `qiCost()` | `float` | read |
+| `setQiCost(float)` | `void` | re-tune |
+
+
+---
+
 ## Treasure and Ruin Exploration (0.9.x)
 
 `plugin.siren.API.TreasureEvents` — Claiming a Buried Cache or entering a Ruin Vault - covers both Treasure tiers, since both are "claiming" the same kind of site.
@@ -5050,6 +6004,203 @@ A player kill is about to move a `BountyType.SLAY` contract's progress. Cancel t
 | `killerUuid()` | `UUID` | read |
 | `victimUuid()` | `UUID` | read |
 | `bounty()` | `Bounty` | read |
+
+
+---
+
+## Tea Ceremony (0.10.3)
+
+`plugin.siren.API.TeaEvents` — The two-player reflex-timing duet (茶道): starting (cancellable), every step resolving, and how the ceremony ends. Players are UUIDs.
+
+**Enums declared here**
+
+- `TeaEvents.EndReason` — Why a ceremony ended - carried on `TeaCeremonyEndEvent` so a listener can tell a clean finish from a voided one without re-deriving it. Values: `COMPLETED`, `LEFT`, `DRIFTED`, `DISCONNECTED`, `COMBAT`, `DISABLED`
+
+**Post-events** — fired once the change is committed; cannot be cancelled.
+
+### `TeaCeremonyStartEvent`
+
+```java
+TeaEvents.onTeaCeremonyStart(event -> { /* ... */ });
+```
+
+A ceremony actually began - herbs already spent, the session already live.
+
+| Accessor | Type |
+| --- | --- |
+| `sessionId()` | `String` |
+| `playerA()` | `UUID` |
+| `playerB()` | `UUID` |
+
+### `TeaStepResolvedEvent`
+
+```java
+TeaEvents.onTeaStepResolved(event -> { /* ... */ });
+```
+
+One prompt (a single BOIL/STEEP/POUR/SERVE step) was scored.
+
+| Accessor | Type |
+| --- | --- |
+| `sessionId()` | `String` |
+| `round()` | `int` |
+| `step()` | `TeaStep` |
+| `playerACorrect()` | `boolean` |
+| `playerBCorrect()` | `boolean` |
+| `scoreDelta()` | `float` |
+
+### `TeaCeremonyEndEvent`
+
+```java
+TeaEvents.onTeaCeremonyEnd(event -> { /* ... */ });
+```
+
+A ceremony ended, one way or another - `harmony`/`band` are only meaningful when `reason` is `EndReason#COMPLETED`; every voided reason reports `harmony=0f`/`band=DISCORDANT` and `rewarded=false`, since no reward is ever paid on an abnormal end (herbs still stay spent either way - this event does not cover that, it is applied unconditionally at ceremony start).
+
+| Accessor | Type |
+| --- | --- |
+| `sessionId()` | `String` |
+| `playerA()` | `UUID` |
+| `playerB()` | `UUID` |
+| `reason()` | `EndReason` |
+| `harmony()` | `float` |
+| `band()` | `TeaHarmonyBand` |
+| `rewarded()` | `boolean` |
+
+**Pre-events** — fired before the change; `setCancelled(true)` vetoes it, and any setter below re-tunes the numbers the mod then uses.
+
+### `PreTeaCeremonyStartEvent`
+
+```java
+TeaEvents.onPreTeaCeremonyStart(event -> { /* ... */ });
+```
+
+A pending invite is about to be accepted and a ceremony is about to begin (herbs not yet spent). Cancel to refuse it - the invite is consumed either way, mirroring `OathEvents.PreOathSwearEvent`, so the offerer must send a fresh one.
+
+| Member | Type | |
+| --- | --- | --- |
+| `offerer()` | `UUID` | read |
+| `accepter()` | `UUID` | read |
+| `herbCost()` | `int` | read |
+| `setHerbCost(int)` | `void` | re-tune |
+
+
+---
+
+## Weiqi (0.10.3)
+
+`plugin.siren.API.WeiqiEvents` — Weiqi (围棋 / Go): invites and declines, the match starting, every move, and how a match resolves. Invite and start are cancellable. Players are UUIDs because a match routinely outlives one participant's session.
+
+**Post-events** — fired once the change is committed; cannot be cancelled.
+
+### `WeiqiInviteEvent`
+
+```java
+WeiqiEvents.onWeiqiInvite(event -> { /* ... */ });
+```
+
+An invite was sent and is now pending the other player's answer.
+
+| Accessor | Type |
+| --- | --- |
+| `inviter()` | `UUID` |
+| `invitee()` | `UUID` |
+
+### `WeiqiDeclineEvent`
+
+```java
+WeiqiEvents.onWeiqiDecline(event -> { /* ... */ });
+```
+
+An invite was declined; no match started.
+
+| Accessor | Type |
+| --- | --- |
+| `inviter()` | `UUID` |
+| `invitee()` | `UUID` |
+
+### `WeiqiMatchStartEvent`
+
+```java
+WeiqiEvents.onWeiqiMatchStart(event -> { /* ... */ });
+```
+
+A match is now live. `blackUuid` is always the ACCEPTER (moves first, a courtesy to the invited player); `whiteUuid` is the original inviter.
+
+| Accessor | Type |
+| --- | --- |
+| `matchId()` | `String` |
+| `blackUuid()` | `UUID` |
+| `whiteUuid()` | `UUID` |
+| `boardSize()` | `int` |
+| `komi()` | `float` |
+
+### `WeiqiMoveEvent`
+
+```java
+WeiqiEvents.onWeiqiMove(event -> { /* ... */ });
+```
+
+One ply resolved - either a stone placed at `index` (a flat `y * boardSize + x` board index, decodable via `WeiqiBoard.xOf`/`yOf`) or a pass, never both. @param index meaningless (always `-1`) when `pass` is true. @param capturedCount how many enemy stones this move captured - always `0` for a pass.
+
+| Accessor | Type |
+| --- | --- |
+| `matchId()` | `String` |
+| `player()` | `UUID` |
+| `color()` | `WeiqiStone` |
+| `index()` | `int` |
+| `pass()` | `boolean` |
+| `capturedCount()` | `int` |
+
+### `WeiqiMatchEndEvent`
+
+```java
+WeiqiEvents.onWeiqiMatchEnd(event -> { /* ... */ });
+```
+
+A match ended. `winner` is null for `WeiqiMatch.Outcome#ABANDONED`/ `WeiqiMatch.Outcome#TIMED_OUT` (nobody won an undecided match); for `WeiqiMatch.Outcome#TWO_PASS`/`WeiqiMatch.Outcome#RESIGNED` it is always set. `blackScore`/`whiteScore` are only meaningful for `TWO_PASS` (a resignation or an abandonment never runs area scoring) - both are `0` otherwise.
+
+| Accessor | Type |
+| --- | --- |
+| `matchId()` | `String` |
+| `blackUuid()` | `UUID` |
+| `whiteUuid()` | `UUID` |
+| `winner()` | `UUID` |
+| `outcome()` | `WeiqiMatch.Outcome` |
+| `blackScore()` | `float` |
+| `whiteScore()` | `float` |
+| `totalMoves()` | `int` |
+
+**Pre-events** — fired before the change; `setCancelled(true)` vetoes it, and any setter below re-tunes the numbers the mod then uses.
+
+### `PreWeiqiInviteEvent`
+
+```java
+WeiqiEvents.onPreWeiqiInvite(event -> { /* ... */ });
+```
+
+An invite is about to be sent. Cancel to refuse it outright (e.g. an addon-enforced cooldown or block list).
+
+| Member | Type | |
+| --- | --- | --- |
+| `inviter()` | `UUID` | read |
+| `invitee()` | `UUID` | read |
+
+### `PreWeiqiMatchStartEvent`
+
+```java
+WeiqiEvents.onPreWeiqiMatchStart(event -> { /* ... */ });
+```
+
+A match is about to start (the accepter just accepted a pending invite). Cancel to refuse it - the invite is consumed either way, so the inviter must send a fresh one. `setKomi` re-tunes the komi this ONE match will actually be latched with; `boardSize` is not mutable here since it is already clamped from config before this event fires.
+
+| Member | Type | |
+| --- | --- | --- |
+| `blackUuid()` | `UUID` | read |
+| `whiteUuid()` | `UUID` | read |
+| `boardSize()` | `int` | read |
+| `komi()` | `float` | read |
+| `setKomi(float)` | `void` | re-tune |
 
 
 ---

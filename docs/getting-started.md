@@ -7,10 +7,10 @@ jar once:
 
 ```bash
 mvn install:install-file \
-  -Dfile=Cultivation-0.10.0.jar \
+  -Dfile=Cultivation-0.10.3.jar \
   -DgroupId=plugin.siren \
   -DartifactId=Cultivation \
-  -Dversion=0.10.0 \
+  -Dversion=0.10.3 \
   -Dpackaging=jar
 ```
 
@@ -23,7 +23,7 @@ Repeat whenever you move to a new Cultivation version.
     <dependency>
         <groupId>com.hypixel.hytale</groupId>
         <artifactId>Server</artifactId>
-        <version>0.6.0-pre.13.1</version>
+        <version>0.6.2</version>
         <scope>provided</scope>
     </dependency>
 
@@ -35,7 +35,7 @@ Repeat whenever you move to a new Cultivation version.
     <dependency>
         <groupId>plugin.siren</groupId>
         <artifactId>Cultivation</artifactId>
-        <version>0.10.0</version>
+        <version>0.10.3</version>
         <scope>provided</scope>
     </dependency>
 </dependencies>
@@ -63,7 +63,7 @@ need them. In `src/main/resources/manifest.json`:
   "Version": "1.0.0",
   "ServerVersion": ">=0.6.0-pre.0 <0.7.0",
   "Dependencies": {
-    "Siren:Cultivation": ">=0.10.0"
+    "Siren:Cultivation": ">=0.10.3"
   },
   "Main": "com.example.myaddon.MyAddon"
 }
@@ -150,7 +150,7 @@ If your mod should also work on a server without Cultivation, move the entry:
 
 ```json
 "OptionalDependencies": {
-  "Siren:Cultivation": ">=0.10.0"
+  "Siren:Cultivation": ">=0.10.3"
 }
 ```
 

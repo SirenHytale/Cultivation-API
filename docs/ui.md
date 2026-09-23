@@ -50,16 +50,23 @@ Their ids are bare words — which is exactly why yours must be namespaced.
 
 | Id | Page | Sort order |
 | --- | --- | --- |
-| `overview` | Stats | 100 |
+| `overview` | Stats (active bonuses folded in) | 100 |
 | `settings` | Settings | 200 |
-| `race` | Race selection | 300 |
+| `race` | Identity — race and titles; the id is kept so a replacement still replaces it | 300 |
 | `skilltree` | Skill tree | 400 |
-| `bonuses` | Active bonuses | 500 |
-| `dao` | Dao | 600 |
-| `keybinds` | Technique keybinds | 650 |
-| `rankings` | Rankings | 700 |
+| `dao` | Spiritual Root | 600 |
+| `way` | Dao Comprehension | 700 |
 | `codex` | Codex | 800 |
+| `sense` | Spirit Sense — hidden until the viewer's realm can perceive anything | 850 |
+| `misc` | Everything without its own button: Rankings, Sect, Land Protection and the command-opened pages | 900 |
 | `admin` | Admin — gated on `cultivation.admin` | 9000 (`SORT_LAST`) |
+| `info` | Info — deliberately past `SORT_LAST` so it stays the final button | 9100 |
+
+Six more ids open real pages but have no button: `bonuses` (folded into
+`overview`), `titles` (folded into `race`), `profiles` and `keybinds` (reached
+from `settings`), and, since 0.10.1, `daomastery` and `daoinheritance`
+(reached from a link row on `dao`). Registering any of them yourself puts a
+button back, since the bar is drawn purely from this registry.
 
 ### Taking over a built-in page
 

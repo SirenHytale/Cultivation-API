@@ -310,6 +310,33 @@ not duplicated here:
 | `IdentitySectionContext` | Handed in, not built | [Identity sections](ui.md#identity-sections-0100) |
 | `MarketCategory` | Static factory (`MarketCategory.of(...)`) | filters the Auction House's category row; shaped like `CodexCategory` plus an `ItemStack` predicate |
 
+### New in 0.10.1 – 0.10.3
+
+| Type | Shape | See |
+| --- | --- | --- |
+| `TechniquePresetSnapshot` | Immutable record; `CultivationAPI.exportTechniquePreset(accessor, ref, index)` / `importTechniquePreset(accessor, ref, snapshot, newName)` | *(0.10.2)* One keybind layout detached from its player, so it can travel on an item or in a config. `serialize()` / `parse(String)` round-trip it through one string; `parse` never throws and returns null for anything unreadable. *A snapshot is not a grant*: the import keeps only arts this server registers, has enabled, and the receiving cultivator already knows, and reports the rest in `ImportResult.droppedUnknown()` / `droppedDisabled()`. |
+| `CultivationPaletteDefault` | Functional interface; `CultivationAPI.registerPaletteDefault(key, rule)` + `unregisterPaletteDefault(key)` | *(0.10.2)* The soft counterpart to `CultivationPaletteLock`: supplies a look only for a player who never chose one. First registered rule to name a registered palette wins. It runs on every page and HUD build, and `isAvailableTo` is *not* re-checked on its answer, so gate it yourself and keep it to a component read. |
+| `AuctionListingType` | Closed enum — `fromId(String)`, `getId()`, `getTranslationKey()` | *(0.10.2)* Buy-now vs timed auction. Closed on purpose; observe or veto bids with `MarketEvents.PreAuctionBidEvent` instead. |
+| `RevealableSystem` | Builder (`RevealableSystem.builder(String id)`) | *(0.10.3)* [Progressive Reveal](registries.md#progressive-reveal-0103) |
+
+Enum changes on existing event classes:
+
+- `DuelEvents.DuelEndReason` gained *`YIELD`* *(0.10.1)*. A yield is a decided
+  result with a known winner and the wager transfers, exactly like `DEATH`. A
+  `switch` that treated everything other than `DEATH` as "nothing happened"
+  now mis-reads yields.
+- `DuelEvents.DuelEndEvent` gained a fifth component, *`@Nullable UUID killer()`*
+  *(0.10.2)*: for a `DEATH`, the player whose own damage killed the loser, or
+  null when the blow was environmental or unattributed. Always null for `YIELD`
+  and `VOIDED`. The four-argument constructor still exists, so existing code
+  compiles unchanged.
+
+The new event classes declare their own enums (`DaoDuelEvents.DaoDuelEndReason`,
+`LifespanEvents.ExtendSource`, `PagodaEvents.PagodaRunEndReason`,
+`SoulEscapeEvents.SanctuaryKind` / `ForfeitReason`, `TeaEvents.EndReason`,
+`WagerEvents.WagerVoidReason`); they are listed with their values in
+[the event reference](events-reference.md).
+
 ---
 
 ## Hytale engine types

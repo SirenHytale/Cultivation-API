@@ -5,15 +5,15 @@ progression mod for Hytale servers — realms and Qi, daos, sects, techniques, s
 beasts, formations, cave abodes, duels, alchemy and the heavens themselves.
 
 This repository is for **mod developers**. It contains the API's Java sources,
-a complete reference for all **291 events**, and worked examples. Everything here
+a complete reference for all **368 events**, and worked examples. Everything here
 is the real code the mod ships — nothing is a summary written after the fact.
 
 | | |
 | --- | --- |
-| **Artifact** | `plugin.siren:Cultivation:0.10.0` |
+| **Artifact** | `plugin.siren:Cultivation:0.10.3` |
 | **Package** | `plugin.siren.API` |
 | **Plugin id** | `Siren:Cultivation` |
-| **Hytale server** | `0.6.0-pre.x` (Update 6 pre-release; built against `com.hypixel.hytale:Server:0.6.0-pre.13.1`) |
+| **Hytale server** | Update 6 (`ServerVersion >=0.6.0-pre.0 <0.7.0`; built against `com.hypixel.hytale:Server:0.6.2`) |
 | **Java** | 25 |
 
 ---
@@ -26,8 +26,8 @@ internals to change how it behaves. Every one of these is a supported hook:
 | I want to… | Use | Guide |
 | --- | --- | --- |
 | Read a player's realm, level, Qi, race, skill nodes | `CultivationAPI` getters | [Reading player state](docs/reading-state.md) |
-| React when something happens (breakthrough, tame, siege…) | 166 post-events | [Events](docs/events.md) |
-| Veto something, or re-tune its numbers | 125 cancellable pre-events | [Events](docs/events.md) |
+| React when something happens (breakthrough, tame, siege…) | 216 post-events | [Events](docs/events.md) |
+| Veto something, or re-tune its numbers | 152 cancellable pre-events | [Events](docs/events.md) |
 | Keep your own progression in step with a player's saves | `ProfileEvents` | [Profiles](docs/profiles.md) |
 | Grant Qi, force a breakthrough, hand out a skill node | `addQi`, `completeBreakthrough`, `grantSkillNode` | [Driving progression](docs/driving-progression.md) |
 | Read or drain a chunk's spirit vein | `readSpiritVein`, `drainSpiritVein` | [Driving progression](docs/driving-progression.md) |
@@ -87,6 +87,17 @@ internals to change how it behaves. Every one of these is a supported hook:
 | Force a player's theme regardless of their own pick | `registerPaletteLock` | [Registries](docs/registries.md#palette-locks-0100) |
 | Add my own tab to the Identity page | `registerIdentitySection` | [UI integration](docs/ui.md#identity-sections-0100) |
 | Register a personal particle look for meditation/breakthroughs | `registerMeditationAura` | [Registries](docs/registries.md#meditation-auras-0100) |
+| Suggest a default look for players who never picked one | `registerPaletteDefault` | [Types](docs/types.md#new-in-0101--0103) |
+| Copy a keybind layout onto an item or into a config, and back | `exportTechniquePreset`, `importTechniquePreset` | [Types](docs/types.md#new-in-0101--0103) |
+| Keep my system hidden in the menus until it is relevant, then announce it | `registerRevealableSystem`, `isSystemRevealed` | [Registries](docs/registries.md#progressive-reveal-0103) |
+| React to a Tempering Stage breakthrough, or replace its ceremony | `BodyTemperingEvents.onPreStageBreakthrough` | [Event reference](docs/events-reference.md#body-tempering) |
+| React to, or veto, a Siege Banner or a war reinforcement reward | `WarEvents` | [Event reference](docs/events-reference.md#sect-wars) |
+| React to Dao Duel escrow, tournament wagers, or Wu Xing combat rewards | `DaoDuelEvents`, `WagerEvents`, `CombatDepthEvents` | [Event reference](docs/events-reference.md#dao-duels-0101) |
+| React to Lifespan, Legacy or a Nascent Soul Escape | `LifespanEvents`, `LegacyEvents`, `SoulEscapeEvents` | [Event reference](docs/events-reference.md#lifespan-0102) |
+| React to sect guardians, sermons, rogue cultivators or Merit | `GuardianEvents`, `SermonEvents`, `RogueEvents`, `MeritEvents` | [Event reference](docs/events-reference.md#sect-guardians-0102) |
+| React to the Trial Pagoda or Transmission Array travel | `PagodaEvents`, `ArrayEvents` | [Event reference](docs/events-reference.md#trial-pagoda-0102) |
+| React to seasons or the Bounty Board | `SeasonEvents`, `BountyEvents` | [Event reference](docs/events-reference.md#seasons-0102) |
+| React to a Tea Ceremony or a Weiqi match | `TeaEvents`, `WeiqiEvents` | [Event reference](docs/events-reference.md#tea-ceremony-0103) |
 
 Three of those are the big ones, and two of the three are easy to confuse:
 `CultivationTheme` changes the **words**, `CultivationPalette` changes the
@@ -105,10 +116,10 @@ your local repository once:
 
 ```bash
 mvn install:install-file \
-  -Dfile=Cultivation-0.10.0.jar \
+  -Dfile=Cultivation-0.10.3.jar \
   -DgroupId=plugin.siren \
   -DartifactId=Cultivation \
-  -Dversion=0.10.0 \
+  -Dversion=0.10.3 \
   -Dpackaging=jar
 ```
 
@@ -118,7 +129,7 @@ Then depend on it in `provided` scope:
 <dependency>
     <groupId>plugin.siren</groupId>
     <artifactId>Cultivation</artifactId>
-    <version>0.10.0</version>
+    <version>0.10.3</version>
     <scope>provided</scope>
 </dependency>
 ```
@@ -133,7 +144,7 @@ resolves Cultivation's classes for you:
 
 ```json
 "Dependencies": {
-  "Siren:Cultivation": ">=0.10.0"
+  "Siren:Cultivation": ">=0.10.3"
 }
 ```
 
@@ -194,7 +205,7 @@ float qi = CultivationAPI.getQi(accessor, ref);
 | **[Driving progression](docs/driving-progression.md)** | Granting Qi, ranking up, meditation, spirit veins, and the rest of the world |
 | **[Config access](docs/config-access.md)** | Reading and writing Cultivation's own settings, and when not to |
 | **[Events](docs/events.md)** | Pre vs post, cancelling, re-tuning, threading, error handling |
-| **[Event reference](docs/events-reference.md)** | All 291 listeners with their payloads — generated from source |
+| **[Event reference](docs/events-reference.md)** | All 368 listeners with their payloads — generated from source |
 | **[Registries](docs/registries.md)** | Races, techniques, Qi-absorption items |
 | **[Profiles](docs/profiles.md)** | Keeping your own progression in step with a player's separate saves |
 | **[Store benefits](docs/store-benefits.md)** | Registering a Treasure Pavilion product, and the one event family that is not on a world thread |
@@ -220,7 +231,7 @@ assistant to read `AGENTS.md` first.
 ## Source layout
 
 ```
-api-sources/plugin/siren/API/   The 58 public API classes, verbatim
+api-sources/plugin/siren/API/   The 87 public API source files, verbatim
 docs/                            Guides and the generated event reference
 examples/                        A worked example addon
 tools/gen_events_reference.py    Regenerates docs/events-reference.md

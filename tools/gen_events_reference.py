@@ -34,6 +34,26 @@ EVENT_FILES: list[tuple[str, str, str]] = [
         "capstone, races, the skill tree and respecs.",
     ),
     (
+        "LifespanEvents",
+        "Lifespan (0.10.2)",
+        "Lifespan (寿元), the per-profile online-play-hour budget keyed to the "
+        "highest realm ever reached: extending it, withering, restoring and "
+        "expiring. Extend and expire are cancellable. Default-off on the server.",
+    ),
+    (
+        "LegacyEvents",
+        "Legacy (0.10.1)",
+        "A retiring cultivator's breakthrough-cost-reduction buff reaching the "
+        "chosen heir. The payout is cancellable.",
+    ),
+    (
+        "SoulEscapeEvents",
+        "Nascent Soul Escape (0.10.2)",
+        "The fatal-blow reprieve (元婴遁走), the chase, and its four resolutions: "
+        "extinguished, survived, timed out, forfeited. Players are UUIDs, since the "
+        "killer may be offline by the time the session resolves.",
+    ),
+    (
         "DaoEvents",
         "Dao, alignment and karma",
         "Elemental daos, affinity drift, Yin-Yang lean, the Righteous/Devil "
@@ -108,9 +128,55 @@ EVENT_FILES: list[tuple[str, str, str]] = [
         "Declaring sieges and how they resolve.",
     ),
     (
+        "GuardianEvents",
+        "Sect Guardians (0.10.2)",
+        "Stationing a guardian NPC at a sect hall, one falling, and the last "
+        "one falling. Stationing is cancellable.",
+    ),
+    (
+        "SermonEvents",
+        "Dao Sermons (0.10.2)",
+        "A cultivator lecturing (讲道) at their own sect's hall, a meditating "
+        "listener's first qualifying pulse, and how the sermon ends. Starting "
+        "one is cancellable.",
+    ),
+    (
+        "RogueEvents",
+        "Rogue Cultivators (0.10.2)",
+        "A rogue cultivator NPC spawning and being slain. The spawn is "
+        "cancellable.",
+    ),
+    (
+        "MeritEvents",
+        "Merit (0.10.2)",
+        "Gaining Merit (功德) and ranking up on it. The gain is cancellable.",
+    ),
+    (
         "DuelEvents",
         "Duels",
         "Challenges, duel start/end and Qi wager payouts.",
+    ),
+    (
+        "DaoDuelEvents",
+        "Dao Duels (0.10.1)",
+        "The Spirit Stone escrow layered on top of `DuelEvents`' plain Qi-wager "
+        "duels: the challenge and the payout are cancellable, and the end is "
+        "reported once the escrow settles.",
+    ),
+    (
+        "WagerEvents",
+        "Tournament Wagers (0.10.2)",
+        "Spectators staking Spirit Stones on individual Dao Duel Tournament "
+        "matches (a parimutuel market). *The two market-resolution events fire "
+        "while the tournament's monitor is held* - zero locking and zero "
+        "cross-manager calls in those listeners. Read the class javadoc first.",
+    ),
+    (
+        "CombatDepthEvents",
+        "Combat Depth (0.10.1)",
+        "Technique interrupts and the Wu Xing PvP reward a favorable elemental "
+        "matchup pays out. Both are cancellable. Punish Windows fire no events of "
+        "their own - they are a damage multiplier consumed inside the combat system.",
     ),
     (
         "FormationEvents",
@@ -208,6 +274,18 @@ EVENT_FILES: list[tuple[str, str, str]] = [
         "a request anything downstream could meaningfully veto.",
     ),
     (
+        "PagodaEvents",
+        "Trial Pagoda (0.10.2)",
+        "Clearing a floor, a run ending, and the reward, which is cancellable.",
+    ),
+    (
+        "ArrayEvents",
+        "Transmission Array (0.10.3)",
+        "Traveling through the Transmission Array network between a Cave "
+        "Abode, a sect hall, a Secret Realm site, the Sea of Consciousness or "
+        "the Heavenly Realm. The trip is cancellable.",
+    ),
+    (
         "TreasureEvents",
         "Treasure and Ruin Exploration (0.9.x)",
         "Claiming a Buried Cache or entering a Ruin Vault - covers both "
@@ -267,6 +345,19 @@ EVENT_FILES: list[tuple[str, str, str]] = [
         "the rotation's own generated contracts deliberately do NOT fire it - "
         "and a completed contract paying out. The claim is cancellable; a "
         "PARTIAL claim (a reward that did not fit) never fires the post-event.",
+    ),
+    (
+        "TeaEvents",
+        "Tea Ceremony (0.10.3)",
+        "The two-player reflex-timing duet (茶道): starting (cancellable), every "
+        "step resolving, and how the ceremony ends. Players are UUIDs.",
+    ),
+    (
+        "WeiqiEvents",
+        "Weiqi (0.10.3)",
+        "Weiqi (围棋 / Go): invites and declines, the match starting, every move, "
+        "and how a match resolves. Invite and start are cancellable. Players are "
+        "UUIDs because a match routinely outlives one participant's session.",
     ),
     (
         "StoreBenefitEvents",

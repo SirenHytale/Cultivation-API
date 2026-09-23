@@ -18,6 +18,7 @@ import javax.annotation.Nullable;
  *         StoreBenefit.builder("myMod:store:crown", "my-mod-crown")
  *                 .name("server.myMod.store.crown")
  *                 .title("server.myMod.title.crown")
+ *                 .hint("server.myMod.title.hint.crown")
  *                 .build());}</pre>
  *
  * <h2>What a benefit is, and is not</h2>
@@ -35,12 +36,14 @@ public final class StoreBenefit {
     private final String productSlug;
     private final String nameKey;
     private final String titleNameKey;
+    private final String hintKey;
 
     private StoreBenefit(Builder builder){
         this.key = builder.key;
         this.productSlug = builder.productSlug;
         this.nameKey = builder.nameKey;
         this.titleNameKey = builder.titleNameKey;
+        this.hintKey = builder.hintKey;
     }
 
     @Nonnull
@@ -72,11 +75,22 @@ public final class StoreBenefit {
         return this.titleNameKey;
     }
 
+    /**
+     * Translation key of the auto-registered title's locked-tile hint, or null
+     * to fall back to the shared {@code server.customUI.cultivation.title.hint.store}
+     * hint every other store title uses.
+     */
+    @Nullable
+    public String getHintKey(){
+        return this.hintKey;
+    }
+
     public static final class Builder {
         private final String key;
         private final String productSlug;
         private String nameKey;
         private String titleNameKey;
+        private String hintKey;
 
         private Builder(@Nonnull String key, @Nonnull String productSlug){
             this.key = key;
@@ -101,6 +115,19 @@ public final class StoreBenefit {
         @Nonnull
         public Builder title(@Nonnull String titleNameTranslationKey){
             this.titleNameKey = titleNameTranslationKey;
+            return this;
+        }
+
+        /**
+         * Overrides the auto-registered title's locked-tile hint for this
+         * benefit specifically, rather than the shared "Bought from the
+         * Treasure Pavilion..." hint every other store title falls back to -
+         * for a benefit whose hint should name what it comes bundled with, or
+         * otherwise say something more specific than the generic one.
+         */
+        @Nonnull
+        public Builder hint(@Nonnull String translationKey){
+            this.hintKey = translationKey;
             return this;
         }
 

@@ -1,17 +1,21 @@
 # Events
 
-Cultivation exposes **291 listener hooks** across 35 subsystems — 166
-post-events and 125 cancellable pre-events. This page covers the rules that apply
+Cultivation exposes **368 listener hooks** across 51 subsystems — 216
+post-events and 152 cancellable pre-events. This page covers the rules that apply
 to all of them. For the full catalog — every event, its payload, and what each
 field means — see **[the event reference](events-reference.md)**.
 
 | Class | Covers |
 | --- | --- |
 | `CultivationEvents` | Qi, meditation, rituals, breakthroughs, advancements, demotions, tribulations, the Heart-Devil Trial, Qi Deviation, the Ascension capstone, races, skill tree, respecs |
+| `LifespanEvents` | *(0.10.2)* Lifespan (寿元), the play-hour budget keyed to the highest realm reached — extend, wither, restore, expire |
+| `LegacyEvents` | *(0.10.1)* A retiring cultivator's breakthrough-cost buff reaching their heir |
+| `SoulEscapeEvents` | *(0.10.2)* Nascent Soul Escape — the fatal-blow reprieve, the chase, and its four resolutions |
 | `DaoEvents` | Elements, affinity drift, Yin-Yang alignment, moral paths, karma, Devil harvest |
 | `DaoComprehensionEvents` | *(0.9.x)* Heavenly Dao understanding, the open Personal Dao registry, Dao Enlightenment |
 | `TechniqueEvents` | Performing and learning arts, fusing two into a third, mastery advancement, Sword Flying, timed combat buffs |
 | `ItemEvents` | Loot drops, pills, spirit cores, manuals, weapon refinement, Life-Bound treasures |
+| `AlchemyEvents` | *(0.10.0)* The Pill Cauldron refining ritual and its Fire Watch tending prompts |
 | `ForgingEvents` | *(0.9.x)* Tempering a weapon/armor at a Forge Anchor |
 | `TalismanEvents` | *(0.9.x)* Inscribing at a Talisman Desk and using a finished talisman |
 | `WeaponSpiritEvents` | *(0.9.x)* A Life-Bound Treasure's spirit awakening, leveling, and being nurtured with Qi |
@@ -19,7 +23,14 @@ field means — see **[the event reference](events-reference.md)**.
 | `BreedingEvents` | *(0.9.x)* The two-cultivator Beast Pen ritual and hatching a bred egg |
 | `SectEvents` | Founding, membership, ranks, abbreviations, halls, inscriptions, the sect Dao, shared progression, buildings |
 | `WarEvents` | Declaring sieges and how they resolve |
+| `GuardianEvents` | *(0.10.2)* Sect Guardian NPCs being stationed and falling |
+| `SermonEvents` | *(0.10.2)* Dao Sermons at a sect hall — start, a listener qualifying, end |
+| `RogueEvents` | *(0.10.2)* Rogue Cultivator NPCs spawning and being slain |
+| `MeritEvents` | *(0.10.2)* Gaining Merit (功德) and ranking up |
 | `DuelEvents` | Challenges, duels, wager payouts |
+| `DaoDuelEvents` | *(0.10.1)* The Spirit Stone escrow on top of a duel — challenge, payout, end |
+| `WagerEvents` | *(0.10.2)* Spectator wagers on Dao Duel Tournament matches. *Two of its events fire under a held lock* — read the class javadoc |
+| `CombatDepthEvents` | *(0.10.1)* Technique interrupts and the Wu Xing PvP reward |
 | `FormationEvents` | Laying and dispersing spirit arrays, trap strikes |
 | `DwellingEvents` | Cave Abodes, Spirit Springs, upkeep, seclusion |
 | `CelestialEvents` | *(0.8.0)* Server-wide phenomena starting and ending — Spirit Tide, Meteor Shower, Blood Moon, and [any an addon registers](registries.md#celestial-event-types) |
@@ -34,11 +45,18 @@ field means — see **[the event reference](events-reference.md)**.
 | `QuestEvents` | *(0.9.x)* Wandering-NPC quest chains — accept, step advance, complete, abandon |
 | `DepthsEvents` | *(0.9.x)* Secret Realm Depths solo runs — start, floor clear, extract, end |
 | `SecretRealmEvents` | *(0.9.x)* A Secret Realm site's barrier opening and closing |
+| `PagodaEvents` | *(0.10.2)* Trial Pagoda floors, run endings and rewards |
+| `ArrayEvents` | *(0.10.3)* Traveling through the Transmission Array network |
 | `TreasureEvents` | *(0.9.x)* Claiming a Buried Cache or entering a Ruin Vault |
 | `MarketEvents` | *(0.9.x)* Auction House listings and the Traveling Merchant |
 | `TideEvents` | *(0.9.x)* Beast Tide sieges on a sect hall or Cave Abode |
 | `RivalEvents` | *(0.9.x)* Challenging a Wandering Rival Cultivator |
 | `WorldBossEvents` | *(0.9.x)* Calamity Beast (wandering world boss) omen, spawn and resolution |
+| `RiftEvents` | *(0.10.0)* Void Rifts — opening, waves, the Warden, sealed or collapsed |
+| `SeasonEvents` | *(0.10.2)* A season opening and closing |
+| `BountyEvents` | *(0.10.2)* Bounty Board contracts posted and paid out |
+| `TeaEvents` | *(0.10.3)* The two-player Tea Ceremony |
+| `WeiqiEvents` | *(0.10.3)* Weiqi (Go) — invites, matches, moves, results |
 | `StoreBenefitEvents` | *(0.8.0)* [Treasure Pavilion](store-benefits.md) entitlements arriving and leaving. **The one class here that does not fire on a world thread** |
 
 ## Pre vs post

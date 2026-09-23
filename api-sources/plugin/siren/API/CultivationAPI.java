@@ -43,6 +43,7 @@ import plugin.siren.Utils.BodyTemperingManager;
 import plugin.siren.Utils.Lifespan.LifespanManager;
 import plugin.siren.Utils.CultivationModifiers;
 import plugin.siren.Utils.CultivationManager;
+import plugin.siren.Utils.Reveal.RevealManager;
 import plugin.siren.Utils.DaoManager;
 import plugin.siren.Utils.Dao.DaoComprehensionManager;
 import plugin.siren.Utils.QiAbsorptionItemRegistry;
@@ -202,6 +203,15 @@ public class CultivationAPI {
      */
     private static final List<CodexEntry> CODEX_ENTRIES = new CopyOnWriteArrayList<>();
     private static final List<CodexCategory> CODEX_CATEGORIES = new CopyOnWriteArrayList<>();
+
+    /**
+     * Every player-facing system Progressive Reveal can keep out of the menus
+     * until it becomes relevant - this mod's own 28 built-ins, put there by
+     * {@code RevealManager.registerBuiltins()} during setup, plus whatever
+     * other mods contribute. Copy-on-write for the same reason as the
+     * registries above.
+     */
+    private static final List<RevealableSystem> REVEALABLE_SYSTEMS = new CopyOnWriteArrayList<>();
 
     /**
      * Every look a player may wear. Copy-on-write for the same reason as the
@@ -2885,6 +2895,74 @@ public class CultivationAPI {
         return null;
     }
 
+    // --- Contributing to Progressive Reveal ---
+
+    /**
+     * Adds a system Progressive Reveal can keep out of the menus/Codex until a
+     * player's highest-ever realm (or an {@code unlockedBy}/{@code engagedBy}
+     * predicate) makes it relevant - see {@link RevealableSystem}'s own doc
+     * for the builder and every field's contract.
+     *
+     * <p>Call from your plugin's {@code setup()}; load order does not matter.
+     * Registering the same id twice replaces the first - the same convention
+     * {@link #registerCodexEntry} follows.</p>
+     */
+    public static void registerRevealableSystem(@Nonnull RevealableSystem system){
+        REVEALABLE_SYSTEMS.removeIf(existing -> existing.getId().equals(system.getId()));
+        REVEALABLE_SYSTEMS.add(system);
+    }
+
+    /** Removes a previously registered system - for a plugin unloading cleanly, or an addon that never wants it hidden at all. */
+    public static void unregisterRevealableSystem(@Nonnull String systemId){
+        REVEALABLE_SYSTEMS.removeIf(existing -> existing.getId().equals(systemId));
+    }
+
+    /**
+     * @return every registered system, ordered by {@link RevealableSystem#getSortOrder()}
+     * and then registration order. A fresh list, safe to hold.
+     */
+    @Nonnull
+    public static List<RevealableSystem> getRevealableSystems(){
+        List<RevealableSystem> systems = new ArrayList<>(REVEALABLE_SYSTEMS);
+        systems.sort(Comparator.comparingInt(RevealableSystem::getSortOrder));
+        return systems;
+    }
+
+    /** @return the system registered under this id, or null if nothing claims it. */
+    @Nullable
+    public static RevealableSystem getRevealableSystem(@Nonnull String systemId){
+        for(RevealableSystem system : REVEALABLE_SYSTEMS){
+            if(system.getId().equals(systemId)){
+                return system;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Whether {@code ref} currently sees {@code systemId} in its menus/Codex -
+     * false only while Progressive Reveal is hiding it (see
+     * {@code Utils/Reveal/RevealView} for the exact rule). True for an
+     * unregistered id - there is nothing to hide it.
+     */
+    public static boolean isSystemRevealed(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref,
+                                           @Nonnull String systemId){
+        return RevealManager.isSystemRevealed(accessor, ref, systemId);
+    }
+
+    /**
+     * @return this player's permanent high-water realm mark (ordinal against
+     * {@code CultivationRealm.ordinal()}) - the account-scoped record
+     * Progressive Reveal's gates read, which rises only through earned
+     * progress and never through an admin realm/level/reset. Read-only: never
+     * seeds or writes anything, even if the account has not been seeded yet
+     * (falls back to the live effective realm in that case).
+     */
+    public static int getHighestRealmReached(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref){
+        return RevealManager.getHighestRealmReached(accessor, ref);
+    }
+
     /**
      * Adds a heading to the Codex index. Four ship with the mod
      * ({@link CodexCategory#PATH}, {@code SELF}, {@code WORLD}, {@code CRAFT});
@@ -2978,6 +3056,20 @@ public class CultivationAPI {
 
         CultivationManager.applyRealmStats(accessor, ref, component);
         CultivationManager.refreshHud(accessor, ref, component);
+
+        // Progressive Reveal: a ProgressionProvider's own progress is earned
+        // progress (owner decision 1) - raises the high-water mark the same
+        // way a natural breakthrough does. Only while a provider is installed:
+        // this method is also Cultivation's own general "resync the snapshot"
+        // call (TitleManager.equip, reached from a plain title click), and
+        // without a provider the effective realm is the stored one an admin
+        // may have just set - letting that path raise the mark would turn any
+        // admin-set realm permanent on the player's next title change. The
+        // built-in ladder's earned raises arrive through BreakthroughEvent
+        // instead. Derives its own PlayerRef; a no-op if this entity has none.
+        if(getProgressionProvider() != null){
+            RevealManager.onEarnedRealm(accessor, ref, accessor.getComponent(ref, PlayerRef.getComponentType()));
+        }
     }
 
     /**

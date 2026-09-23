@@ -33,7 +33,7 @@ cover it, because nearly every mechanic is re-tunable there.
 1. **`docs/pitfalls.md`** — the mistakes that crash servers. Read this first.
 2. `docs/getting-started.md` — dependency wiring and `setup()`.
 3. The guide for whatever the user is doing (see `README.md`'s table).
-4. `docs/events-reference.md` — all 291 listeners with their payloads. Generated
+4. `docs/events-reference.md` — all 368 listeners with their payloads. Generated
    from source, so it is accurate; it is long, so search it rather than reading
    it end to end.
 
@@ -262,29 +262,25 @@ for every new subsystem's config too — `daoComprehension()`, `talisman()`,
 `treasure()`, `faction()`, `dreamTrial()`, `campaign()`, `oath()`, `market()`,
 `tide()`, `partner()`, `masterDisciple()`, `qiDeviation()`, `tournament()` and
 `celestial()` — plus `secretRealm()`, which previously had none, and 0.10.0
-added `alliance()` (sect diplomacy - Non-Aggression/Trade/Alliance/Rivalry).
+added `alliance()` (sect diplomacy - Non-Aggression/Trade/Alliance/Rivalry),
+0.10.1 added `pathWar()` and `season()`, and 0.10.3 added `array()` (the
+Transmission Array network), `tea()` and `weiqi()`.
 Each returns the
 live `Config<T>` **holder**; call `.get()` at the point of use and `.save()` after
 writing. To change a value for one player or one event, use the matching `Pre*`
 event instead — a config write changes the server permanently and overwrites what
 its owner tuned.
 
-**Twelve config files have no `CultivationConfigs` accessor** — Bounty, Depths,
-Fist, HeavenlyRealm, Land, Leaderboard, Meridian, Quest, Reclusive, Retreat,
-SeaOfConsciousness and WorldBoss. Of the original seven named here through
-0.8.0, Celestial, Master-Disciple, Qi Deviation, Secret Realm and Tournament all
-gained one in 0.9.x; Fist and Land are the two survivors. The other ten are
-config files behind 0.9.x subsystems that were never wrapped at all — several of
-which (Depths, Meridian, Quest, WorldBoss) DO have a public `*Events` class, so
-the events surface for those four is real even though their settings are not
-reachable through this registry. Bounty, HeavenlyRealm, Leaderboard, Reclusive,
-Retreat and SeaOfConsciousness have **no public API surface at all** — no
-`*Events` class in `plugin.siren.API` either — so nothing in this repo covers
-them yet.
+*32 config files have no `CultivationConfigs` accessor* as of 0.10.3.
+[`docs/config-access.md`](docs/config-access.md#files-with-no-accessor-yet)
+has the list and, for each, the public surface that exists instead — most of
+them (Bounty, CombatDepth, DaoDuel, Depths, Fist, Legacy, Lifespan, Meridian,
+Merit, Pagoda, Quest, Rift, WorldBoss) have their own `*Events` class. Check
+there before telling a user a subsystem is unreachable.
 
-Every one of these twelve is reachable as `Cultivation.getFistConfig()` and
-friends, on the ordinary internals terms: `plugin.siren.Cultivation` may change
-shape between versions. Prefer a `Pre*` event where one exists.
+Every one is reachable as `Cultivation.getFistConfig()` and friends, on the
+ordinary internals terms: `plugin.siren.Cultivation` may change shape between
+versions. Prefer a `Pre*` event where one exists.
 
 **Compatibility flags:**
 
@@ -357,6 +353,26 @@ void registerPaletteLock(CultivationPaletteLock)    // + unregisterPaletteLock(C
                                                       // forces a palette on some players, overriding their own pick
 CultivationPaletteLock resolveActivePaletteLock(accessor, ref)
 
+// (0.10.2)
+void registerPaletteDefault(String key, CultivationPaletteDefault)  // + unregisterPaletteDefault(String)
+                                                      // a SUGGESTED look for players who never picked one;
+                                                      // runs every draw, gate it yourself
+TechniquePresetSnapshot exportTechniquePreset(accessor, ref, int presetIndex)   // null if none
+TechniquePresetSnapshot.ImportResult importTechniquePreset(accessor, ref, snapshot, @Nullable String newName)
+                                                      // a snapshot is NOT a grant: unknown/disabled
+                                                      // arts are dropped and counted
+
+// (0.10.3) Progressive Reveal - see docs/registries.md#progressive-reveal-0103
+void registerRevealableSystem(RevealableSystem)     // + unregisterRevealableSystem(String)
+RevealableSystem.builder(String id).name(key).hint(key)   // both required; id is PERSISTED, never rename
+        .revealRealm(CultivationRealm | IntSupplier) | .neverByRealm()
+        .unlockedBy(Predicate<PlayerRef>) .engagedBy(Predicate<PlayerRef>)   // cheap, read-only
+        .codexEntries(String...) .opensCodex(String) .build()
+boolean isSystemRevealed(accessor, ref, String systemId)   // true for an unknown id
+int     getHighestRealmReached(accessor, ref)              // earned high-water mark; never writes
+// Does NOT hide your menu button - gate CultivationMenuPage.visible(...) on isSystemRevealed.
+// opensMenuPage(...) only takes Cultivation's own Compass targets; use opensCodex for an addon.
+
 // A title is PURELY cosmetic. Its two gates ask different questions:
 //   .permission(node) / .visible(Predicate<PlayerRef>)  may they SEE it   -> hidden if false
 //   .unlocked(UnlockCheck)                              have they EARNED it -> greyed + .hint()
@@ -393,11 +409,14 @@ boolean hasStoreBenefit(@Nullable UUID playerUuid, String productSlug)
 StoreBenefit.builder(String key, String productSlug)
         .name(String translationKey)     // how it is listed
         .title(String translationKey)    // ALSO registers a CultivationTitle for owners
+        .hint(String translationKey)     // (0.10.3) that title's locked-tile hint; optional
         .build()
 ```
 
 Two ids, NOT interchangeable: `key` is yours and must be namespaced; `productSlug`
-is the store's. **`hasStoreBenefit` takes the slug** — passing the key returns
+is the store's — a product slug, `sub_<family>` for everyone holding that family's
+subscription, or `once_<slug>` (a product sold both ways only) for outright
+buyers with family subscribers excluded. **`hasStoreBenefit` takes the slug** — passing the key returns
 `false` forever, silently. `false` also means "system disabled" / "product
 disabled" / "first sweep has not landed", so it means *do not apply this*, never
 *they did not buy it*. Safe from any thread, answers for offline players.
@@ -462,7 +481,21 @@ Builder.semantic(Semantic, int rgb)
 `TreasureEvents`, `MarketEvents`, `TideEvents`, `RivalEvents`, `WorldBossEvents` —
 plus two more in 0.10.0: `AlchemyEvents` (the Pill Cauldron refining ritual,
 including Fire Watch tending prompts) and `RiftEvents` (the Void Rift world
-event). 35 classes, 291 listeners total.
+event) — plus sixteen more through 0.10.3: `CombatDepthEvents`, `DaoDuelEvents`,
+`LegacyEvents` (0.10.1); `SeasonEvents`, `BountyEvents`, `LifespanEvents`,
+`SoulEscapeEvents`, `WagerEvents`, `GuardianEvents`, `SermonEvents`,
+`RogueEvents`, `MeritEvents`, `PagodaEvents` (0.10.2); `ArrayEvents`,
+`TeaEvents`, `WeiqiEvents` (0.10.3). 51 classes, 368 listeners total.
+
+*`WagerEvents.WagerMarketResolvedEvent` / `WagerMarketVoidedEvent` fire while
+the tournament's monitor is held.* A listener on those two must take no lock
+and call back into no Cultivation manager — copy what it needs and queue it.
+
+`DuelEvents.DuelEndReason` gained `YIELD` (0.10.1), a decided result where the
+wager transfers exactly as for `DEATH`, and `DuelEndEvent` gained a nullable
+`killer()` (0.10.2). A `switch` written against the old two values mis-reads
+yields.
+
 See [docs/events-reference.md](docs/events-reference.md) for what each covers.
 
 Every listener is `ClassName.onSomething(Consumer<SomethingEvent>)`, and nearly

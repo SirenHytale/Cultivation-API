@@ -50,6 +50,16 @@ public final class BodyTemperingEvents {
     public record LevelUpEvent(@Nonnull Ref<EntityStore> ref, @Nullable PlayerRef player,
                                int fromLevel, int toLevel) {}
 
+    /**
+     * A body crossed into a new Tempering Stage (锻体境) - the 9-rung milestone
+     * derived from the level above (see {@code BodyTemperingManager.getTemperingStage}).
+     * Fires at most once per {@link #addXp} call even if a single huge blow
+     * crossed several levels at once, since the stage is read once before and
+     * once after the whole level-up loop, not per level.
+     */
+    public record StageBreakthroughEvent(@Nonnull Ref<EntityStore> ref, @Nullable PlayerRef player,
+                                         int fromStage, int toStage) {}
+
     // --- Pre events ----------------------------------------------------------
 
     /**
@@ -131,21 +141,68 @@ public final class BodyTemperingEvents {
         }
     }
 
+    /**
+     * About to celebrate a Tempering Stage breakthrough. Cancellable, but
+     * unlike {@link PreLevelUpEvent} cancelling this does NOT hold the body at
+     * its old stage - it can't, since the stage is derived from the level
+     * (already banked by the time this fires) rather than stored on its own.
+     * What cancelling suppresses is the CEREMONY: the title, sound, particle
+     * and broadcast a real stage breakthrough gets. Refuse it to run your own
+     * presentation instead of - or in place of - the built-in one.
+     */
+    public static final class PreStageBreakthroughEvent extends CancellableEvent {
+        private final Ref<EntityStore> ref;
+        private final PlayerRef player;
+        private final int fromStage;
+        private final int toStage;
+
+        public PreStageBreakthroughEvent(@Nonnull Ref<EntityStore> ref, @Nullable PlayerRef player, int fromStage, int toStage){
+            this.ref = ref;
+            this.player = player;
+            this.fromStage = fromStage;
+            this.toStage = toStage;
+        }
+
+        @Nonnull
+        public Ref<EntityStore> ref(){
+            return ref;
+        }
+
+        @Nullable
+        public PlayerRef player(){
+            return player;
+        }
+
+        public int fromStage(){
+            return fromStage;
+        }
+
+        public int toStage(){
+            return toStage;
+        }
+    }
+
     // --- Registration --------------------------------------------------------
 
     private static final List<Consumer<XpGainEvent>> XP_GAIN = EventBus.newListenerList();
     private static final List<Consumer<LevelUpEvent>> LEVEL_UP = EventBus.newListenerList();
+    private static final List<Consumer<StageBreakthroughEvent>> STAGE_BREAKTHROUGH = EventBus.newListenerList();
     private static final List<Consumer<PreXpGainEvent>> PRE_XP_GAIN = EventBus.newListenerList();
     private static final List<Consumer<PreLevelUpEvent>> PRE_LEVEL_UP = EventBus.newListenerList();
+    private static final List<Consumer<PreStageBreakthroughEvent>> PRE_STAGE_BREAKTHROUGH = EventBus.newListenerList();
 
     public static void onXpGain(@Nonnull Consumer<XpGainEvent> listener){ XP_GAIN.add(listener); }
     public static void onLevelUp(@Nonnull Consumer<LevelUpEvent> listener){ LEVEL_UP.add(listener); }
+    public static void onStageBreakthrough(@Nonnull Consumer<StageBreakthroughEvent> listener){ STAGE_BREAKTHROUGH.add(listener); }
     public static void onPreXpGain(@Nonnull Consumer<PreXpGainEvent> listener){ PRE_XP_GAIN.add(listener); }
     public static void onPreLevelUp(@Nonnull Consumer<PreLevelUpEvent> listener){ PRE_LEVEL_UP.add(listener); }
+    public static void onPreStageBreakthrough(@Nonnull Consumer<PreStageBreakthroughEvent> listener){ PRE_STAGE_BREAKTHROUGH.add(listener); }
 
     public static void fireXpGain(@Nonnull XpGainEvent event){ EventBus.dispatch(XP_GAIN, event, "BodyTemperingXpGainEvent"); }
     public static void fireLevelUp(@Nonnull LevelUpEvent event){ EventBus.dispatch(LEVEL_UP, event, "BodyTemperingLevelUpEvent"); }
+    public static void fireStageBreakthrough(@Nonnull StageBreakthroughEvent event){ EventBus.dispatch(STAGE_BREAKTHROUGH, event, "BodyTemperingStageBreakthroughEvent"); }
     public static boolean firePreLevelUp(@Nonnull PreLevelUpEvent event){ return EventBus.fire(PRE_LEVEL_UP, event, "BodyTemperingPreLevelUpEvent"); }
+    public static boolean firePreStageBreakthrough(@Nonnull PreStageBreakthroughEvent event){ return EventBus.fire(PRE_STAGE_BREAKTHROUGH, event, "BodyTemperingPreStageBreakthroughEvent"); }
 
     /**
      * Fires the pre-XP event and reports what survived it.

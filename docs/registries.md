@@ -965,3 +965,93 @@ the built-in look). An id nobody claims resolves back to Cultivation's own
 particles at every one of the three moments, so a mod that stops shipping an
 aura never leaves a player's session broken — the same fallback contract an
 unclaimed palette or title id has everywhere else in this API.
+
+## Progressive Reveal (0.10.3)
+
+Progressive Reveal keeps a player-facing system out of the menus and the Codex
+until it becomes relevant to that player, then announces it through the
+Progression Compass's "Newly Opened" row. Cultivation registers 28 of its own
+systems. An addon adds its own the same way it adds a Codex entry:
+
+```java
+CultivationAPI.registerRevealableSystem(
+        RevealableSystem.builder("myMod:soulRings")
+                .name("server.myMod.reveal.soulRings.name")   // required
+                .hint("server.myMod.reveal.soulRings.hint")   // required
+                .revealRealm(CultivationRealm.QI_CONDENSATION)
+                .codexEntries("myMod:soulRings")
+                .opensCodex("myMod:soulRings")
+                .build());
+```
+
+`build()` throws unless the id matches `^[A-Za-z0-9_.:-]{1,64}$` and both
+`name` and `hint` are set. Registering an existing id replaces it;
+`unregisterRevealableSystem(id)` removes one.
+
+*The id is persisted on every account that has revealed it. Never rename it
+once shipped* — a rename silently un-reveals the system for every player who
+had already earned it.
+
+### When a system reveals
+
+A system is visible when any of these holds, checked in order:
+
+1. Progressive Reveal is off (`Reveal-Enabled`), the player turned on "show
+   everything" in their settings, or they are an admin and
+   `Reveal-Admins-See-All` is on (the default — so admins testing your addon
+   see everything unless they turn it off).
+2. The system is unregistered, or its `enabledWhen(...)` supplier says it is
+   off. A disabled system is never hidden, and never announced either.
+3. It was already revealed for this account (reveals are sticky).
+4. The player's realm reaches the gate. The gate is compared against the
+   higher of their live realm and their *high-water mark* — the highest realm
+   they ever *earned*. An admin `setRealm` does not raise the mark.
+5. `unlockedBy(...)` passes (reveals *and* announces) or `engagedBy(...)`
+   passes (reveals silently — for a player who already found the system some
+   other way).
+
+Realm gates:
+
+| Builder call | Gate |
+| --- | --- |
+| `.revealRealm(CultivationRealm)` | A fixed realm |
+| `.revealRealm(IntSupplier)` | A live ordinal, e.g. from your own config getter, so an admin edit applies without a restart |
+| `.neverByRealm()` | Realm alone never reveals it; only the two predicates can |
+| *(none)* | Ordinal 0, visible from the start |
+
+### Predicates must be cheap and read-only
+
+`unlockedBy` and `engagedBy` receive a `PlayerRef` and are called while pages
+are being built. Read components with a plain `getComponent`; never call a
+`getOrCreate`-style accessor or write anything. A predicate that throws is
+treated as *passed* (the system reveals) and logged once for that id.
+
+### What reveal hides, and what it does not
+
+- *Codex entries* listed in `codexEntries(...)` are hidden while the system
+  is. An entry claimed by several systems hides only while *every* claimant is
+  hidden.
+- *Your own menu page button is not hidden for you.* Nothing ties a
+  `RevealableSystem` to a `CultivationMenuPage`. To hide yours, gate its
+  `visible(...)` predicate on `CultivationAPI.isSystemRevealed(accessor, ref,
+  "myMod:soulRings")`.
+- *`opensMenuPage(...)` only accepts Cultivation's own Compass page targets*
+  (`SECT`, `DAO_COMPREHENSION`, `SEA`, `FORMATIONS`, `DAO_INHERITANCE`, `TIDE`,
+  `PAGODA`, `ABODE`, `ASCENSION`, `REINCARNATION`, `CELESTIAL`, `MISC`). Any
+  other string, including your own menu page key, silently gives the "Newly
+  Opened" row no open button. Point an addon's row at a Codex article with
+  `opensCodex(...)` instead.
+
+### Reading it
+
+```java
+boolean shown = CultivationAPI.isSystemRevealed(accessor, ref, "myMod:soulRings");  // true for an unknown id
+int mark      = CultivationAPI.getHighestRealmReached(accessor, ref);  // CultivationRealm ordinal; never writes
+List<RevealableSystem> all = CultivationAPI.getRevealableSystems();    // sorted by sortOrder, a fresh copy
+RevealableSystem one = CultivationAPI.getRevealableSystem("myMod:soulRings");  // null if unclaimed
+```
+
+A [`ProgressionProvider`](progression-provider.md) counts as earned progress:
+while one is installed, every `refreshProgression` call raises the high-water
+mark to the provider's current realm. That is one more reason to call it on
+every level change.

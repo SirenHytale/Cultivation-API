@@ -61,6 +61,12 @@ inside somebody else's component, so anything that skips this leaves the HUD, th
 rankings and every realm gate showing that player's previous standing until their
 next meditation tick.
 
+*New in 0.10.3:* while a provider is installed, `refreshProgression` also counts
+as earned progress for [Progressive Reveal](registries.md#progressive-reveal-0103).
+It raises the player's permanent high-water realm mark to your current realm,
+which is what reveals Cultivation's realm-gated systems in their menus. Skipping
+the call now also leaves those systems hidden.
+
 Worth calling from your own player-join handling too, so a player whose component
 loads after Cultivation's join hook is not gated on last session's numbers for
 their first few seconds.

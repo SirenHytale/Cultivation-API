@@ -39,7 +39,7 @@ generated.
 ## Read this before copying
 
 **It compiles.** Every source file here builds clean with `javac` against the
-real `Cultivation-0.10.0.jar` and `Server-0.6.0-pre.13.1.jar`, so every API
+real `Cultivation-0.10.3.jar` and `Server-0.6.2.jar`, so every API
 signature in it is verified rather than merely plausible. You cannot build it
 straight out of this repository only because neither jar can be redistributed
 here — see

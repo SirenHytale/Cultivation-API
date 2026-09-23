@@ -57,6 +57,20 @@ if (CultivationAPI.hasStoreBenefit(uuid, "myMod:store:crown")) { … }
 Keep the slug in a constant next to the `builder(...)` call so the two can only
 ever disagree in one place.
 
+*New in 0.10.3:* a slug is either a product's own (`cultivation-sacred-bodies`) or
+`sub_<family>` — `sub_cultivation`, `sub_mermaids`, `sub_endless-leveling` — which
+lists everyone holding that family's subscription, bundles included. A product
+sold both ways already lists its subscribers and its outright buyers together, so
+register the product slug alone rather than combining two benefits on the server.
+
+The store also publishes `once_<slug>` for any product sold both ways: the same
+list minus the family subscribers, i.e. only players who bought that product
+outright. Register on `once_<slug>` instead of the bare slug when the benefit
+must specifically NOT follow the family subscription (Sacred Bodies and Heavenly
+Flames are the two products this applies to today). `once_<slug>` 404s for a
+product with no outright option — a `subscription`-only product, or
+`username-bound`, whose bare slug is already the outright-only list.
+
 `key` still follows [the namespacing rule](pitfalls.md#5-colliding-on-an-id) that
 every other registry in this API follows: registering an existing key **replaces**
 the previous holder rather than erroring.
@@ -87,8 +101,9 @@ for the benefit, unlocked for exactly the players who bought it:
 
 ```java
 StoreBenefit.builder("myMod:store:crown", "my-mod-crown")
-        .name("server.myMod.store.crown")     // how the benefit is listed
-        .title("server.myMod.title.crown")    // the label players wear
+        .name("server.myMod.store.crown")            // how the benefit is listed
+        .title("server.myMod.title.crown")           // the label players wear
+        .hint("server.myMod.title.storeHint.crown")  // (0.10.3) optional locked-tile hint
         .build();
 ```
 
@@ -97,7 +112,23 @@ it, which is both this mod's convention for anything locked and the only
 advertising the system does. Omit `.title(...)` and no title is registered; the
 benefit then exists purely for your own code to query.
 
-Both strings are translation keys, under [your own prefix](pitfalls.md#4-trying-to-override-cultivations-lang-keys).
+*New in 0.10.3:*
+
+- **`.hint(...)`** replaces the shared "Bought from the Treasure Pavilion…" line
+  on the greyed tile with your own. Use it to say what the title comes with
+  ("Comes with the Crown Pack, bought outright or through the subscription…").
+  Omit it and the shared hint is used.
+- **The title is hidden, not greyed, when the server refuses it** — the master
+  switch off, or your slug in `DisabledBenefits`. A product the operator switched
+  off should not be teased on the picker. Equipping re-checks this, and a worn
+  one comes off at the wearer's next join.
+- **The Gallery tab shows a store title only to a player who owns it**, and never
+  counts an unowned one toward completion — completion is for what is earned.
+- **Every store title shares one picker section**, whichever mod registered it
+  and whenever that mod loaded: the picker groups titles by section, not by
+  registration order.
+
+All three strings are translation keys, under [your own prefix](pitfalls.md#4-trying-to-override-cultivations-lang-keys).
 
 ## Reacting to a grant or a revoke
 

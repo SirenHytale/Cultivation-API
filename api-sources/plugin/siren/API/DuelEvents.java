@@ -1,6 +1,7 @@
 package plugin.siren.API;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -21,6 +22,8 @@ public final class DuelEvents {
     public enum DuelEndReason {
         /** One duelist died; the wager transfers. */
         DEATH,
+        /** A duelist yielded ({@code /cultivation duel yield}); the wager transfers, exactly like DEATH - a decided outcome with a known winner, never "nothing happened" (see K-030). */
+        YIELD,
         /** Undecidable - a participant left, or the duel ran past its max duration. No wager moves. */
         VOIDED
     }
@@ -36,8 +39,29 @@ public final class DuelEvents {
     /** A duel is now live - both players are flagged as dueling. */
     public record DuelStartEvent(@Nonnull UUID challenger, @Nonnull UUID challenged, int wager) {}
 
-    /** A duel ended. For DEATH, {@code winner}/{@code loser} are meaningful and the payout has been queued; for VOIDED they are simply the two participants and nothing changes hands. */
-    public record DuelEndEvent(@Nonnull UUID winner, @Nonnull UUID loser, int wager, @Nonnull DuelEndReason reason) {}
+    /**
+     * A duel ended. For DEATH/YIELD, {@code winner}/{@code loser} are
+     * meaningful and the payout has been queued; for VOIDED they are simply
+     * the two participants and nothing changes hands.
+     *
+     * @param killer for a DEATH, the uuid of the player whose own damage
+     * actually killed the loser, or null when the killing blow was not a
+     * player's (lava, a fall, drowning, a formation trap) or could not be
+     * attributed. Always null for YIELD and VOIDED. Added for Tournament
+     * Wagers, which must not pay out on a death the winner did not cause -
+     * see {@code WagerEvents.WagerVoidReason.NOT_OPPONENT_KILL}. It is a
+     * plain extra record component and every existing listener keeps
+     * compiling; the four-argument constructor below still exists for callers
+     * that genuinely have no attribution.
+     */
+    public record DuelEndEvent(@Nonnull UUID winner, @Nonnull UUID loser, int wager, @Nonnull DuelEndReason reason,
+                               @Nullable UUID killer) {
+
+        /** The pre-attribution form - {@code killer} is null, i.e. "not known to be the opponent's own kill". */
+        public DuelEndEvent(@Nonnull UUID winner, @Nonnull UUID loser, int wager, @Nonnull DuelEndReason reason){
+            this(winner, loser, wager, reason, null);
+        }
+    }
 
     /** A decided duel's wager actually moved: {@code amount} is what the loser could cover, which is exactly what the winner gained. */
     public record DuelPayoutEvent(@Nonnull UUID winner, @Nonnull UUID loser, int amount) {}

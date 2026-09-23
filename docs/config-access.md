@@ -74,7 +74,13 @@ saving the one holder you edited — but useful after a bulk rewrite.
 | | `raceSystem()` | The race system's own switches |
 | | `race(PlayerRace)` | One race's stat block — including a race another mod registered |
 | **Arts** | `dao()` `technique()` `manual()` `alchemy()` `refinement()` `lifeBound()` `beast()` | What a cultivator practices, crafts, tempers and binds |
+| | `daoComprehension()` `talisman()` `forging()` `weaponSpirit()` `breeding()` | *(0.9.x)* The Heavenly/Personal Dao track, talisman inscription, forge tempering, Life-Bound spirits, beast breeding |
 | **Society** | `sect()` `formation()` `dwelling()` `war()` `duel()` `partner()` | Sects, the ground they hold, the homes they build, the fights they pick |
+| | `party()` `dungeon()` `rival()` `treasure()` `faction()` `oath()` `dreamTrial()` `campaign()` `market()` `tide()` `masterDisciple()` `qiDeviation()` `tournament()` `celestial()` `secretRealm()` | *(0.9.x)* Parties and dungeons, rivals, exploration, factions, oaths, the campaign, the Auction House, Beast Tides, mentorship, deviation, tournaments, celestial events, Secret Realms |
+| | `alliance()` | *(0.10.0)* Sect diplomacy — Non-Aggression, Trade, Alliance, Rivalry |
+| | `pathWar()` `season()` | *(0.10.1)* The server-wide Righteous vs Devil kill-count contest; the Seasonal Cycle and its Hall of Fame |
+| | `array()` | *(0.10.3)* The Transmission Array network — master switch, realm gate, per-destination toggles, Qi cost and cooldown |
+| | `tea()` `weiqi()` | *(0.10.3)* The two-player Tea Ceremony and Weiqi (Go) — timing, costs and payouts |
 | **Compatibility** | `endlessLeveling()` | How Cultivation shares the stats it raises — see [Compatibility](compatibility.md) |
 | **Release** | `update()` | The version check behind the Info page — see [Update checks](registries.md#update-checks) |
 | | `webStore()` | *(0.8.0)* The Treasure Pavilion sync: whether purchases are applied here, how often the lists are re-read, and which products the server refuses — see [Store benefits](store-benefits.md#the-operators-switches) |
@@ -85,26 +91,35 @@ its own.
 
 ### Files with no accessor yet
 
-Cultivation ships twelve config files that `CultivationConfigs` does not
-expose: **Bounty**, **Depths**, **Fist**, **HeavenlyRealm**, **Land**,
-**Leaderboard**, **Meridian**, **Quest**, **Reclusive**, **Retreat**,
-**SeaOfConsciousness** and **WorldBoss**.
+As of 0.10.3, Cultivation ships *32* config files that `CultivationConfigs`
+does not expose. Many of them still have a public events surface, so the
+subsystem is observable and re-tunable per event even though its settings file
+is not reachable here:
 
-Of the seven named here through 0.8.0 (Celestial, Fist, Land, Master-Disciple,
-Qi Deviation, Secret Realm, Tournament), five gained an accessor in 0.9.x —
-only **Fist** and **Land** are still missing one. The other ten above are
-config files behind 0.9.x subsystems that were never wrapped at all. Every new
-subsystem that DID get one has its own accessor now too — `talisman()`,
-`forging()`, `weaponSpirit()`, `breeding()`, `daoComprehension()`, `party()`,
-`dungeon()`, `rival()`, `treasure()`, `faction()`, `dreamTrial()`, `campaign()`,
-`oath()`, `market()`, `tide()`, `partner()`.
+| Config file | Public surface instead |
+| --- | --- |
+| *Bounty* | `BountyEvents` |
+| *CombatDepth* | `CombatDepthEvents` |
+| *DaoDuel* | `DaoDuelEvents` (and `WagerEvents` for the tournament market) |
+| *Depths* | `DepthsEvents` |
+| *Fist* | `FistEvents` |
+| *Legacy* | `LegacyEvents` |
+| *Lifespan* | `LifespanEvents` |
+| *Meridian* | `MeridianEvents` |
+| *Merit* | `MeritEvents` |
+| *Pagoda* | `PagodaEvents` |
+| *Quest* | `QuestEvents` |
+| *Rift* | `RiftEvents` |
+| *WorldBoss* | `WorldBossEvents` |
+| *InnerDemon*, *CleanseRite*, *Reincarnation* | `CultivationEvents` (`PreInnerDemonTrialEvent`, `PreCleanseRiteEvent`, `PreReincarnationEvent` and their posts) |
+| *Reveal* | The [Progressive Reveal registry](registries.md#progressive-reveal-0103) — contribute systems, not settings |
 
-Four of the ten new gaps — **Depths**, **Meridian**, **Quest** and
-**WorldBoss** — DO have a public `*Events` class even though their settings
-are not reachable here; see [Event reference](events-reference.md). The other
-six — **Bounty**, **HeavenlyRealm**, **Leaderboard**, **Reclusive**,
-**Retreat** and **SeaOfConsciousness** — have no public API surface at all yet:
-no config accessor and no `*Events` class either.
+The remaining fifteen — *Compass*, *DaoInheritance*, *DaoMastery*,
+*Forage*, *GrandDao*, *GrandTournament*, *Hearth*, *HeavenlyRealm*,
+*HerbScatter*, *Land*, *Leaderboard*, *Reclusive*, *Retreat*,
+*SeaOfConsciousness* and *SolarTerm* — have no public API surface at all
+yet (a few are *read* by `CultivationAPI` helpers, such as the leaderboard and
+Dao Mastery season champions, but none can be tuned through this package).
 
 They are reachable, on the internals terms the [README](../README.md#compatibility)
 sets out for anything outside `plugin.siren.API`:

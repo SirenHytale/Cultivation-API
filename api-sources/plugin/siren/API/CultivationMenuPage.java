@@ -44,12 +44,15 @@ import java.util.function.Supplier;
  *
  * <h2>Ids without a button</h2>
  *
- * <p>Four more ids exist and open real pages, but Cultivation no longer puts
+ * <p>Six more ids exist and open real pages, but Cultivation no longer puts
  * them on the bar - {@code bonuses} was folded into {@code overview},
  * {@code titles} into {@code race} (which is why that button now reads
- * "Identity"), and {@code profiles} and {@code keybinds} are reached from
- * {@code settings}. Registering any of them yourself puts a button back, since
- * the bar is drawn purely from what is in this registry.</p>
+ * "Identity"), {@code profiles} and {@code keybinds} are reached from
+ * {@code settings}, and {@code daomastery} and {@code daoinheritance} are
+ * reached from a link row on {@code dao} specifically (the Spiritual Root
+ * page) rather than from settings. Registering any of them yourself puts a
+ * button back, since the bar is drawn purely from what is in this
+ * registry.</p>
  *
  * <p>Note also that {@code sense} carries a {@link Builder#visible} gate rather
  * than a permission: its button is hidden until the viewer's realm actually
