@@ -1,0 +1,1 @@
+- [Disconnect thread vs entity removal](reference_disconnect_thread_and_removal_order.md) — on-thread disconnect removes entity before queued hops; /stop disconnects before plugin shutdown
