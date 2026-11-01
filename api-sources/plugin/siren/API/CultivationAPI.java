@@ -158,17 +158,18 @@ public class CultivationAPI {
 
     /**
      * The installed progression system, or null while the built-in realm/stage
-     * ladder is in charge. Plain static (not volatile/atomic) for the same
-     * reason the other registries in this class are: it is written once from a
-     * plugin's setup() on the main thread, long before any world thread reads
-     * it, and never again.
+     * ladder is in charge. Normally written once from a plugin's setup(), but
+     * nothing stops a later call (an addon handing progression back with
+     * {@code null} on shutdown, or installing late), and every world thread
+     * reads it on its own hot paths - so volatile, to make a swap visible to
+     * all of them rather than leaving one thread on the old provider.
      */
     @Nullable
-    private static ProgressionProvider progressionProvider;
+    private static volatile ProgressionProvider progressionProvider;
 
-    /** The installed theme, or null when the mod uses its own wording. Same threading rationale as above. */
+    /** The installed theme, or null when the mod uses its own wording. Volatile for the same reason as above. */
     @Nullable
-    private static CultivationTheme theme;
+    private static volatile CultivationTheme theme;
 
     /**
      * Config sections other mods have added to the admin menu, in registration
@@ -1134,6 +1135,12 @@ public class CultivationAPI {
      */
     public static int addBodyTemperingXp(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref,
                                          @Nullable PlayerRef playerRef, float amount){
+        // BodyTemperingManager.addXp refuses a NaN/infinite amount itself;
+        // checked here too so a bad grant costs not even the component read.
+        if(!(amount > 0f) || !Float.isFinite(amount)){
+            return 0;
+        }
+
         BodyTemperingComponent component = accessor.getComponent(ref, BodyTemperingComponent.getComponentType());
         if(component == null){
             return 0;
@@ -1602,12 +1609,24 @@ public class CultivationAPI {
      * can recompute a bonus whenever its own state changes without having to
      * track and subtract what it granted last time. Pass 0 to withdraw it.</p>
      *
+     * <p>Not a heal: the pool keeps the same current/max fraction across the
+     * change (full stays full, a pool at 40% stays at 40%), whether the bonus
+     * rises or falls, so withdrawing and re-applying a bonus never refills it.</p>
+     *
      * @param statIndex one of {@code DefaultEntityStatTypes.getHealth()},
      *                  {@code getStamina()}, {@code getMana()}, {@code getOxygen()}.
      * @param key       a modifier key unique to your mod and this bonus.
+     * @param amount    the flat bonus; a NaN or infinite amount is ignored
+     *                  (the key's previous contribution is left as it was).
      */
     public static void applyStatBonus(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref,
                                       int statIndex, @Nonnull String key, float amount){
+        // A NaN max would poison the whole pool - every later read of it,
+        // the fraction preserveStatFraction keeps, and the save.
+        if(!Float.isFinite(amount)){
+            return;
+        }
+
         SkillTreeManager.applyKeyedStatBonus(accessor, ref, statIndex, key, amount);
     }
 
@@ -2833,6 +2852,20 @@ public class CultivationAPI {
     }
 
     /**
+     * As {@link #handleMenuNav}, but reports whether a page was opened.
+     *
+     * @return true when the target page opened; false when the click was refused
+     * (unknown or hidden target, invalid player) or the page threw. A page
+     * calling this from a locking nav binding must answer the click itself on
+     * false - send an empty update ({@code sendUpdate(null, null, false)}),
+     * or the client stays on its loading state.
+     */
+    public static boolean tryHandleMenuNav(@Nonnull Store<EntityStore> store, @Nonnull Ref<EntityStore> ref,
+                                           @Nonnull PlayerRef playerRef, @Nullable String navKey){
+        return CultivationNav.open(store, ref, playerRef, navKey);
+    }
+
+    /**
      * Swaps the player's open custom page for another one - what a
      * {@link CultivationMenuPage}'s {@code onOpen} normally does, and the same
      * page-swap the built-in menus use to navigate between themselves.
@@ -3396,9 +3429,21 @@ public class CultivationAPI {
      * Sets banked Qi outright, skipping every multiplier and event - the admin
      * {@code /cultivation admin setqi} path, not the gameplay one. Prefer
      * {@link #addQi} for anything a player earned. Does not rank anyone up: that
-     * still requires the meditation ritual.
+     * still requires the meditation ritual. A NaN or infinite {@code qi} is
+     * ignored; a negative one is clamped to 0.
+     *
+     * <p><b>Built-in ladder only.</b> This writes the built-in banked Qi, which
+     * an installed {@link ProgressionProvider} never reads - under a provider
+     * this changes nothing the cultivator can see ({@link #getQi} answers from
+     * the provider). Drive the provider's own API instead; {@link #addQi} is
+     * the one write here that reaches it.</p>
      */
     public static void setQi(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref, float qi){
+        // Math.max(0f, NaN) is NaN, so the clamp below never caught it.
+        if(!Float.isFinite(qi)){
+            return;
+        }
+
         CultivationComponent component = getCultivationComponent(accessor, ref);
         if(component == null){
             return;
@@ -3412,6 +3457,11 @@ public class CultivationAPI {
      * Moves a cultivator to a realm outright and re-applies their stat bonuses.
      * The admin path - it fires no breakthrough event and runs no ritual, because
      * nothing was broken through.
+     *
+     * <p><b>Built-in ladder only</b>, like {@link #setQi}: under an installed
+     * {@link ProgressionProvider} the stored realm is not what any gate or
+     * label reads ({@link #getRealm} answers from the provider), so this has
+     * no visible effect there.</p>
      */
     public static void setRealm(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref,
                                 @Nonnull CultivationRealm realm){
@@ -3424,7 +3474,12 @@ public class CultivationAPI {
         CultivationManager.applyRealmStats(accessor, ref, component);
     }
 
-    /** As {@link #setRealm}, for the sub-stage. */
+    /**
+     * As {@link #setRealm}, for the sub-stage - and likewise built-in ladder
+     * only: an installed {@link ProgressionProvider} owns its own sub-ranks
+     * ({@link #getStage} answers null there), so the stored stage this writes
+     * is not what the cultivator is shown.
+     */
     public static void setStage(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref,
                                 @Nonnull CultivationStage stage){
         CultivationComponent component = getCultivationComponent(accessor, ref);
@@ -3444,7 +3499,16 @@ public class CultivationAPI {
      * breakthrough (a quest, an item, a boss kill) should call rather than
      * setting the realm directly.
      *
-     * @return false if a listener vetoed it, or the entity has no CultivationComponent.
+     * <p>On the built-in ladder the cultivator must be at a realm's Peak stage
+     * (a breakthrough is the Peak-to-next-realm step; anywhere else it is an
+     * advancement - see {@link #completeAdvancement}). Banked Qi is NOT
+     * required: an addon granting a breakthrough as a reward may do so on an
+     * empty bank, which is simply spent to zero. Under an installed
+     * {@link ProgressionProvider} the provider owns which milestone is next.</p>
+     *
+     * @return true only if the rank actually advanced; false if a listener
+     * vetoed it, the entity has no CultivationComponent, is at max level, or
+     * (built-in ladder) is not at Peak stage.
      */
     public static boolean completeBreakthrough(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref,
                                                @Nullable PlayerRef playerRef){
@@ -3453,12 +3517,30 @@ public class CultivationAPI {
             return false;
         }
 
-        CultivationRealm before = component.getRealm();
-        CultivationManager.completeBreakthrough(accessor, ref, component, playerRef);
-        return component.getRealm() != before;
+        // CultivationManager.completeBreakthrough indexes the NEXT realm
+        // directly, and only advanceStage's Peak case actually crosses into
+        // it - called from any other stage it used to fire a breakthrough
+        // (event, skill points, message) for what was really a sub-stage step,
+        // and from a non-Peak stage of the last realm it threw
+        // ArrayIndexOutOfBoundsException. The ritual itself never gets here
+        // off-Peak (isReadyForBreakthrough); this is the API's equivalent gate.
+        if(getProgressionProvider() == null && component.getStage() != CultivationStage.PEAK){
+            return false;
+        }
+
+        // The boolean is CultivationManager's own "did it actually advance"
+        // answer - comparing the stored realm before/after instead (as this
+        // used to) always read false under a ProgressionProvider, which never
+        // writes the stored realm.
+        return CultivationManager.completeBreakthrough(accessor, ref, component, playerRef);
     }
 
-    /** As {@link #completeBreakthrough}, for a single sub-stage advancement. */
+    /**
+     * As {@link #completeBreakthrough}, for a single sub-stage advancement. On
+     * the built-in ladder the cultivator must NOT be at Peak stage - from Peak
+     * the next step is a realm breakthrough, and the next sub-stage does not
+     * exist (this used to throw ArrayIndexOutOfBoundsException there).
+     */
     public static boolean completeAdvancement(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref,
                                               @Nullable PlayerRef playerRef){
         CultivationComponent component = getCultivationComponent(accessor, ref);
@@ -3466,9 +3548,11 @@ public class CultivationAPI {
             return false;
         }
 
-        CultivationStage before = component.getStage();
-        CultivationManager.completeAdvancement(accessor, ref, component, playerRef);
-        return component.getStage() != before;
+        if(getProgressionProvider() == null && component.getStage() == CultivationStage.PEAK){
+            return false;
+        }
+
+        return CultivationManager.completeAdvancement(accessor, ref, component, playerRef);
     }
 
     /**
@@ -3549,46 +3633,86 @@ public class CultivationAPI {
 
     // --- Meditation ---
 
+    // Both halves run the exact sequence /cultivation meditate does - they
+    // call the same CultivationManager.startMeditation / stopMeditation the
+    // command calls, so an addon seating or standing a cultivator gets every
+    // gate, message, event and penalty a player typing the command would.
+
     /**
-     * Seats a cultivator in meditation, playing the cross-legged pose and letting
-     * the meditation system start drawing Qi on the next tick - as
-     * {@code /cultivation meditate} does.
+     * Seats a cultivator in meditation, exactly as {@code /cultivation meditate}
+     * does for a standing player: a fleeing Nascent Soul, or a cultivator
+     * inside a Dream Trial, Inner Demon duel or Cleanse Rite, is refused (and
+     * told why); then the cancellable {@code PreMeditationStartEvent} fires,
+     * and on success the cultivator is anchored where they sit, plays the
+     * cross-legged pose, is sent the "you settle into meditation" line, and
+     * {@code MeditationStartEvent} fires. The meditation system starts drawing
+     * Qi on its next tick; moving away still cancels it.
      *
-     * <p>Movement still cancels it, and a cultivator already meditating is left
-     * alone.</p>
+     * <p>A cultivator already meditating is left alone (no message, no event).
+     * Run it on the cultivator's own world thread; {@code accessor} may be a
+     * {@code Store} or a system's {@code CommandBuffer}.</p>
      */
     public static void startMeditating(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref){
-        CultivationStateComponent state = getCultivationStateComponent(accessor, ref);
-        if(state == null || state.isMeditating()){
-            return;
-        }
-
-        TransformComponent transform = accessor.getComponent(ref, TransformComponent.getComponentType());
-        if(transform != null){
-            // The anchor is what the movement-cancel system measures drift
-            // against - without it a cultivator seated by an addon is cancelled
-            // on the next check for having "moved" away from the origin.
-            org.joml.Vector3d position = transform.getPosition();
-            state.setAnchor(position.x, position.y, position.z);
-        }
-
-        state.setMeditating(true);
-        CultivationManager.setMeditationAnimation(accessor, ref, true);
+        tryStartMeditating(accessor, ref);
     }
 
     /**
-     * Ends a cultivator's meditation and stops the pose. Note this does NOT apply
-     * the failed-ritual penalty - call {@link #demote} as well if you are
-     * interrupting a ritual and mean it to cost something.
+     * As {@link #startMeditating}, but reports the outcome.
+     *
+     * @return true when the cultivator is now meditating (including already
+     * being so); false when they have no cultivation state, their soul is
+     * fleeing, a Dream Trial / Inner Demon duel / Cleanse Rite is active, or
+     * a {@code PreMeditationStartEvent} listener cancelled it - in every false
+     * case nothing was changed.
+     */
+    public static boolean tryStartMeditating(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref){
+        CultivationManager.MeditationChange change = CultivationManager.startMeditation(accessor, ref, null);
+        return change == CultivationManager.MeditationChange.STARTED
+                || change == CultivationManager.MeditationChange.ALREADY_MEDITATING;
+    }
+
+    /**
+     * Stands a cultivator up, exactly as {@code /cultivation meditate} does for
+     * a seated player - INCLUDING the stand-up penalty. Stopping someone in
+     * the middle of a ritual costs what walking away from it costs: a realm
+     * breakthrough or sub-stage advancement demotes a stage and scatters the
+     * banked Qi, a Closed-Door Retreat forfeits its payout, an Ascension or
+     * Reincarnation fails (cooldown and server-wide line included), and a
+     * weapon refinement is forfeited. Check {@link #isMeditating} and the
+     * ritual reads first if you only meant to stand up an idle meditator.
+     *
+     * <p>The cancellable {@code PreMeditationStopEvent} fires first, so a
+     * listener holding a cultivator inside a ritual holds them against this
+     * call too. Both stop events report
+     * {@link CultivationEvents.MeditationStopReason#COMMAND}: this is treated
+     * as the cultivator being told to stand, not as wandering off.</p>
+     *
+     * <p>Changed in 0.11.0: this used to skip the penalty, the events and the
+     * veto, and advised calling {@link #demote} yourself. It now applies the
+     * penalty itself - do not also call {@code demote}, or the cultivator is
+     * demoted twice.</p>
+     *
+     * <p>A cultivator who is not meditating is left alone. Run it on the
+     * cultivator's own world thread; {@code accessor} may be a {@code Store}
+     * or a system's {@code CommandBuffer}.</p>
      */
     public static void stopMeditating(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref){
-        CultivationStateComponent state = getCultivationStateComponent(accessor, ref);
-        if(state == null || !state.isMeditating()){
-            return;
-        }
+        tryStopMeditating(accessor, ref);
+    }
 
-        state.setMeditating(false);
-        CultivationManager.setMeditationAnimation(accessor, ref, false);
+    /**
+     * As {@link #stopMeditating}, but reports the outcome.
+     *
+     * @return true when the cultivator is no longer meditating (including
+     * never having been); false when they have no cultivation state or a
+     * {@code PreMeditationStopEvent} listener kept them seated - in which case
+     * nothing was changed and no penalty applied.
+     */
+    public static boolean tryStopMeditating(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref){
+        CultivationManager.MeditationChange change = CultivationManager.stopMeditation(accessor, ref, null,
+                CultivationEvents.MeditationStopReason.COMMAND);
+        return change == CultivationManager.MeditationChange.STOPPED
+                || change == CultivationManager.MeditationChange.NOT_MEDITATING;
     }
 
     // --- The world's Qi ---
@@ -3603,8 +3727,10 @@ public class CultivationAPI {
      * divining item, or worldgen decoration that should follow the Qi.</p>
      *
      * @param world  the world whose seed and chunks are consulted.
-     * @param chunkX chunk coordinates, not block coordinates - divide by 16, or
-     *               use {@code ChunkUtil.chunkCoordinate(blockX)}.
+     * @param chunkX chunk coordinates, not block coordinates - use
+     *               {@code ChunkUtil.chunkCoordinate(blockX)} (Hytale chunks
+     *               are 32 blocks wide, so it is {@code blockX >> 5}, never
+     *               a divide by 16).
      */
     @Nonnull
     public static SpiritVeinManager.VeinReading readSpiritVein(@Nonnull World world, int chunkX, int chunkZ){
@@ -3627,7 +3753,7 @@ public class CultivationAPI {
      * vein is running dry, and 0 when the chunk is not loaded.
      */
     public static float drainSpiritVein(@Nonnull World world, int chunkX, int chunkZ, float amount){
-        if(amount <= 0f){
+        if(!(amount > 0f) || !Float.isFinite(amount)){
             return 0f;
         }
 
@@ -3759,6 +3885,13 @@ public class CultivationAPI {
      */
     public static void addMerit(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref,
                                 @Nullable PlayerRef playerRef, float amount){
+        // Negative is a legitimate correction, so this is a finiteness check
+        // rather than a sign check: MeritManager clamps with Math.min/max,
+        // which pass a NaN straight through into the stored ledger.
+        if(!Float.isFinite(amount)){
+            return;
+        }
+
         plugin.siren.Utils.Merit.MeritManager.addMerit(accessor, ref, playerRef, amount);
     }
 
@@ -3871,6 +4004,12 @@ public class CultivationAPI {
 
     /** Grants (or, with a negative amount, works off) comprehension toward a registered Personal Dao by key. No-ops for an unregistered key. */
     public static void addPersonalDaoComprehension(@Nonnull ComponentAccessor<EntityStore> accessor, @Nonnull Ref<EntityStore> ref, @Nonnull String key, float amount, @Nullable PlayerRef playerRef){
+        // Signed on purpose (a negative amount works comprehension off), so
+        // only a non-finite amount is refused.
+        if(!Float.isFinite(amount)){
+            return;
+        }
+
         DaoComprehensionManager.addPersonalDaoComprehension(accessor, ref, key, amount, playerRef);
     }
 

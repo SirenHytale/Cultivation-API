@@ -1,18 +1,19 @@
 # Events
 
-Cultivation exposes **368 listener hooks** across 51 subsystems — 216
-post-events and 152 cancellable pre-events. This page covers the rules that apply
+Cultivation exposes **377 listener hooks** across 53 subsystems — 222
+post-events and 155 cancellable pre-events. This page covers the rules that apply
 to all of them. For the full catalog — every event, its payload, and what each
 field means — see **[the event reference](events-reference.md)**.
 
 | Class | Covers |
 | --- | --- |
-| `CultivationEvents` | Qi, meditation, rituals, breakthroughs, advancements, demotions, tribulations, the Heart-Devil Trial, Qi Deviation, the Ascension capstone, races, skill tree, respecs |
+| `CultivationEvents` | Qi, meditation, rituals, withdrawing from a ritual *(0.11.0)*, breakthroughs, advancements, demotions, tribulations, the Heart-Devil Trial, Qi Deviation, the Ascension capstone, races, skill tree, respecs |
 | `LifespanEvents` | *(0.10.2)* Lifespan (寿元), the play-hour budget keyed to the highest realm reached — extend, wither, restore, expire |
 | `LegacyEvents` | *(0.10.1)* A retiring cultivator's breakthrough-cost buff reaching their heir |
 | `SoulEscapeEvents` | *(0.10.2)* Nascent Soul Escape — the fatal-blow reprieve, the chase, and its four resolutions |
 | `DaoEvents` | Elements, affinity drift, Yin-Yang alignment, moral paths, karma, Devil harvest |
 | `DaoComprehensionEvents` | *(0.9.x)* Heavenly Dao understanding, the open Personal Dao registry, Dao Enlightenment |
+| `DaoDomainEvents` | *(0.11.1)* [Dao Domains](dao-domains.md) — unfolding (cancellable, re-tunable), collapsing, and clashing with a hostile domain or sect array. Players are UUIDs |
 | `TechniqueEvents` | Performing and learning arts, fusing two into a third, mastery advancement, Sword Flying, timed combat buffs |
 | `ItemEvents` | Loot drops, pills, spirit cores, manuals, weapon refinement, Life-Bound treasures |
 | `AlchemyEvents` | *(0.10.0)* The Pill Cauldron refining ritual and its Fire Watch tending prompts |
@@ -23,11 +24,12 @@ field means — see **[the event reference](events-reference.md)**.
 | `BreedingEvents` | *(0.9.x)* The two-cultivator Beast Pen ritual and hatching a bred egg |
 | `SectEvents` | Founding, membership, ranks, abbreviations, halls, inscriptions, the sect Dao, shared progression, buildings |
 | `WarEvents` | Declaring sieges and how they resolve |
+| `SectArrayEvents` | *(0.11.1)* A sect's wartime [Array Domain](sect-array-domains.md) over its territory — raising it (cancellable, price re-tunable), raised, ended. An end fires from whichever world noticed it, so hop per player |
 | `GuardianEvents` | *(0.10.2)* Sect Guardian NPCs being stationed and falling |
 | `SermonEvents` | *(0.10.2)* Dao Sermons at a sect hall — start, a listener qualifying, end |
 | `RogueEvents` | *(0.10.2)* Rogue Cultivator NPCs spawning and being slain |
 | `MeritEvents` | *(0.10.2)* Gaining Merit (功德) and ranking up |
-| `DuelEvents` | Challenges, duels, wager payouts |
+| `DuelEvents` | Challenges, duels, wager payouts. *Since 0.11.0 the payout events fire on no fixed thread* — read the class javadoc |
 | `DaoDuelEvents` | *(0.10.1)* The Spirit Stone escrow on top of a duel — challenge, payout, end |
 | `WagerEvents` | *(0.10.2)* Spectator wagers on Dao Duel Tournament matches. *Two of its events fire under a held lock* — read the class javadoc |
 | `CombatDepthEvents` | *(0.10.1)* Technique interrupts and the Wu Xing PvP reward |
@@ -143,6 +145,15 @@ listeners run on **the remote checker thread**, and the payload carries a bare
 `UUID` rather than a `Ref` — for a player who may well be offline. Find them and
 hop first; see [Treasure Pavilion benefits](store-benefits.md#these-do-not-run-on-a-world-thread).
 
+### `DuelEvents` payouts follow the duel, not a world (0.11.0)
+
+A duel can now outlive a dropped connection, and its money follows it.
+`DuelPayoutEvent` and `PreDuelPayoutEvent` fire on whichever thread settled the
+duel — a world thread, a command's, a disconnect event's or the duel ledger's —
+and a reconnect grace asks the pre-event twice. Resolve each `UUID` and hop
+before touching a component, as for the store events; see
+[pitfall 20](pitfalls.md#20-touching-a-player-from-a-duel-payout-listener-0110).
+
 ### `CelestialEvents` has no subject, so it has no *particular* world thread
 
 `CelestialEvents` is still dispatched from a ticking world — `CelestialScheduleSystem`
@@ -154,7 +165,9 @@ first, and the payload carries a `CelestialEventType` rather than a `ref()`.
 Treat it like the store events for the purpose of touching anybody: enumerate the
 players you care about and hop onto each one's own world thread before reading a
 component. Everything else in this API follows the subject's-world-thread rule
-exactly as described above.
+exactly as described above. `DaoDomainEvents` *(0.11.1)* is one of them even
+though its payload is the caster's `UUID` rather than a `ref()`: it fires on the
+caster's own world thread, from inside a ticking system.
 
 ## Registration
 

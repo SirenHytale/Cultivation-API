@@ -48,6 +48,11 @@ bonus and the event both want it.
 event. Use it for a respec, a debug command or a save-restore, not for something a
 player earned. Neither call ranks anyone up on its own.
 
+`setQi` writes the *built-in* bank, which an installed `ProgressionProvider` never
+reads, so under a provider it changes nothing the cultivator can see — `addQi` is
+the one write here that reaches a provider. A NaN or infinite value is ignored and
+a negative one is clamped to 0 *(0.11.0)*.
+
 ```java
 // A quest reward, from your own command or interaction.
 CultivationAPI.addQi(accessor, ref, 500f, playerRef);
@@ -68,12 +73,35 @@ void setStage(accessor, ref, CultivationStage)
 consume the banked Qi, grant the skill points, fire the `Pre*` and post events,
 and play the celebration, as though the ritual had just finished. This is what an
 addon offering its own route to a breakthrough (a quest, an item, a boss kill)
-should call. Both return `false` if a listener vetoed it, the cultivator is
-already at max, or the entity has no `CultivationComponent`.
+should call. Banked Qi is *not* required: a breakthrough granted as a reward on an
+empty bank simply spends it to zero.
+
+On the built-in ladder the two are not interchangeable *(0.11.0)*. A breakthrough
+is the step from a realm's `PEAK` into the next realm, so `completeBreakthrough`
+needs the cultivator at `PEAK`; `completeAdvancement` is every other step, so it
+refuses at `PEAK`. Pick by stage:
+
+```java
+boolean advanced = CultivationAPI.getStage(accessor, ref) == CultivationStage.PEAK
+        ? CultivationAPI.completeBreakthrough(accessor, ref, playerRef)
+        : CultivationAPI.completeAdvancement(accessor, ref, playerRef);
+```
+
+Both return `true` only when the rank actually advanced, and `false` when a
+listener vetoed it, the cultivator is already at max, is at the wrong stage, or
+has no `CultivationComponent`. Under a `ProgressionProvider` there is no stage gate
+(`getStage` is `null` there): the call is handed to the provider, which owns which
+milestone is next — see [Progression provider](progression-provider.md#rank-up-rituals).
+
+> Before 0.11.0, calling the wrong one fired a breakthrough for what was really a
+> sub-stage step (and threw at the last realm), and under a provider both returned
+> `false` even when they succeeded. Re-check any code that relied on either.
 
 **`setRealm` / `setStage` are the admin path** — they move a cultivator outright
 and re-apply their stat bonuses, but fire no breakthrough event and run no ritual,
 because nothing was broken through. Use them for a restore or a debug command.
+Like `setQi`, they write the built-in ladder only and have no visible effect
+under a `ProgressionProvider`.
 
 **`demote`** applies the failed-ritual penalty: one sub-stage down (never below
 the current realm's first stage) and the banked Qi wiped, with the demotion events
@@ -161,18 +189,38 @@ unlock did not succeed.
 ## Meditation
 
 ```java
-void startMeditating(accessor, ref)
-void stopMeditating(accessor, ref)
+void    startMeditating(accessor, ref)
+void    stopMeditating(accessor, ref)
+boolean tryStartMeditating(accessor, ref)   // (0.11.0) true = meditating now
+boolean tryStopMeditating(accessor, ref)    // (0.11.0) true = not meditating now
 ```
 
-`startMeditating` seats a cultivator, plays the cross-legged pose and lets the
-meditation system start drawing Qi on the next tick — as `/cultivation meditate`
-does, anchor included, so the movement-cancel check does not immediately cancel
-it. Movement still cancels it, and a cultivator already meditating is left alone.
+Since 0.11.0 both halves run exactly what `/cultivation meditate` runs, so an addon
+seating or standing a cultivator gets every gate, message, event and penalty a
+player typing the command would.
 
-`stopMeditating` ends it. Note it does **not** apply the failed-ritual penalty —
-call `demote` as well if you are interrupting a ritual and mean it to cost
-something.
+`startMeditating` refuses a fleeing Nascent Soul and a cultivator inside a Dream
+Trial, Inner Demon duel or Cleanse Rite (and tells them why), then fires the
+cancellable `PreMeditationStartEvent`. On success the cultivator is anchored where
+they sit, plays the cross-legged pose, and `MeditationStartEvent` fires; the
+meditation system starts drawing Qi on its next tick. Movement still cancels it,
+and a cultivator already meditating is left alone.
+
+`stopMeditating` stands them up *including the stand-up penalty*. Stopping someone
+in the middle of a ritual costs what walking away from it costs: a breakthrough or
+advancement demotes a stage and scatters the banked Qi, a Closed-Door Retreat
+forfeits its payout, an Ascension or Reincarnation fails, a weapon refinement is
+forfeited. `PreMeditationStopEvent` fires first with reason `COMMAND`, so a
+listener holding a cultivator in a ritual holds them against this call too.
+
+> *Changed in 0.11.0.* `stopMeditating` used to skip the penalty, the events and the
+> veto, and this page told you to call `demote` yourself. Do not any more — the
+> cultivator would be demoted twice. If you only meant to stand up an idle
+> meditator, check `isMeditating` and the ritual state first.
+
+The `try` forms report the outcome: `false` means nothing changed — no cultivation
+state, a refusal gate, or a listener's veto. Run all four on the cultivator's own
+world thread; `accessor` may be a `Store` or a system's `CommandBuffer`.
 
 ## The world's Qi
 
@@ -203,9 +251,11 @@ if (drawn <= 0f) {
 CultivationAPI.addQi(accessor, ref, drawn, playerRef);
 ```
 
-**Both take chunk coordinates, not block coordinates** — divide by 16, or use
-`ChunkUtil.chunkCoordinate(blockX)`. `drainSpiritVein` writes to a world's chunk
-store, so it must run on **that world's** thread.
+**Both take chunk coordinates, not block coordinates** — use
+`ChunkUtil.chunkCoordinate(blockX)`. Hytale chunks are *32* blocks wide, so that is
+`blockX >> 5`, never a divide by 16. `drainSpiritVein` writes to a world's chunk
+store, so it must run on **that world's** thread, and returns 0 for a NaN or
+infinite request.
 
 Since 0.6.1, veins form a coherent landscape rather than an independent roll per
 chunk, so neighbouring chunks read as a slope you can walk along. An addon that

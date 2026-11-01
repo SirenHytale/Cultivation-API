@@ -1,6 +1,7 @@
 package com.example.exampleaddon;
 
 import com.hypixel.hytale.component.Ref;
+import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.Universe;
 import com.hypixel.hytale.server.core.universe.world.World;
@@ -10,8 +11,10 @@ import plugin.siren.API.CelestialEvents;
 import plugin.siren.API.CultivationAPI;
 import plugin.siren.API.CultivationConfigs;
 import plugin.siren.API.CultivationEvents;
+import plugin.siren.API.DaoDomainEvents;
 import plugin.siren.API.DaoEvents;
 import plugin.siren.API.ItemEvents;
+import plugin.siren.API.SectArrayEvents;
 import plugin.siren.API.SectEvents;
 import plugin.siren.API.StoreBenefit;
 import plugin.siren.API.StoreBenefitEvents;
@@ -49,6 +52,8 @@ public final class CultivationHooks {
         registerVetoes();
         registerRetunes();
         registerCelestial();
+        registerDaoDomains();
+        registerSectArrays();
         registerStoreBenefits();
         registerCompatibility();
     }
@@ -195,6 +200,20 @@ public final class CultivationHooks {
             }
         });
 
+        // 0.11.0: refuse /cultivation meditate abort during a server event. This
+        // fires for the quote AND again for "abort confirm", so it must have no
+        // side effect beyond explaining itself - and it MUST explain itself: the
+        // command sends the player nothing of its own when this is cancelled.
+        CultivationEvents.onPreRitualAbort(event -> {
+            if (isBreakthroughLocked()) {
+                event.setCancelled(true);
+                PlayerRef player = event.player();
+                if (player != null) {
+                    player.sendMessage(Message.translation("server.exampleAddon.abortLocked"));
+                }
+            }
+        });
+
         // Confine sect wars to a scheduled window.
         WarEvents.onPreWarDeclare(event -> {
             if (!isWarWindowOpen()) {
@@ -311,6 +330,80 @@ public final class CultivationHooks {
 
             event.setDurationMinutes(event.durationMinutes() * 1.5f);
         });
+    }
+
+    // ------------------------------------------------------------------
+    // 0.11.1: Dao Domains. The payloads carry the caster's UUID, not a ref(),
+    // but these DO fire on the caster's own world thread - from inside
+    // Cultivation's cast interaction and the domain system's tick, so a
+    // CommandBuffer is in play: read freely, never write to the Store here.
+    // ------------------------------------------------------------------
+
+    private static void registerDaoDomains() {
+        // Veto or re-tune one cast. Cancelling refuses it like one of
+        // Cultivation's own gates (no Qi, no cooldown) and Cultivation tells the
+        // caster itself. Values left in the setters are clamped before use, and
+        // a Creative or admin-bypass caster stays free whatever the cost says.
+        DaoDomainEvents.onPreDomainUnfold(event -> {
+            if (isWarWindowOpen() && event.tier() >= 2) {
+                event.setDurationSeconds(event.durationSeconds() * 0.75f);
+            }
+        });
+
+        // element() is null for a domain cast in Heavenly Qi (no Dao, or an
+        // element with no domain flavor of its own).
+        DaoDomainEvents.onDomainUnfold(event ->
+                ExampleAddon.LOGGER.atInfo().log("Domain unfolded by %s: %s, tier %d, radius %.1f, %.1f Qi.",
+                        event.caster(), event.element() == null ? "Heavenly Qi" : event.element().name(),
+                        event.tier(), event.radius(), event.qiSpent()));
+
+        // A caster who DISCONNECTS fires no collapse at all - also clear any
+        // per-domain state of your own on disconnect.
+        DaoDomainEvents.onDomainCollapse(event -> {
+            if (event.reason() == DaoDomainEvents.CollapseReason.CLASHED) {
+                return;   // reported in more detail by onDomainClash, which fired first
+            }
+            ExampleAddon.LOGGER.atInfo().log("Domain of %s collapsed (%s) after %.1f s.",
+                    event.caster(), event.reason(), event.secondsActive());
+        });
+
+        // Two hostile domains - or a domain and a sect's wartime array -
+        // overlapped and the clash was settled. second() is null against an
+        // array (arraySect() names the sect), and an admin's test rival is a
+        // UUID that matches no player, so resolve before you trust it.
+        DaoDomainEvents.onDomainClash(event -> {
+            String opponent = event.second() != null ? event.second().toString() : "sect " + event.arraySect();
+            ExampleAddon.LOGGER.atInfo().log("Domain clash %s vs %s: %d - %d, %s%s.",
+                    event.first(), opponent, event.firstPower(), event.secondPower(), event.outcome(),
+                    event.counterDecided() ? " (decided by a Wu Xing counter)" : "");
+        });
+    }
+
+    // ------------------------------------------------------------------
+    // 0.11.1: Sect Array Domains - a besieged sect's wartime ward over its
+    // territory. sect() is the live Sect object: read what you need and
+    // return, and never raise or lower an array from inside a listener. An
+    // end can fire from whichever world noticed the siege was over, so hop
+    // per player before touching anybody.
+    // ------------------------------------------------------------------
+
+    private static void registerSectArrays() {
+        // A discount during the war window. The raiser must still hold the
+        // re-tuned price; an admin raise never fires this pre-event at all.
+        SectArrayEvents.onPreSectArrayRaise(event -> {
+            if (isWarWindowOpen()) {
+                event.setCost(event.cost() / 2);
+            }
+        });
+
+        // raiser() is null for an admin raise.
+        SectArrayEvents.onSectArrayRaised(event ->
+                ExampleAddon.LOGGER.atInfo().log("Sect '%s' raised its array (cost %d, admin=%b).",
+                        event.sect().getName(), event.cost(), event.adminRaised()));
+
+        SectArrayEvents.onSectArrayEnded(event ->
+                ExampleAddon.LOGGER.atInfo().log("Sect '%s' array ended (%s) after %.0f s.",
+                        event.sect().getName(), event.reason(), event.secondsActive()));
     }
 
     // ------------------------------------------------------------------

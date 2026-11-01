@@ -130,6 +130,9 @@ public final class CultivationEvents {
     /** A timed meditation ritual just began (the tick that first accrued progress). */
     public record RitualStartEvent(@Nonnull Ref<EntityStore> ref, @Nullable PlayerRef player, @Nonnull RitualType type) {}
 
+    /** A cultivator withdrew from an armed breakthrough or advancement with {@code /cultivation meditate abort}. {@code type} is BREAKTHROUGH or ADVANCEMENT; {@code qiLost} is the banked Qi that scattered (already deducted). No demotion applies. They have been stood up through an ordinary COMMAND stop, so {@link MeditationStopEvent} fires too. */
+    public record RitualAbortEvent(@Nonnull Ref<EntityStore> ref, @Nullable PlayerRef player, @Nonnull RitualType type, float qiLost) {}
+
     /**
      * A cultivator survived the Ascension Capstone (飞升) - the end of the
      * ladder. {@code ascensionCount} is the total INCLUDING this one, and
@@ -637,6 +640,37 @@ public final class CultivationEvents {
         @Nullable public PlayerRef player(){ return this.player; }
     }
 
+    /**
+     * A cultivator is asking to withdraw from an armed breakthrough or
+     * advancement: fired for the {@code /cultivation meditate abort} quote and
+     * again for {@code abort confirm}, so a veto refuses before the player is
+     * quoted a cost. Cancel to refuse it: nothing has been charged yet. Every
+     * built-in eligibility check has already passed. The listener explains
+     * itself - the command sends the player no message of its own when this is
+     * cancelled - the same contract as {@link PreRitualStartEvent} - so a
+     * listener must have no side effect beyond that message (it can fire twice
+     * for one withdrawal). {@code qiLost} is the banked Qi the withdrawal would
+     * scatter.
+     */
+    public static final class PreRitualAbortEvent extends CancellableEvent {
+        private final Ref<EntityStore> ref;
+        private final PlayerRef player;
+        private final RitualType type;
+        private final float qiLost;
+
+        public PreRitualAbortEvent(@Nonnull Ref<EntityStore> ref, @Nullable PlayerRef player, @Nonnull RitualType type, float qiLost){
+            this.ref = ref;
+            this.player = player;
+            this.type = type;
+            this.qiLost = qiLost;
+        }
+
+        @Nonnull public Ref<EntityStore> ref(){ return this.ref; }
+        @Nullable public PlayerRef player(){ return this.player; }
+        @Nonnull public RitualType type(){ return this.type; }
+        public float qiLost(){ return this.qiLost; }
+    }
+
     public static final class PreRitualStartEvent extends CancellableEvent {
         private final Ref<EntityStore> ref;
         private final PlayerRef player;
@@ -761,6 +795,8 @@ public final class CultivationEvents {
     private static final List<Consumer<MeditationStopEvent>> MEDITATION_STOP = EventBus.newListenerList();
     private static final List<Consumer<PreMeditationStopEvent>> PRE_MEDITATION_STOP = EventBus.newListenerList();
     private static final List<Consumer<RitualStartEvent>> RITUAL_START = EventBus.newListenerList();
+    private static final List<Consumer<RitualAbortEvent>> RITUAL_ABORT = EventBus.newListenerList();
+    private static final List<Consumer<PreRitualAbortEvent>> PRE_RITUAL_ABORT = EventBus.newListenerList();
     private static final List<Consumer<AscensionEvent>> ASCENSION = EventBus.newListenerList();
     private static final List<Consumer<AscensionFailedEvent>> ASCENSION_FAILED = EventBus.newListenerList();
     private static final List<Consumer<AscensionLegacyEvent>> ASCENSION_LEGACY = EventBus.newListenerList();
@@ -806,6 +842,8 @@ public final class CultivationEvents {
     public static void onMeditationStop(@Nonnull Consumer<MeditationStopEvent> listener){ MEDITATION_STOP.add(listener); }
     public static void onPreMeditationStop(@Nonnull Consumer<PreMeditationStopEvent> listener){ PRE_MEDITATION_STOP.add(listener); }
     public static void onRitualStart(@Nonnull Consumer<RitualStartEvent> listener){ RITUAL_START.add(listener); }
+    public static void onRitualAbort(@Nonnull Consumer<RitualAbortEvent> listener){ RITUAL_ABORT.add(listener); }
+    public static void onPreRitualAbort(@Nonnull Consumer<PreRitualAbortEvent> listener){ PRE_RITUAL_ABORT.add(listener); }
     public static void onAscension(@Nonnull Consumer<AscensionEvent> listener){ ASCENSION.add(listener); }
     public static void onAscensionFailed(@Nonnull Consumer<AscensionFailedEvent> listener){ ASCENSION_FAILED.add(listener); }
     public static void onAscensionLegacy(@Nonnull Consumer<AscensionLegacyEvent> listener){ ASCENSION_LEGACY.add(listener); }
@@ -854,6 +892,8 @@ public final class CultivationEvents {
     public static void fireMeditationStop(@Nonnull MeditationStopEvent event){ EventBus.dispatch(MEDITATION_STOP, event, "MeditationStopEvent"); }
     public static boolean firePreMeditationStop(@Nonnull PreMeditationStopEvent event){ return EventBus.fire(PRE_MEDITATION_STOP, event, "PreMeditationStopEvent"); }
     public static void fireRitualStart(@Nonnull RitualStartEvent event){ EventBus.dispatch(RITUAL_START, event, "RitualStartEvent"); }
+    public static void fireRitualAbort(@Nonnull RitualAbortEvent event){ EventBus.dispatch(RITUAL_ABORT, event, "RitualAbortEvent"); }
+    public static boolean firePreRitualAbort(@Nonnull PreRitualAbortEvent event){ return EventBus.fire(PRE_RITUAL_ABORT, event, "PreRitualAbortEvent"); }
     public static void fireAscension(@Nonnull AscensionEvent event){ EventBus.dispatch(ASCENSION, event, "AscensionEvent"); }
     public static void fireAscensionFailed(@Nonnull AscensionFailedEvent event){ EventBus.dispatch(ASCENSION_FAILED, event, "AscensionFailedEvent"); }
     public static void fireAscensionLegacy(@Nonnull AscensionLegacyEvent event){ EventBus.dispatch(ASCENSION_LEGACY, event, "AscensionLegacyEvent"); }

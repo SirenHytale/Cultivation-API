@@ -7,10 +7,10 @@ jar once:
 
 ```bash
 mvn install:install-file \
-  -Dfile=Cultivation-0.10.3.jar \
+  -Dfile=Cultivation-0.11.1.jar \
   -DgroupId=plugin.siren \
   -DartifactId=Cultivation \
-  -Dversion=0.10.3 \
+  -Dversion=0.11.1 \
   -Dpackaging=jar
 ```
 
@@ -19,11 +19,19 @@ Repeat whenever you move to a new Cultivation version.
 ## 2. Declare the dependency
 
 ```xml
+<repositories>
+    <repository>
+        <id>hytale-release</id>
+        <url>https://maven.hytale.com/release</url>
+    </repository>
+</repositories>
+
 <dependencies>
+    <!-- The server API Cultivation 0.11.1 is built against (Update 7). -->
     <dependency>
         <groupId>com.hypixel.hytale</groupId>
         <artifactId>Server</artifactId>
-        <version>0.6.2</version>
+        <version>0.7.2</version>
         <scope>provided</scope>
     </dependency>
 
@@ -35,7 +43,7 @@ Repeat whenever you move to a new Cultivation version.
     <dependency>
         <groupId>plugin.siren</groupId>
         <artifactId>Cultivation</artifactId>
-        <version>0.10.3</version>
+        <version>0.11.1</version>
         <scope>provided</scope>
     </dependency>
 </dependencies>
@@ -61,9 +69,9 @@ need them. In `src/main/resources/manifest.json`:
   "Group": "MyGroup",
   "Name": "MyAddon",
   "Version": "1.0.0",
-  "ServerVersion": ">=0.6.0-pre.0 <0.7.0",
+  "ServerVersion": ">=0.7.2 <0.8.0",
   "Dependencies": {
-    "Siren:Cultivation": ">=0.10.3"
+    "Siren:Cultivation": ">=0.11.1"
   },
   "Main": "com.example.myaddon.MyAddon"
 }
@@ -73,10 +81,20 @@ Without this entry, your mod loads and then dies with `NoClassDefFoundError` the
 first time it touches a Cultivation class.
 
 `ServerVersion` needs a real range, not a bare wildcard-minor string like
-`"0.5.x"` — a wildcard-minor pattern can never match a pre-release server, no
-matter how high the pre-release number is, so a mod declared that way silently
-refuses to load on any `0.6.0-pre.*` build. Match the range shape Cultivation's
-own `manifest.json` uses.
+`"0.7.x"` — a wildcard-minor pattern can never match a pre-release server, no
+matter how high the pre-release number is. Match the range shape Cultivation's
+own `manifest.json` uses: since 0.11.1 that is `>=0.7.2 <0.8.0`.
+
+A range that does not match the running server does not stop your mod loading on
+0.7.2 — the engine logs a warning naming it, a SEVERE "targeting a different
+server version" line at boot, and a notice to admins as they join, then loads it
+anyway. The engine source marks this to become a hard error, so treat the warning
+as one.
+
+`>=0.11.1` is what an addon using anything from 0.11.1 — `DaoDomainEvents`,
+`SectArrayEvents`, `DaoElement.fromDamageCause` — must declare. An addon that uses
+only older API can declare a lower floor, but 0.11.0 is the oldest Cultivation
+that runs on Update 7 at all.
 
 ## 4. Register everything from `setup()`
 
@@ -150,7 +168,7 @@ If your mod should also work on a server without Cultivation, move the entry:
 
 ```json
 "OptionalDependencies": {
-  "Siren:Cultivation": ">=0.10.3"
+  "Siren:Cultivation": ">=0.11.1"
 }
 ```
 

@@ -63,7 +63,23 @@ public final class DuelEvents {
         }
     }
 
-    /** A decided duel's wager actually moved: {@code amount} is what the loser could cover, which is exactly what the winner gained. */
+    /**
+     * A decided duel's wager actually moved: {@code amount} is what the loser
+     * could cover, which is exactly what the winner gained - or is owed, when
+     * the winner could not be credited on the spot (offline, between worlds,
+     * on a test cultivation); the Qi then reaches them at their next login.
+     *
+     * <p><b>Thread.</b> Fired once the loser's side has been taken, never under
+     * any of Cultivation's locks, but on no fixed thread: for a death, a yield
+     * or an immediate disconnect forfeit, the loser's world thread (or the
+     * ledger's write thread when part of the stake came out of Qi still held
+     * for the loser after a reconnect grace); for a reconnect grace that ran
+     * out, the WINNER's world thread when they are online, else the thread
+     * that settled it; for a duelist who walked out while their opponent was
+     * reconnecting, the absent winner's world thread if they are back online,
+     * else the thread that settled it. Resolve players fresh and hop to their
+     * world thread before touching a Store.</p>
+     */
     public record DuelPayoutEvent(@Nonnull UUID winner, @Nonnull UUID loser, int amount) {}
 
     // --- Pre-events ---
@@ -106,7 +122,28 @@ public final class DuelEvents {
         public void setWager(int wager){ this.wager = wager; }
     }
 
-    /** A decided duel's wager is about to move. Cancel to let the winner take nothing; {@link #setAmount} to re-scale the transfer (the loser can still only forfeit what they actually hold). */
+    /**
+     * A decided duel's wager is about to move. Cancel to let the winner take
+     * nothing; {@link #setAmount} to re-scale the transfer (the loser can
+     * still only forfeit what they actually hold).
+     *
+     * <p><b>Thread and timing.</b> Answer synchronously, from any thread: it
+     * is never fired under any of Cultivation's locks, and on no fixed thread
+     * - the caller's for a death (the dead duelist's world thread, mid-tick),
+     * a yield (the command's thread) or an immediate disconnect forfeit (the
+     * disconnect event's thread). A reconnect grace asks it TWICE: once when
+     * the grace begins, on the disconnect event's thread while the absent
+     * duelist is still online (so a listener that reads a player can still
+     * read them), and again when the grace is settled - when it runs out, on
+     * the winner's world thread if they are online, else the settling thread;
+     * or, when the duelist who was waiting walks out instead and so pays the
+     * absent one, on that disconnect's thread with winner and loser the other
+     * way round. The transfer is capped by the lower of the two answers, so a
+     * cancel at either moment holds; a listener that reads a player must treat
+     * an offline one conservatively or rely on that first call. The first call
+     * may be for a payout that never happens (the duelist returns in time): do
+     * not count it as a payout.</p>
+     */
     public static final class PreDuelPayoutEvent extends CancellableEvent {
         private final UUID winner;
         private final UUID loser;

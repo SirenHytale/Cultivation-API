@@ -61,6 +61,12 @@ a temporary difficulty swing.
 `CultivationConfigs.saveAll()` writes every file. Rarely what you want — prefer
 saving the one holder you edited — but useful after a bulk rewrite.
 
+*Fixed in 0.11.1:* `saveAll()` used to skip `daoComprehension()`, `secretRealm()`,
+`webStore()` and the three built-in race files (Human, Demon, Deity), so an edit to
+any of those through a holder was lost on restart unless that holder's own
+`save()` was called. It writes all of them now. A race another mod registered is
+backed by that mod's file and is still not `saveAll()`'s to write.
+
 ## The files
 
 | Group | Accessor | Covers |
@@ -91,7 +97,7 @@ its own.
 
 ### Files with no accessor yet
 
-As of 0.10.3, Cultivation ships *32* config files that `CultivationConfigs`
+As of 0.11.1, Cultivation ships *37* config files that `CultivationConfigs`
 does not expose. Many of them still have a public events surface, so the
 subsystem is observable and re-tunable per event even though its settings file
 is not reachable here:
@@ -113,12 +119,17 @@ is not reachable here:
 | *WorldBoss* | `WorldBossEvents` |
 | *InnerDemon*, *CleanseRite*, *Reincarnation* | `CultivationEvents` (`PreInnerDemonTrialEvent`, `PreCleanseRiteEvent`, `PreReincarnationEvent` and their posts) |
 | *Reveal* | The [Progressive Reveal registry](registries.md#progressive-reveal-0103) — contribute systems, not settings |
+| *DaoDomain* (`Arts/DaoDomainConfig`) | *(0.11.1)* `DaoDomainEvents` — `PreDomainUnfoldEvent` re-tunes one cast's radius, duration and Qi cost. See [Dao Domains](dao-domains.md) |
+| *DaoSeal* (`Arts/DaoSealConfig`) | *(0.11.1)* None yet — no seal events ship. The damage causes and effect ids in [Dao Seals](dao-seals.md) are observable |
+| *BreachReward* (`Society/BreachRewardConfig`) | *(0.11.1)* The Merit it grants arrives through `MeritEvents` as deed `BREACH_CLEAR` |
+| *SectArray* | *(0.11.1)* `SectArrayEvents` — `PreSectArrayRaiseEvent` re-tunes one raise's price. See [Sect Array Domains](sect-array-domains.md) |
 
-The remaining fifteen — *Compass*, *DaoInheritance*, *DaoMastery*,
+The remaining sixteen — *Compass*, *DaoInheritance*, *DaoMastery*,
 *Forage*, *GrandDao*, *GrandTournament*, *Hearth*, *HeavenlyRealm*,
 *HerbScatter*, *Land*, *Leaderboard*, *Reclusive*, *Retreat*,
-*SeaOfConsciousness* and *SolarTerm* — have no public API surface at all
-yet (a few are *read* by `CultivationAPI` helpers, such as the leaderboard and
+*SeaOfConsciousness*, *SolarTerm* and, new in 0.11.1, *VeinCompass*
+(`Cultivation/VeinCompassConfig`, the Spirit Vein Compass) — have no public API
+surface at all yet (a few are *read* by `CultivationAPI` helpers, such as the leaderboard and
 Dao Mastery season champions, but none can be tuned through this package).
 
 They are reachable, on the internals terms the [README](../README.md#compatibility)

@@ -1,7 +1,7 @@
 # Event reference
 
 Every event Cultivation fires, grouped by the class that declares it.
-**368 listener hooks** across 51 subsystems.
+**377 listener hooks** across 53 subsystems.
 
 > Generated from `api-sources/` by `tools/gen_events_reference.py`. Do not edit
 > by hand — re-run the script instead. The prose in each entry is the javadoc on
@@ -22,7 +22,7 @@ CultivationEvents.onBreakthrough(event -> {
 
 ## Core progression
 
-`plugin.siren.API.CultivationEvents` — Qi, meditation, rituals, breakthroughs, advancements, demotions, tribulations, the Heart-Devil Trial, Qi Deviation, the Ascension capstone, races, the skill tree and respecs.
+`plugin.siren.API.CultivationEvents` — Qi, meditation, rituals, withdrawing from an armed ritual (`/cultivation meditate abort`, 0.11.0), breakthroughs, advancements, demotions, tribulations, the Heart-Devil Trial, Qi Deviation, the Ascension capstone, races, the skill tree and respecs.
 
 **Enums declared here**
 
@@ -256,6 +256,21 @@ A timed meditation ritual just began (the tick that first accrued progress).
 | `player()` | `PlayerRef` |
 | `type()` | `RitualType` |
 
+### `RitualAbortEvent`
+
+```java
+CultivationEvents.onRitualAbort(event -> { /* ... */ });
+```
+
+A cultivator withdrew from an armed breakthrough or advancement with `/cultivation meditate abort`. `type` is BREAKTHROUGH or ADVANCEMENT; `qiLost` is the banked Qi that scattered (already deducted). No demotion applies. They have been stood up through an ordinary COMMAND stop, so `MeditationStopEvent` fires too.
+
+| Accessor | Type |
+| --- | --- |
+| `ref()` | `Ref<EntityStore>` |
+| `player()` | `PlayerRef` |
+| `type()` | `RitualType` |
+| `qiLost()` | `float` |
+
 ### `AscensionEvent`
 
 ```java
@@ -384,7 +399,13 @@ A player respecced their skill tree; every node was cleared and `refundedPoints`
 CultivationEvents.onPlayerKill(event -> { /* ... */ });
 ```
 
-One cultivator killed another, and the kill is worth something. The generic player-versus-player hook: everything the mod itself pays out for a kill - Devil-path Qi, Dao deeds, the Wu Xing reward, a shed manual - is credited immediately after this fires. **Only fires for a kill that PAYS.** `CultivationDeathSystem` runs its own anti-farm gate (`Pk-Same-Victim-Cooldown-Seconds` and `Pk-Min-Victim-Realm` - see `isFarmedKill`) first, and a farmed kill returns before this event exists. That ordering is the whole point: a listener running BEFORE the gate would pay out on exactly the kills the gate exists to make worthless, and no later `return` can take back a credit already made. An addon that rewards kills therefore inherits the mod's own farm protection for free - and must not go looking for an earlier hook to "catch every death", because every death is not what this event means. Also never fires for a self-inflicted death, an environmental one, a kill whose killer has no `PlayerRef`, or a kill a fleeing Nascent Soul landed (see `SoulEscapeManager` - such a kill credits nobody at all, by design). **No `Pre` twin, deliberately.** The only cancellable thing at this point is the kill itself, which belongs to the damage pipeline and is long since resolved by the time anything here runs. Every consumer is a reward path, and a reward path must be gated by its own rules rather than by vetoing somebody else's event. @param killer the slayer. Never the victim - a self-kill returns before this. @param killerPlayer the slayer's `PlayerRef`; always valid at the moment this fires. @param victim the fallen cultivator. @param victimPlayer the fallen cultivator's `PlayerRef`, or null if the component could not be read - the kill is still a player kill (the death system already established that), so this is a read failure rather than "an NPC died". @param sanctionedDuel true when this death resolved a sanctioned duel (plain or Dao). The mod excludes its own general PvP reward on those - a duel already has its own stakes - and any addon paying for kills should do the same, or two accounts can farm each other through a duel that pays both ways.
+One cultivator killed another, and the kill is worth something. The generic player-versus-player hook: everything the mod itself pays out for a kill - Devil-path Qi, Dao deeds, the Wu Xing reward, a shed manual - is credited immediately after this fires. **Only fires for a kill that PAYS.** `CultivationDeathSystem` runs its own anti-farm gate (`Pk-Same-Victim-Cooldown-Seconds` and `Pk-Min-Victim-Realm` - see `isFarmedKill`) first, and a farmed kill returns before this event exists. That ordering is the whole point: a listener running BEFORE the gate would pay out on exactly the kills the gate exists to make worthless, and no later `return` can take back a credit already made. An addon that rewards kills therefore inherits the mod's own farm protection for free - and must not go looking for an earlier hook to "catch every death", because every death is not what this event means. Also never fires for a self-inflicted death, an environmental one, a kill whose killer has no `PlayerRef`, or a kill a fleeing Nascent Soul landed (see `SoulEscapeManager` - such a kill credits nobody at all, by design). **No `Pre` twin, deliberately.** The only cancellable thing at this point is the kill itself, which belongs to the damage pipeline and is long since resolved by the time anything here runs. Every consumer is a reward path, and a reward path must be gated by its own rules rather than by vetoing somebody else's event.
+
+- `killer` — the slayer. Never the victim - a self-kill returns before this.
+- `killerPlayer` — the slayer's `PlayerRef`; always valid at the moment this fires.
+- `victim` — the fallen cultivator.
+- `victimPlayer` — the fallen cultivator's `PlayerRef`, or null if the component could not be read - the kill is still a player kill (the death system already established that), so this is a read failure rather than "an NPC died".
+- `sanctionedDuel` — true when this death resolved a sanctioned duel (plain or Dao). The mod excludes its own general PvP reward on those - a duel already has its own stakes - and any addon paying for kills should do the same, or two accounts can farm each other through a duel that pays both ways.
 
 | Accessor | Type |
 | --- | --- |
@@ -652,6 +673,21 @@ A cultivator is about to begin Reincarnation. Cancelling keeps them at their cur
 | `ref()` | `Ref<EntityStore>` | read |
 | `player()` | `PlayerRef` | read (may be null) |
 
+### `PreRitualAbortEvent`
+
+```java
+CultivationEvents.onPreRitualAbort(event -> { /* ... */ });
+```
+
+A cultivator is asking to withdraw from an armed breakthrough or advancement: fired for the `/cultivation meditate abort` quote and again for `abort confirm`, so a veto refuses before the player is quoted a cost. Cancel to refuse it: nothing has been charged yet. Every built-in eligibility check has already passed. The listener explains itself - the command sends the player no message of its own when this is cancelled - the same contract as `PreRitualStartEvent` - so a listener must have no side effect beyond that message (it can fire twice for one withdrawal). `qiLost` is the banked Qi the withdrawal would scatter.
+
+| Member | Type | |
+| --- | --- | --- |
+| `ref()` | `Ref<EntityStore>` | read |
+| `player()` | `PlayerRef` | read (may be null) |
+| `type()` | `RitualType` | read |
+| `qiLost()` | `float` | read |
+
 ### `PreRitualStartEvent`
 
 ```java
@@ -830,7 +866,9 @@ A cultivator's Lifespan budget is about to reach 0 and enter Withering. Cancelli
 LegacyEvents.onLegacyPayout(event -> { /* ... */ });
 ```
 
-A legacy buff has actually reached (or been queued for) an heir - the reduction described here is the FINAL amount, after the recent-profile scale-down for an immediate payout, or the pre-scale base amount for a queued one (see `queued`). @param queued true if this was deferred to the offline-heir mailbox rather than applied immediately - the reduction/expiry here are the values as queued, not yet scaled for profile age; that scaling only happens at actual delivery and is not separately observable through this event.
+A legacy buff has actually reached (or been queued for) an heir - the reduction described here is the FINAL amount, after the recent-profile scale-down for an immediate payout, or the pre-scale base amount for a queued one (see `queued`).
+
+- `queued` — true if this was deferred to the offline-heir mailbox rather than applied immediately - the reduction/expiry here are the values as queued, not yet scaled for profile age; that scaling only happens at actual delivery and is not separately observable through this event.
 
 | Accessor | Type |
 | --- | --- |
@@ -1422,6 +1460,96 @@ A Dao Enlightenment is about to fire. Cancel to refuse it (as if the roll never 
 | `qiGain()` | `float` | read |
 | `setComprehensionGain(float)` | `void` | re-tune |
 | `setQiGain(float)` | `void` | re-tune |
+
+
+---
+
+## Dao Domains (0.11.1)
+
+`plugin.siren.API.DaoDomainEvents` — Dao Domains (道域): a Nascent Soul+ cultivator unfolding an anchored aura from the Domain Heart rune in an Update 7 core ability slot, the domain collapsing, and two hostile domains clashing. The unfold is cancellable, with radius, duration and Qi cost re-tunable. Players are UUIDs, and a domain lost to its caster disconnecting fires nothing - see [Dao Domains](dao-domains.md).
+
+**Enums declared here**
+
+- `DaoDomainEvents.CollapseReason` — Why a domain ended. Values: `EXPIRED`, `LEFT_AREA`, `DIED`, `LEFT_WORLD`, `GATE`, `DISABLED`, `CLASHED`
+- `DaoDomainEvents.Outcome` — How a clash came out, from the point of view of `DomainClashEvent#first()`. Values: `FIRST_WON`, `SECOND_WON`, `TIE`
+
+**Post-events** — fired once the change is committed; cannot be cancelled.
+
+### `DomainUnfoldEvent`
+
+```java
+DaoDomainEvents.onDomainUnfold(event -> { /* ... */ });
+```
+
+| Accessor | Type |
+| --- | --- |
+| `caster()` | `UUID` |
+| `element()` | `DaoElement` |
+| `tier()` | `int` |
+| `radius()` | `float` |
+| `durationSeconds()` | `float` |
+| `qiSpent()` | `float` |
+
+### `DomainCollapseEvent`
+
+```java
+DaoDomainEvents.onDomainCollapse(event -> { /* ... */ });
+```
+
+| Accessor | Type |
+| --- | --- |
+| `caster()` | `UUID` |
+| `element()` | `DaoElement` |
+| `reason()` | `CollapseReason` |
+| `secondsActive()` | `float` |
+
+### `DomainClashEvent`
+
+```java
+DaoDomainEvents.onDomainClash(event -> { /* ... */ });
+```
+
+Two hostile domains, or a domain and a hostile sect array, overlapped and a clash was settled. Fires once per clash, on the world thread of the casters, and before the `DomainCollapseEvent`s the clash causes. **Power.** A domain's clash power is its caster's realm ordinal (Body Refinement 0 ... Void Refinement 6) plus `Domain-Clash-Counter-Bonus` (default 1) if the domain's Dao element overcomes the opponent's in the Wu Xing cycles (`DaoElement.counters`); a Heavenly Qi domain (no element) never counters and is never countered. A sect array's power is the higher of its configured base and the strongest defender standing in its territory, plus the same bonus if its sect's element overcomes the domain's. The higher power wins; equal power is a `Outcome#TIE`. **Who is first.** `first` is the caster whose pulse found the overlap - in the ordinary case the one who unfolded last, because a domain is anchored and an overlap begins when one of the two is cast. Clashes only happen between domains whose owners count each other enemy (world PvP, a duel, an opposed Path War side, or a live siege between their sects), never between allies or neutrals.
+
+- `first` — the caster whose pulse settled the clash
+- `second` — the other domain's caster; `null` when the opponent was a sect array. May be a synthetic id that matches no player when an admin summoned a test rival (`/cultivation admin domain rival`).
+- `arraySect` — the defending sect's name when the opponent was a sect array, else `null`
+- `firstPower` — `first`'s clash power, counter bonus included
+- `secondPower` — the opponent's clash power, counter bonus included
+- `outcome` — who won
+- `counterDecided` — true if a Wu Xing counter changed the result: with the bonuses removed the outcome would have been different
+
+| Accessor | Type |
+| --- | --- |
+| `first()` | `UUID` |
+| `second()` | `UUID` |
+| `arraySect()` | `String` |
+| `firstPower()` | `int` |
+| `secondPower()` | `int` |
+| `outcome()` | `Outcome` |
+| `counterDecided()` | `boolean` |
+
+**Pre-events** — fired before the change; `setCancelled(true)` vetoes it, and any setter below re-tunes the numbers the mod then uses.
+
+### `PreDomainUnfoldEvent`
+
+```java
+DaoDomainEvents.onPreDomainUnfold(event -> { /* ... */ });
+```
+
+A domain is about to unfold; the cast's gates have all passed but no Qi has been spent. Cancel -> the cast fails exactly like a refusal: nothing charged, no cooldown, no domain. Radius, duration and Qi cost may be re-tuned; the values left in the event are clamped to the engine's sane range before use.
+
+| Member | Type | |
+| --- | --- | --- |
+| `caster()` | `UUID` | read |
+| `element()` | `DaoElement` | read (may be null) |
+| `tier()` | `int` | read |
+| `radius()` | `float` | read |
+| `durationSeconds()` | `float` | read |
+| `qiCost()` | `float` | read |
+| `setRadius(float)` | `void` | re-tune |
+| `setDurationSeconds(float)` | `void` | re-tune |
+| `setQiCost(float)` | `void` | re-tune |
 
 
 ---
@@ -3394,6 +3522,74 @@ Formations 2.0: a Siege Banner is about to be placed. Cancel to refuse it (repor
 
 ---
 
+## Sect Array Domains (0.11.1)
+
+`plugin.siren.API.SectArrayEvents` — A sect's wartime Array Domain over every chunk it has claimed: raised only while a siege is declared against the sect, paid from the raiser's own sect contribution, held until the siege ends, and contested by any hostile Dao Domain unfolded inside it - see [Sect Array Domains](sect-array-domains.md).
+
+**Enums declared here**
+
+- `SectArrayEvents.EndReason` — Why a sect array ended. Values: `SIEGE_ENDED`, `HALL_LOST`, `LOWERED`, `ADMIN`, `DISABLED`
+
+**Post-events** — fired once the change is committed; cannot be cancelled.
+
+### `SectArrayRaisedEvent`
+
+```java
+SectArrayEvents.onSectArrayRaised(event -> { /* ... */ });
+```
+
+A sect's array rose.
+
+- `sect` — the sect
+- `raiser` — whoever paid for it, or `null` when an admin raised it
+- `cost` — the contribution actually charged (0 for an admin raise)
+- `adminRaised` — true if the admin test command raised it
+
+| Accessor | Type |
+| --- | --- |
+| `sect()` | `Sect` |
+| `raiser()` | `UUID` |
+| `cost()` | `int` |
+| `adminRaised()` | `boolean` |
+
+### `SectArrayEndedEvent`
+
+```java
+SectArrayEvents.onSectArrayEnded(event -> { /* ... */ });
+```
+
+A sect's array came down.
+
+- `sect` — the sect (its name may already be gone from the roster for `EndReason#HALL_LOST`)
+- `reason` — why it ended
+- `secondsActive` — how long it stood, in seconds
+
+| Accessor | Type |
+| --- | --- |
+| `sect()` | `Sect` |
+| `reason()` | `EndReason` |
+| `secondsActive()` | `float` |
+
+**Pre-events** — fired before the change; `setCancelled(true)` vetoes it, and any setter below re-tunes the numbers the mod then uses.
+
+### `PreSectArrayRaiseEvent`
+
+```java
+SectArrayEvents.onPreSectArrayRaise(event -> { /* ... */ });
+```
+
+A Patriarch or Elder is about to raise the sect's array; every gate has passed (the feature is on, a siege stands against the sect, the sect has a hall and no array, the raiser holds enough contribution) but nothing has been spent. Cancel -> the raise fails with a generic "something prevents that" line, nothing charged, no array. The cost may be re-tuned (a discount for a sect that holds a relic, say); the value left in the event is clamped to `[0, 1000000]` and the raiser must still hold it, or the raise fails as insufficient contribution. Not fired for an admin raise.
+
+| Member | Type | |
+| --- | --- | --- |
+| `sect()` | `Sect` | read |
+| `raiser()` | `UUID` | read |
+| `cost()` | `int` | read |
+| `setCost(int)` | `void` | re-tune |
+
+
+---
+
 ## Sect Guardians (0.10.2)
 
 `plugin.siren.API.GuardianEvents` — Stationing a guardian NPC at a sect hall, one falling, and the last one falling. Stationing is cancellable.
@@ -3502,7 +3698,7 @@ One listener's FIRST qualifying pulse of this sermon - fired once per (sermon, l
 SermonEvents.onSermonEnd(event -> { /* ... */ });
 ```
 
-A sermon ended - naturally (duration elapsed), early (`/cultivation sermon stop`), or abnormally (lecturer left the hall chunk/world, hall lost, sect besieged, feature disabled). `forfeited` is true only for the disconnect path (`SermonManager#forget`) - see that method's own doc for why a disconnect forfeits the Merit a graceful stop still pays out.
+A sermon ended - naturally (duration elapsed), early (`/cultivation sermon stop`), or abnormally (lecturer left the hall chunk/world, hall lost, sect besieged, feature disabled). `forfeited` is true only for a disconnect the lecturer caused (`SermonManager#forget`) - see that method's own doc for why walking out forfeits the Merit a graceful stop still pays out. A disconnect the server caused (a stop, a staff kick) pays like a stop and reports `forfeited == false`.
 
 | Accessor | Type |
 | --- | --- |
@@ -3706,7 +3902,9 @@ A duel is now live - both players are flagged as dueling.
 DuelEvents.onDuelEnd(event -> { /* ... */ });
 ```
 
-A duel ended. For DEATH/YIELD, `winner`/`loser` are meaningful and the payout has been queued; for VOIDED they are simply the two participants and nothing changes hands. @param killer for a DEATH, the uuid of the player whose own damage actually killed the loser, or null when the killing blow was not a player's (lava, a fall, drowning, a formation trap) or could not be attributed. Always null for YIELD and VOIDED. Added for Tournament Wagers, which must not pay out on a death the winner did not cause - see `WagerEvents.WagerVoidReason.NOT_OPPONENT_KILL`. It is a plain extra record component and every existing listener keeps compiling; the four-argument constructor below still exists for callers that genuinely have no attribution.
+A duel ended. For DEATH/YIELD, `winner`/`loser` are meaningful and the payout has been queued; for VOIDED they are simply the two participants and nothing changes hands.
+
+- `killer` — for a DEATH, the uuid of the player whose own damage actually killed the loser, or null when the killing blow was not a player's (lava, a fall, drowning, a formation trap) or could not be attributed. Always null for YIELD and VOIDED. Added for Tournament Wagers, which must not pay out on a death the winner did not cause - see `WagerEvents.WagerVoidReason.NOT_OPPONENT_KILL`. It is a plain extra record component and every existing listener keeps compiling; the four-argument constructor below still exists for callers that genuinely have no attribution.
 
 | Accessor | Type |
 | --- | --- |
@@ -3722,7 +3920,7 @@ A duel ended. For DEATH/YIELD, `winner`/`loser` are meaningful and the payout ha
 DuelEvents.onDuelPayout(event -> { /* ... */ });
 ```
 
-A decided duel's wager actually moved: `amount` is what the loser could cover, which is exactly what the winner gained.
+A decided duel's wager actually moved: `amount` is what the loser could cover, which is exactly what the winner gained - or is owed, when the winner could not be credited on the spot (offline, between worlds, on a test cultivation); the Qi then reaches them at their next login. **Thread.** Fired once the loser's side has been taken, never under any of Cultivation's locks, but on no fixed thread: for a death, a yield or an immediate disconnect forfeit, the loser's world thread (or the ledger's write thread when part of the stake came out of Qi still held for the loser after a reconnect grace); for a reconnect grace that ran out, the WINNER's world thread when they are online, else the thread that settled it; for a duelist who walked out while their opponent was reconnecting, the absent winner's world thread if they are back online, else the thread that settled it. Resolve players fresh and hop to their world thread before touching a Store.
 
 | Accessor | Type |
 | --- | --- |
@@ -3768,7 +3966,7 @@ A duel is about to start. Cancel to refuse it - the challenge is consumed either
 DuelEvents.onPreDuelPayout(event -> { /* ... */ });
 ```
 
-A decided duel's wager is about to move. Cancel to let the winner take nothing; `setAmount` to re-scale the transfer (the loser can still only forfeit what they actually hold).
+A decided duel's wager is about to move. Cancel to let the winner take nothing; `setAmount` to re-scale the transfer (the loser can still only forfeit what they actually hold). **Thread and timing.** Answer synchronously, from any thread: it is never fired under any of Cultivation's locks, and on no fixed thread - the caller's for a death (the dead duelist's world thread, mid-tick), a yield (the command's thread) or an immediate disconnect forfeit (the disconnect event's thread). A reconnect grace asks it TWICE: once when the grace begins, on the disconnect event's thread while the absent duelist is still online (so a listener that reads a player can still read them), and again when the grace is settled - when it runs out, on the winner's world thread if they are online, else the settling thread; or, when the duelist who was waiting walks out instead and so pays the absent one, on that disconnect's thread with winner and loser the other way round. The transfer is capped by the lower of the two answers, so a cancel at either moment holds; a listener that reads a player must treat an offline one conservatively or rely on that first call. The first call may be for a payout that never happens (the duelist returns in time): do not count it as a payout.
 
 | Member | Type | |
 | --- | --- | --- |
@@ -3875,7 +4073,11 @@ A spectator's Spirit Stones have been charged and their stake recorded. `backed`
 WagerEvents.onWagerMarketResolved(event -> { /* ... */ });
 ```
 
-A market resolved and paid out. @param payouts bettor uuid to the TOTAL Spirit Stones handed back to them - their own returned stake plus their share of the losing pool. A bettor who backed the loser is present with a payout of 0 only if they are also in `stakes`; read `stakes` for what each one put in. Both maps are unmodifiable. @param stakes bettor uuid to what they originally staked. @param burned the house cut plus the indivisible remainder - Spirit Stones destroyed rather than paid to anyone. There is no house account and no organizer; see `TournamentWagerManager`'s own doc.
+A market resolved and paid out.
+
+- `payouts` — bettor uuid to the TOTAL Spirit Stones handed back to them - their own returned stake plus their share of the losing pool. A bettor who backed the loser is present with a payout of 0 only if they are also in `stakes`; read `stakes` for what each one put in. Both maps are unmodifiable.
+- `stakes` — bettor uuid to what they originally staked.
+- `burned` — the house cut plus the indivisible remainder - Spirit Stones destroyed rather than paid to anyone. There is no house account and no organizer; see `TournamentWagerManager`'s own doc.
 
 | Accessor | Type |
 | --- | --- |
@@ -4645,7 +4847,9 @@ A Cracked Dantian's Qi spill is about to be armed (fired once at inflict/deepen,
 ProfileEvents.onProfileSwitch(event -> { /* ... */ });
 ```
 
-A player is now on a different profile. Their components have already been replaced, so anything read here describes the cultivator they switched TO. @param from the profile they left, or null when they were placed on one without leaving another (a first-time backfill)
+A player is now on a different profile. Their components have already been replaced, so anything read here describes the cultivator they switched TO.
+
+- `from` — the profile they left, or null when they were placed on one without leaving another (a first-time backfill)
 
 | Accessor | Type |
 | --- | --- |
@@ -4688,7 +4892,9 @@ A profile was erased. It is already off the player's list.
 ProfileEvents.onProfileExpire(event -> { /* ... */ });
 ```
 
-A temp profile's time ran out and it was removed. @param wasActive whether the player was playing it, and so has just been put back on a real one
+A temp profile's time ran out and it was removed.
+
+- `wasActive` — whether the player was playing it, and so has just been put back on a real one
 
 | Accessor | Type |
 | --- | --- |
@@ -5104,7 +5310,11 @@ A player has taken on a quest chain - the progress row is written and, for a sit
 QuestEvents.onQuestStepAdvance(event -> { /* ... */ });
 ```
 
-A step of a chain just cleared. @param completedStepIndex the 0-based index of the step that was finished. @param nextStepIndex the 0-based index now current, or `completedStepIndex + 1` past the end when the chain has run out of steps - check `finalStep()` rather than comparing against a step count. @param finalStep true if this was the last step, so the run has moved to awaiting its reward.
+A step of a chain just cleared.
+
+- `completedStepIndex` — the 0-based index of the step that was finished.
+- `nextStepIndex` — the 0-based index now current, or `completedStepIndex + 1` past the end when the chain has run out of steps - check `finalStep()` rather than comparing against a step count.
+- `finalStep` — true if this was the last step, so the run has moved to awaiting its reward.
 
 | Accessor | Type |
 | --- | --- |
@@ -5967,7 +6177,9 @@ A contract was explicitly posted to the board - it is already in the board list 
 BountyEvents.onBountyClaimed(event -> { /* ... */ });
 ```
 
-A contract was fully claimed - every promised reward component landed and the acceptance has been marked claimed. Never fires for a `BountyManager.Result#PARTIAL` claim, which leaves the acceptance completed-but-unclaimed for a retry. @param rewardQi the Qi the contract promised, exactly as the board row advertised it. What the cultivator's own multipliers turned that into is `CultivationEvents.QiGainEvent`'s business, not this event's.
+A contract was fully claimed - every promised reward component landed and the acceptance has been marked claimed. Never fires for a `BountyManager.Result#PARTIAL` claim, which leaves the acceptance completed-but-unclaimed for a retry.
+
+- `rewardQi` — the Qi the contract promised, exactly as the board row advertised it. What the cultivator's own multipliers turned that into is `CultivationEvents.QiGainEvent`'s business, not this event's.
 
 | Accessor | Type |
 | --- | --- |
@@ -6141,7 +6353,10 @@ A match is now live. `blackUuid` is always the ACCEPTER (moves first, a courtesy
 WeiqiEvents.onWeiqiMove(event -> { /* ... */ });
 ```
 
-One ply resolved - either a stone placed at `index` (a flat `y * boardSize + x` board index, decodable via `WeiqiBoard.xOf`/`yOf`) or a pass, never both. @param index meaningless (always `-1`) when `pass` is true. @param capturedCount how many enemy stones this move captured - always `0` for a pass.
+One ply resolved - either a stone placed at `index` (a flat `y * boardSize + x` board index, decodable via `WeiqiBoard.xOf`/`yOf`) or a pass, never both.
+
+- `index` — meaningless (always `-1`) when `pass` is true.
+- `capturedCount` — how many enemy stones this move captured - always `0` for a pass.
 
 | Accessor | Type |
 | --- | --- |

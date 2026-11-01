@@ -64,6 +64,15 @@ Each maps to a real `DamageCause` asset id. `FIRE`, `ICE` and `POISON` use
 vanilla causes; the rest use Cultivation's own shipped assets
 (`Server/Entity/Damage/Cultivation_*.json`, all inheriting `Elemental`).
 
+Going the other way:
+
+| Call | Answers |
+| --- | --- |
+| `fromDamageCauseId(String)` | An exact cause id match, or `null`. Since 0.11.0 it also maps Update 7's own vanilla `Earth`, `Water`, `Wind` and `Lightning` causes to those elements |
+| `fromDamageCause(DamageCause)` | *(0.11.1)* As above, then up the cause's `Inherits` chain — so a [Dao Seal](dao-seals.md) cause such as `Cultivation_Seal_Metal` (inheriting `Cultivation_Metal`) resolves to `METAL`, while a cause that only inherits the generic `Elemental` resolves to `null` |
+| `overcomes()` / `overcomeBy()` | The element this one overcomes, and the one that overcomes it, within its own ring |
+| `counters(DaoElement)` / `counteredBy(DaoElement)` | The same relation as a test; cross-ring is always `false`. It is what decides a [Dao Domain clash](dao-domains.md#domain-clashes)'s counter bonus |
+
 `WOOD` is the healing path — it converts damage into self-healing instead of
 taking the flat damage bonus.
 
@@ -192,7 +201,8 @@ static Technique fromId(@Nullable String value)
 
 `plugin.siren.Utils.Config.TechniqueRule` is the tuning: `isEnabled()`,
 `isDaoSpecific()`, `getRequiredElement()`, `getElements()`, `getDamageType()`,
-`isRequiresManual()`, `getUnlockRealm()`, `getQiCost()`, `getCooldownSeconds()`,
+`isRequiresUnlock()`, `isCharged()`, `isRequiresUnarmed()`, `isFusionOnly()`,
+`getUnlockRealm()`, `getQiCost()`, `getCooldownSeconds()`,
 `getParam(String key, float fallback)`.
 
 Build one with `CultivationAPI.newTechniqueRule(...)` rather than the constructor.
@@ -336,6 +346,29 @@ The new event classes declare their own enums (`DaoDuelEvents.DaoDuelEndReason`,
 `SoulEscapeEvents.SanctuaryKind` / `ForfeitReason`, `TeaEvents.EndReason`,
 `WagerEvents.WagerVoidReason`); they are listed with their values in
 [the event reference](events-reference.md).
+
+### New in 0.11.0 – 0.11.1
+
+No new standalone types. The changes a `switch` or a `Block` reader must handle:
+
+- `MeritDeed` (`plugin.siren.Utils.Merit`, carried by `MeritEvents`) gained
+  *`BREACH_CLEAR`* *(0.11.1)*: Merit for standing near an Update 7 Goblin Breach,
+  Coffer, Voidtaken Hunt or dungeon boss when it resolves. Repeatable, with no
+  beneficiary.
+- `CodexPage.BlockType` gained *`ICON`* *(0.11.0)*, written by `CodexPage.icon(...)`:
+  `primary` is the icon's name, `secondary` its meaning and `data` the PNG's asset
+  path. See [UI integration](ui.md#block-types).
+- `DaoDomainEvents` *(0.11.1)* declares `CollapseReason` and `Outcome`; they are in
+  [the event reference](events-reference.md#dao-domains-0111). `CollapseReason`
+  ends with `CLASHED`, so a `switch` written against the other six needs a
+  default.
+- `DuelEvents.DuelEndReason` is unchanged, but what a disconnect reports is not
+  *(0.11.0)*. Through 0.10.3 a duelist disconnecting *voided* the duel
+  (`VOIDED`, no wager moved). Now a disconnect the player caused — quitting, a
+  dropped connection, an AFK kick — pauses the duel for the reconnect grace, and a
+  duelist who does not return *forfeits* as a `YIELD`, wager and all. Only a
+  disconnect the server caused (a stop, a crash, a staff kick or ban) still
+  voids. A `YIELD` no longer always means somebody typed `/cultivation duel yield`.
 
 ---
 

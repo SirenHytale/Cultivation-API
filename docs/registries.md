@@ -872,6 +872,11 @@ It is **keyed**: calling it again with the same key replaces that key's
 contribution rather than stacking with it, so you can recompute freely without
 tracking what you granted last time. Pass `0` to withdraw it.
 
+It is *not a heal* *(0.11.0)*: the pool keeps its current share of full as the
+maximum moves — full stays full, 40% stays 40% — whether the bonus rises or
+falls, so withdrawing and re-applying a bonus never refills anyone. A NaN or
+infinite amount is ignored, leaving the key's previous contribution in place.
+
 ## Off-ring Dao roots (0.10.0)
 
 `DaoElement` is a plain Java enum — a mod cannot add a new element constant to
@@ -970,8 +975,8 @@ unclaimed palette or title id has everywhere else in this API.
 
 Progressive Reveal keeps a player-facing system out of the menus and the Codex
 until it becomes relevant to that player, then announces it through the
-Progression Compass's "Newly Opened" row. Cultivation registers 28 of its own
-systems. An addon adds its own the same way it adds a Codex entry:
+Progression Compass's "Newly Opened" row. Cultivation registers 30 of its own
+systems (0.11.1 added `cultivation:daoSeals` and `cultivation:daoDomains`). An addon adds its own the same way it adds a Codex entry:
 
 ```java
 CultivationAPI.registerRevealableSystem(

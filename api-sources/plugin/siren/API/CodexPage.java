@@ -52,13 +52,19 @@ public final class CodexPage {
         /** A crafting recipe, resolved live from the item's own asset. */
         RECIPE,
         /** A thin rule. */
-        DIVIDER
+        DIVIDER,
+        /**
+         * A picture beside its name and what it means - how the Codex explains an
+         * icon the player meets somewhere else, like a HUD effect tile.
+         */
+        ICON
     }
 
     /**
-     * One rendered element. {@code primary} is the heading/paragraph/note text or
-     * a stat's label; {@code secondary} is a stat's value; {@code data} is a
-     * recipe's output item id.
+     * One rendered element. {@code primary} is the heading/paragraph/note text, a
+     * stat's label or an icon's name; {@code secondary} is a stat's value or an
+     * icon's meaning; {@code data} is a recipe's output item id or an icon's
+     * asset path.
      */
     public record Block(@Nonnull BlockType type, @Nullable Message primary, @Nullable Message secondary, @Nullable String data) {}
 
@@ -173,6 +179,27 @@ public final class CodexPage {
     @Nonnull
     public CodexPage recipe(@Nonnull String itemId){
         return add(BlockType.RECIPE, null, null, itemId);
+    }
+
+    /**
+     * An icon with its name and what it means.
+     *
+     * @param iconPath    the PNG's asset path from the asset root, e.g.
+     *                    {@code "UI/Custom/Hud/Cultivation/Assets/Icons/Effect_Tea.png"}
+     *                    - the same form a HUD's AssetImage takes, never a
+     *                    document-relative {@code ../} path.
+     * @param name        what the icon is called.
+     * @param description what it means for the reader: what causes it, what it
+     *                    does, how it ends.
+     */
+    @Nonnull
+    public CodexPage icon(@Nonnull String iconPath, @Nonnull Message name, @Nonnull Message description){
+        return add(BlockType.ICON, name, description, iconPath);
+    }
+
+    @Nonnull
+    public CodexPage icon(@Nonnull String iconPath, @Nonnull String nameKey, @Nonnull String descriptionKey){
+        return icon(iconPath, Text.of(nameKey), Text.of(descriptionKey));
     }
 
     @Nonnull

@@ -39,9 +39,11 @@ public final class SermonEvents {
      * A sermon ended - naturally (duration elapsed), early ({@code
      * /cultivation sermon stop}), or abnormally (lecturer left the hall
      * chunk/world, hall lost, sect besieged, feature disabled). {@code
-     * forfeited} is true only for the disconnect path ({@code
-     * SermonManager#forget}) - see that method's own doc for why a
-     * disconnect forfeits the Merit a graceful stop still pays out.
+     * forfeited} is true only for a disconnect the lecturer caused ({@code
+     * SermonManager#forget}) - see that method's own doc for why walking out
+     * forfeits the Merit a graceful stop still pays out. A disconnect the
+     * server caused (a stop, a staff kick) pays like a stop and reports
+     * {@code forfeited == false}.
      */
     public record SermonEndEvent(@Nonnull UUID lecturerUuid, @Nonnull String sectName, int qualifiedListenerCount,
                                  float meritAwarded, boolean forfeited){}

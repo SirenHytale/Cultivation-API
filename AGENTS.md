@@ -33,7 +33,7 @@ cover it, because nearly every mechanic is re-tunable there.
 1. **`docs/pitfalls.md`** — the mistakes that crash servers. Read this first.
 2. `docs/getting-started.md` — dependency wiring and `setup()`.
 3. The guide for whatever the user is doing (see `README.md`'s table).
-4. `docs/events-reference.md` — all 368 listeners with their payloads. Generated
+4. `docs/events-reference.md` — all 377 listeners with their payloads. Generated
    from source, so it is accurate; it is long, so search it rather than reading
    it end to end.
 
@@ -78,8 +78,9 @@ Synchronously, on the world thread of the player the event happened to. So:
 - A listener that throws is caught, logged and skipped — the mod and other
   addons keep working. Do not rely on this; it hides your bug.
 
-**Two 0.8.0 classes have no subject player, so this rule does not apply as
-written.** Check which you are writing before assuming a `ref()`:
+**Two 0.8.0 classes and one 0.11.1 class have no subject player, and one 0.11.0
+pair has no fixed thread, so this rule does not apply as written.** Check which
+you are writing before assuming a `ref()`:
 
 - **`StoreBenefitEvents`** fires on the **remote checker thread** — grants are
   discovered by an HTTP sweep, so there is no world in hand, the payload carries a
@@ -89,6 +90,20 @@ written.** Check which you are writing before assuming a `ref()`:
   block), but it is whichever world reached the shared scheduler first, not a
   particular player's, and the payload has a `CelestialEventType` rather than a
   `ref()`. Hop per player before touching anybody.
+- **`DuelEvents.DuelPayoutEvent` / `PreDuelPayoutEvent`** (0.11.0) follow a duel
+  that can outlive a dropped connection, so they fire on whichever thread
+  settled it — a world thread, a command's, a disconnect event's, or the duel
+  ledger's — and a reconnect grace asks the pre-event *twice*. Resolve each
+  `UUID` and hop, as for the store events.
+- **`SectArrayEvents`** (0.11.1) is about a sect, not a player: a raise fires
+  from the raising command, an end from the lowering command or from whichever
+  world's once-a-second keeper noticed the siege was over. Like `CelestialEvents`,
+  hop per player before touching anybody, and never raise or lower an array from
+  inside the listener.
+
+`DaoDomainEvents` (0.11.1) hands you UUIDs rather than a `ref()`, but it *does*
+follow the rule: it fires on the caster's own world thread, from inside a ticking
+system, so a `CommandBuffer` is in play.
 
 ### 4. `provided` scope, never shaded
 
@@ -215,8 +230,12 @@ void    addQi(accessor, ref, float amount, @Nullable PlayerRef)  // gameplay: al
 void    setQi(accessor, ref, float qi)                           // admin: raw, no events
 void    setRealm(accessor, ref, CultivationRealm)                // admin: no ritual, no event
 void    setStage(accessor, ref, CultivationStage)
+    // setQi/setRealm/setStage write the BUILT-IN ladder only: no visible effect
+    // under a ProgressionProvider (0.11.0 javadoc). addQi is the write that reaches one.
 boolean completeBreakthrough(accessor, ref, @Nullable PlayerRef) // gameplay: full ritual outcome
 boolean completeAdvancement(accessor, ref, @Nullable PlayerRef)
+    // (0.11.0) built-in ladder: completeBreakthrough needs stage PEAK, completeAdvancement
+    // refuses at PEAK - pick by getStage(). Both return true ONLY if the rank advanced.
 void    demote(accessor, ref, @Nullable PlayerRef, boolean wasBreakthrough)
 
 boolean isMaxLevel(accessor, ref)
@@ -228,9 +247,18 @@ void    grantSkillPoints(accessor, ref, int points)
 boolean unlockSkillNode(accessor, ref, String nodeId)  // spends points
 boolean grantSkillNode(accessor, ref, String nodeId)   // free, for a reward
 
-void startMeditating(accessor, ref)   // stopMeditating does NOT apply the demotion penalty
-void stopMeditating(accessor, ref)
+void    startMeditating(accessor, ref)     // runs /cultivation meditate's gates + events
+void    stopMeditating(accessor, ref)      // (0.11.0) APPLIES the stand-up penalty
+boolean tryStartMeditating(accessor, ref)  // (0.11.0) true = meditating now
+boolean tryStopMeditating(accessor, ref)   // (0.11.0) false = a listener kept them seated
 ```
+
+*Changed in 0.11.0:* `stopMeditating` runs exactly what `/cultivation meditate`
+runs — `PreMeditationStopEvent` (reason `COMMAND`, vetoable) and the penalty for
+walking out of a ritual (a breakthrough/advancement demotes and scatters Qi, a
+retreat forfeits, an Ascension/Reincarnation fails). It used to skip both, and
+older docs told you to call `demote` after it. *Do not*: the cultivator would be
+demoted twice.
 
 There is deliberately **no `ascend(...)`**. The Ascension Capstone (0.8.0, the end
 of the ladder) is observe-and-veto only, through `CultivationEvents.onPreAscension`
@@ -271,12 +299,19 @@ writing. To change a value for one player or one event, use the matching `Pre*`
 event instead — a config write changes the server permanently and overwrites what
 its owner tuned.
 
-*32 config files have no `CultivationConfigs` accessor* as of 0.10.3.
+*37 config files have no `CultivationConfigs` accessor* as of 0.11.1 (0.11.1
+added `Arts/DaoSealConfig`, `Arts/DaoDomainConfig`,
+`Society/BreachRewardConfig`, `Cultivation/VeinCompassConfig` and the Sect Array
+config to that list).
 [`docs/config-access.md`](docs/config-access.md#files-with-no-accessor-yet)
 has the list and, for each, the public surface that exists instead — most of
 them (Bounty, CombatDepth, DaoDuel, Depths, Fist, Legacy, Lifespan, Meridian,
 Merit, Pagoda, Quest, Rift, WorldBoss) have their own `*Events` class. Check
 there before telling a user a subsystem is unreachable.
+
+`CultivationConfigs.saveAll()` (fixed in 0.11.1) now also writes
+`daoComprehension()`, `secretRealm()`, `webStore()` and the three built-in race
+files.
 
 Every one is reachable as `Cultivation.getFistConfig()` and friends, on the
 ordinary internals terms: `plugin.siren.Cultivation` may change shape between
@@ -324,7 +359,13 @@ void     registerSectBuildingType(SectBuildingType)       // last ctor arg = doe
 void     registerLifeBoundTrait(LifeBoundTrait)           // enters the weighted roll immediately
 
 void registerMenuPage(CultivationMenuPage)          // + unregisterMenuPage(String)
+boolean tryHandleMenuNav(store, ref, playerRef, @Nullable String navKey)
+                                                      // (0.11.0) as handleMenuNav, true if a page opened;
+                                                      // a LOCKING nav binding must answer the click on false
+                                                      // with sendUpdate(null, null, false)
 void registerCodexEntry(CodexEntry)                 // + unregisterCodexEntry(String)
+                                                      // (0.11.0) CodexPage.icon(iconPath, name, description):
+                                                      // iconPath is from the ASSET ROOT, never a ../ path
 void registerCodexCategory(CodexCategory)           // + unregisterCodexCategory(String)
 void registerAdminConfigSection(AdminConfigSection)  // + unregisterAdminConfigSection(String)
 void registerPlayerAdminAction(PlayerAdminAction)    // + unregisterPlayerAdminAction(String)
@@ -485,7 +526,20 @@ event) — plus sixteen more through 0.10.3: `CombatDepthEvents`, `DaoDuelEvents
 `LegacyEvents` (0.10.1); `SeasonEvents`, `BountyEvents`, `LifespanEvents`,
 `SoulEscapeEvents`, `WagerEvents`, `GuardianEvents`, `SermonEvents`,
 `RogueEvents`, `MeritEvents`, `PagodaEvents` (0.10.2); `ArrayEvents`,
-`TeaEvents`, `WeiqiEvents` (0.10.3). 51 classes, 368 listeners total.
+`TeaEvents`, `WeiqiEvents` (0.10.3) — plus two in 0.11.1: `DaoDomainEvents`
+(Dao Domains: unfold, collapse, clash) and `SectArrayEvents` (a sect's wartime
+Array Domain). 53 classes, 377 listeners total.
+
+`CultivationEvents` gained `onPreRitualAbort` / `onRitualAbort` in 0.11.0
+(`/cultivation meditate abort`). A `PreRitualAbortEvent` listener that cancels
+must explain itself to the player — the command sends no message of its own —
+and may be called twice for one withdrawal (the quote, then the confirm).
+
+*Dao Seals (0.11.1) have no events.* Do not invent a `DaoSealEvents`: an addon
+observes seals through their damage causes (`Cultivation_Seal_<Element>`,
+`Cultivation_DaoReaction`) and effect ids, listed in `docs/dao-seals.md`.
+`DaoElement.fromDamageCause(DamageCause)` (0.11.1) resolves a seal cause to its
+element.
 
 *`WagerEvents.WagerMarketResolvedEvent` / `WagerMarketVoidedEvent` fire while
 the tournament's monitor is held.* A listener on those two must take no lock
@@ -494,7 +548,11 @@ and call back into no Cultivation manager — copy what it needs and queue it.
 `DuelEvents.DuelEndReason` gained `YIELD` (0.10.1), a decided result where the
 wager transfers exactly as for `DEATH`, and `DuelEndEvent` gained a nullable
 `killer()` (0.10.2). A `switch` written against the old two values mis-reads
-yields.
+yields. Since 0.11.0 a duelist who disconnects through their own doing and does
+not return within the reconnect grace also ends as `YIELD` (through 0.10.3 a
+disconnect was `VOIDED`); only a server-caused disconnect still voids.
+
+`MeritDeed` gained `BREACH_CLEAR` (0.11.1), carried by `MeritEvents`.
 
 See [docs/events-reference.md](docs/events-reference.md) for what each covers.
 
@@ -549,6 +607,15 @@ SkillTreeBranch   VITALITY, RESILIENCE, MIGHT, WARDING, INSIGHT, HARMONY,
       touching a component.
 - [ ] If `hasStoreBenefit` is called: it is passed the **product slug**, not the
       registry key, and a `false` answer is not persisted as "did not buy".
+- [ ] If `stopMeditating` / `tryStopMeditating` is called: nothing calls `demote`
+      after it — since 0.11.0 it applies the stand-up penalty itself.
+- [ ] If `completeBreakthrough` / `completeAdvancement` is called on the built-in
+      ladder: the right one is picked by stage (`PEAK` = breakthrough).
+- [ ] If a `DuelPayoutEvent` / `PreDuelPayoutEvent` listener is registered: it
+      assumes no thread, resolves each `UUID`, and does not count a pre-event as a
+      payout (it can be asked twice).
+- [ ] If the addon uses anything from 0.11.1 (`DaoDomainEvents`, `SectArrayEvents`,
+      `DaoElement.fromDamageCause`): the manifest says `"Siren:Cultivation": ">=0.11.1"`.
 
 If you could not verify something against the sources, say which part and why —
 do not present an unverified integration as working.

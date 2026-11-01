@@ -159,6 +159,9 @@ autopilot will reach for a `ref()` that is not there:
   do not block — but **which** world thread you are on is whichever one reached the
   shared scheduler first, not any particular player's. Hop per player before
   touching anybody.
+- *`SectArrayEvents`* *(0.11.1)* is about a sect at war, not a player. An array's
+  end fires from whichever world's keeper noticed the siege was over, which need
+  not be any member's world. Hop per player, exactly as for `CelestialEvents`.
 
 ## 9. Reading `getStage()` under a `ProgressionProvider`
 
@@ -328,3 +331,49 @@ CommandBuffer rule does not apply here. It *is* still resolved onto the
 **target's** own world thread, which may differ from the admin's, so report
 outcomes only through `PlayerRef#sendMessage` on `targetPlayerRef`/`actingAdmin`
 — there is no page left to talk back to by the time this runs.
+
+## 19. Calling `demote` after `stopMeditating` (0.11.0)
+
+**Symptom:** a cultivator your addon stood up mid-breakthrough loses *two* stages,
+or a retreat or Ascension you meant to pause is simply over.
+
+Through 0.10.3, `stopMeditating` only stood a cultivator up, and the advice was to
+call `demote` yourself if the interruption should cost something. Since 0.11.0 it
+runs exactly what `/cultivation meditate` runs, *penalty included* — and fires
+`PreMeditationStopEvent` with reason `COMMAND` first, which another addon may
+cancel. So:
+
+```java
+// Wrong since 0.11.0 - the second line demotes them again.
+CultivationAPI.stopMeditating(accessor, ref);
+CultivationAPI.demote(accessor, ref, playerRef, true);
+
+// Right - one call, and you learn whether it happened.
+if (!CultivationAPI.tryStopMeditating(accessor, ref)) {
+    // a listener kept them seated; nothing changed and nothing was charged
+}
+```
+
+If you only meant to stand up an idle meditator, check `isMeditating` and the
+ritual state first: there is no penalty-free stop any more.
+
+## 20. Touching a player from a duel payout listener (0.11.0)
+
+**Symptom:** a `DuelPayoutEvent` / `PreDuelPayoutEvent` listener that reads the
+winner's components throws, reads the wrong world, or answers differently the
+second time.
+
+Since 0.11.0 a duel survives a dropped connection for a reconnect grace, and the
+payout events follow it. Neither fires on a fixed thread — the loser's world
+thread, the winner's, the yield command's, the disconnect event's, or the duel
+ledger's write thread, depending on how the duel ended — and a reconnect grace asks
+`PreDuelPayoutEvent` *twice*: once when the grace begins (the absent duelist is
+still readable then) and once when it is settled. The first ask may be for a
+payout that never happens, because the duelist came back. A `DuelPayoutEvent` may
+also report Qi *owed* to a winner who is offline and is credited at their next
+login.
+
+Treat both like `StoreBenefitEvents`: resolve each UUID fresh, hop to that
+player's world before touching a `Store`, keep the pre-event answer cheap and
+side-effect free, and never count a `PreDuelPayoutEvent` as a payout. The
+`DuelEvents` javadoc spells out every thread.

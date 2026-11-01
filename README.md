@@ -5,16 +5,20 @@ progression mod for Hytale servers — realms and Qi, daos, sects, techniques, s
 beasts, formations, cave abodes, duels, alchemy and the heavens themselves.
 
 This repository is for **mod developers**. It contains the API's Java sources,
-a complete reference for all **368 events**, and worked examples. Everything here
+a complete reference for all **377 events**, and worked examples. Everything here
 is the real code the mod ships — nothing is a summary written after the fact.
 
 | | |
 | --- | --- |
-| **Artifact** | `plugin.siren:Cultivation:0.10.3` |
+| **Version** | 0.11.1 |
+| **Artifact** | `plugin.siren:Cultivation:0.11.1` |
 | **Package** | `plugin.siren.API` |
 | **Plugin id** | `Siren:Cultivation` |
-| **Hytale server** | Update 6 (`ServerVersion >=0.6.0-pre.0 <0.7.0`; built against `com.hypixel.hytale:Server:0.6.2`) |
+| **Hytale server** | Update 7, 0.7.2 or later (`ServerVersion >=0.7.2 <0.8.0`; built against `com.hypixel.hytale:Server:0.7.2`) |
 | **Java** | 25 |
+
+On an Update 6 server, stay on Cultivation 0.10.3 — 0.11.0 and later do not run
+there, and an Update 6 server cannot open a world an Update 7 server has saved.
 
 ---
 
@@ -26,8 +30,8 @@ internals to change how it behaves. Every one of these is a supported hook:
 | I want to… | Use | Guide |
 | --- | --- | --- |
 | Read a player's realm, level, Qi, race, skill nodes | `CultivationAPI` getters | [Reading player state](docs/reading-state.md) |
-| React when something happens (breakthrough, tame, siege…) | 216 post-events | [Events](docs/events.md) |
-| Veto something, or re-tune its numbers | 152 cancellable pre-events | [Events](docs/events.md) |
+| React when something happens (breakthrough, tame, siege…) | 222 post-events | [Events](docs/events.md) |
+| Veto something, or re-tune its numbers | 155 cancellable pre-events | [Events](docs/events.md) |
 | Keep your own progression in step with a player's saves | `ProfileEvents` | [Profiles](docs/profiles.md) |
 | Grant Qi, force a breakthrough, hand out a skill node | `addQi`, `completeBreakthrough`, `grantSkillNode` | [Driving progression](docs/driving-progression.md) |
 | Read or drain a chunk's spirit vein | `readSpiritVein`, `drainSpiritVein` | [Driving progression](docs/driving-progression.md) |
@@ -98,6 +102,12 @@ internals to change how it behaves. Every one of these is a supported hook:
 | React to the Trial Pagoda or Transmission Array travel | `PagodaEvents`, `ArrayEvents` | [Event reference](docs/events-reference.md#trial-pagoda-0102) |
 | React to seasons or the Bounty Board | `SeasonEvents`, `BountyEvents` | [Event reference](docs/events-reference.md#seasons-0102) |
 | React to a Tea Ceremony or a Weiqi match | `TeaEvents`, `WeiqiEvents` | [Event reference](docs/events-reference.md#tea-ceremony-0103) |
+| Veto or re-tune a Dao Domain unfolding; react to it collapsing or clashing | `DaoDomainEvents` | [Dao Domains](docs/dao-domains.md) |
+| React to a sect raising its wartime Array Domain | `SectArrayEvents` | [Sect Array Domains](docs/sect-array-domains.md) |
+| Recognize a Dao Seal hit, mark or reaction from my own systems | Seal damage causes and effect ids | [Dao Seals](docs/dao-seals.md) |
+| Veto, or react to, a cultivator withdrawing from a breakthrough | `onPreRitualAbort`, `onRitualAbort` | [Event reference](docs/events-reference.md#core-progression) |
+| Seat or stand a cultivator and know whether it worked | `tryStartMeditating`, `tryStopMeditating` | [Driving progression](docs/driving-progression.md#meditation) |
+| Explain an icon in a Codex article | `CodexPage.icon` | [UI integration](docs/ui.md#block-types) |
 
 Three of those are the big ones, and two of the three are easy to confuse:
 `CultivationTheme` changes the **words**, `CultivationPalette` changes the
@@ -109,6 +119,103 @@ and the skill tree keep working on top of it — that is how the
 
 ---
 
+## New in 0.11.0 and 0.11.1
+
+Both releases are for Hytale Update 7. Updating an addon from 0.10.3, read the
+three *behavior changes* first — they change what existing code does without
+breaking its compile.
+
+### 0.11.1 — Dao Seals, Dao Domains, Sect Array Domains
+
+Requires Server 0.7.2 (`ServerVersion >=0.7.2 <0.8.0`, built against
+`com.hypixel.hytale:Server:0.7.2`).
+
+- *`DaoDomainEvents`* (new class): `PreDomainUnfoldEvent` (cancellable; radius,
+  duration and Qi cost re-tunable), `DomainUnfoldEvent`, `DomainCollapseEvent`
+  with `CollapseReason`, and `DomainClashEvent` with `Outcome` for two hostile
+  domains — or a domain and a sect array — contesting each other. Players are
+  UUIDs. See [Dao Domains](docs/dao-domains.md).
+- *`SectArrayEvents`* (new class): `PreSectArrayRaiseEvent` (cancellable; the
+  contribution price re-tunable), `SectArrayRaisedEvent` and
+  `SectArrayEndedEvent` with `EndReason`, for a besieged sect's wartime Array
+  Domain over its territory. See [Sect Array Domains](docs/sect-array-domains.md).
+- *Dao Seals* have no events yet. What they leave behind — the
+  `Cultivation_Seal_<Element>` and `Cultivation_DaoReaction` damage causes, the
+  mark and reaction effects, and their Reveal, Codex and admin ids — is in
+  [Dao Seals](docs/dao-seals.md).
+- `DaoElement.fromDamageCause(DamageCause)` (new) resolves a damage cause to its
+  element through its `Inherits` chain, so a seal cause resolves to its element.
+- `MeritDeed.BREACH_CLEAR` (new constant, carried by `MeritEvents`): Merit for
+  standing near an Update 7 Goblin Breach, Coffer, Voidtaken Hunt or dungeon boss
+  when it resolves. A `switch` over `MeritDeed` should handle it — an exhaustive
+  `switch` expression with no `default` throws on it at runtime.
+- `CultivationConfigs.saveAll()` now also writes `daoComprehension()`,
+  `secretRealm()`, `webStore()` and the three built-in race files, which it
+  used to skip.
+- Five new config files with no `CultivationConfigs` accessor — Dao Seals, Dao
+  Domains, breach rewards, the Spirit Vein Compass and Sect Arrays; see
+  [Config access](docs/config-access.md#files-with-no-accessor-yet).
+- Two new built-in [Progressive Reveal](docs/registries.md#progressive-reveal-0103)
+  systems, `cultivation:daoSeals` and `cultivation:daoDomains`.
+
+### 0.11.0 — the move to Update 7
+
+Built against Server 0.7.0-pre.5.1 (`ServerVersion >=0.7.0-pre.0 <0.8.0`). It no
+longer runs on an Update 6 server.
+
+*Behavior changes:*
+
+- *`stopMeditating` now costs what standing up costs.* It runs the same path as
+  `/cultivation meditate`: `PreMeditationStopEvent` fires (reason `COMMAND`) and can
+  keep the cultivator seated, and a ritual in progress is penalized — a
+  breakthrough or advancement demotes a stage and scatters the banked Qi, a
+  Closed-Door Retreat forfeits its payout, an Ascension or Reincarnation fails.
+  It used to skip all of that and told you to call `demote` yourself; *do not*
+  any more, or the cultivator is demoted twice. `startMeditating` likewise now
+  runs the command's gates and fires `PreMeditationStartEvent` /
+  `MeditationStartEvent`. See [Driving progression](docs/driving-progression.md#meditation).
+- *`completeBreakthrough` needs Peak stage* on the built-in ladder, and
+  `completeAdvancement` refuses at Peak; both return `false` instead. Both now
+  return `true` only when the rank actually advanced — under a
+  `ProgressionProvider` they used to return `false` even on success.
+- *A dropped duel pauses, then forfeits.* Through 0.10.3 a disconnect voided the
+  duel (`VOIDED`, no wager moved). Now a duelist who disconnects through their own
+  doing pauses it for `Duel-Reconnect-Grace-Seconds` (30) with their stake held:
+  back in time, it resumes; not back, they forfeit and `DuelEndEvent` reports
+  `YIELD`, wager and all. Only a server-caused disconnect still voids.
+  `PreDuelPayoutEvent` can be asked twice for one payout and `DuelPayoutEvent`
+  can report winnings owed to an offline winner — both now fire on no fixed
+  thread, so read [`DuelEvents`](api-sources/plugin/siren/API/DuelEvents.java)'
+  javadoc before touching a player from them.
+
+*Additions:*
+
+- `CultivationEvents.onPreRitualAbort` / `onRitualAbort` — a cultivator withdrawing
+  from an armed breakthrough or advancement with `/cultivation meditate abort`.
+- `CultivationAPI.tryStartMeditating` / `tryStopMeditating` — as
+  `startMeditating` / `stopMeditating`, but they report whether it happened.
+- `CultivationAPI.tryHandleMenuNav` — as `handleMenuNav`, but reports whether a
+  page opened. See [UI integration](docs/ui.md#putting-the-bar-on-your-own-page).
+- `CodexPage.icon(...)` and `CodexPage.BlockType.ICON` — an icon beside its name
+  and meaning. See [UI integration](docs/ui.md#block-types).
+- `DaoElement.fromDamageCauseId` also maps Update 7's vanilla `Earth`, `Water`,
+  `Wind` and `Lightning` damage causes to their elements.
+
+*Smaller contract changes,* all in the javadoc:
+
+- `setQi`, `setRealm` and `setStage` are built-in-ladder only; under a
+  `ProgressionProvider` they change nothing the cultivator sees.
+- `setQi`, `applyStatBonus`, `addMerit`, `addBodyTemperingXp`,
+  `addPersonalDaoComprehension` and `drainSpiritVein` ignore a NaN or infinite
+  amount.
+- `applyStatBonus` is not a heal: the pool keeps its current share of full.
+- `setProgressionProvider` and `setTheme` are safe to call after `setup()` — the
+  swap is visible to every world thread at once.
+- `SermonEvents.SermonEndEvent.forfeited()` is `false` for a disconnect the
+  server caused (a stop, a staff kick).
+
+---
+
 ## Install
 
 Cultivation is not on a public Maven repository. Install the released jar into
@@ -116,10 +223,10 @@ your local repository once:
 
 ```bash
 mvn install:install-file \
-  -Dfile=Cultivation-0.10.3.jar \
+  -Dfile=Cultivation-0.11.1.jar \
   -DgroupId=plugin.siren \
   -DartifactId=Cultivation \
-  -Dversion=0.10.3 \
+  -Dversion=0.11.1 \
   -Dpackaging=jar
 ```
 
@@ -129,7 +236,7 @@ Then depend on it in `provided` scope:
 <dependency>
     <groupId>plugin.siren</groupId>
     <artifactId>Cultivation</artifactId>
-    <version>0.10.3</version>
+    <version>0.11.1</version>
     <scope>provided</scope>
 </dependency>
 ```
@@ -144,7 +251,7 @@ resolves Cultivation's classes for you:
 
 ```json
 "Dependencies": {
-  "Siren:Cultivation": ">=0.10.3"
+  "Siren:Cultivation": ">=0.11.1"
 }
 ```
 
@@ -205,10 +312,13 @@ float qi = CultivationAPI.getQi(accessor, ref);
 | **[Driving progression](docs/driving-progression.md)** | Granting Qi, ranking up, meditation, spirit veins, and the rest of the world |
 | **[Config access](docs/config-access.md)** | Reading and writing Cultivation's own settings, and when not to |
 | **[Events](docs/events.md)** | Pre vs post, cancelling, re-tuning, threading, error handling |
-| **[Event reference](docs/events-reference.md)** | All 368 listeners with their payloads — generated from source |
+| **[Event reference](docs/events-reference.md)** | All 377 listeners with their payloads — generated from source |
 | **[Registries](docs/registries.md)** | Races, techniques, Qi-absorption items |
 | **[Profiles](docs/profiles.md)** | Keeping your own progression in step with a player's separate saves |
 | **[Store benefits](docs/store-benefits.md)** | Registering a Treasure Pavilion product, and the one event family that is not on a world thread |
+| **[Dao Seals](docs/dao-seals.md)** | *(0.11.1)* Update 7 rune seals, their marks and reactions — the ids an addon can read |
+| **[Dao Domains](docs/dao-domains.md)** | *(0.11.1)* Unfolding, collapsing and clashing domains, and their events |
+| **[Sect Array Domains](docs/sect-array-domains.md)** | *(0.11.1)* A sect's wartime array over its territory |
 | **[UI integration](docs/ui.md)** | Menu pages, Codex articles, admin config sections, player admin actions |
 | **[Compatibility](docs/compatibility.md)** | Endless Leveling, PlaceholderAPI, Marriage; optional-dependency guards |
 | **[Progression provider](docs/progression-provider.md)** | Replacing the realm/Qi ladder entirely |
@@ -231,7 +341,7 @@ assistant to read `AGENTS.md` first.
 ## Source layout
 
 ```
-api-sources/plugin/siren/API/   The 87 public API source files, verbatim
+api-sources/plugin/siren/API/   The 89 public API source files, verbatim
 docs/                            Guides and the generated event reference
 examples/                        A worked example addon
 tools/gen_events_reference.py    Regenerates docs/events-reference.md

@@ -483,7 +483,12 @@ public final class CultivationConfigs {
         bodyTempering().save();
         skillTree().save();
         raceSystem().save();
+        // The three built-in Race/*.json files (Human, Demon, Deity). They have
+        // no accessor of their own - a race registered by another mod backs its
+        // stats with that mod's file, which is not ours to write.
+        Cultivation.saveBuiltInRaceConfigs();
         dao().save();
+        daoComprehension().save();
         technique().save();
         manual().save();
         alchemy().save();
@@ -520,7 +525,9 @@ public final class CultivationConfigs {
         celestial().save();
         pathWar().save();
         season().save();
+        secretRealm().save();
         endlessLeveling().save();
         update().save();
+        webStore().save();
     }
 }

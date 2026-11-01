@@ -59,6 +59,9 @@ PAGES: list[tuple[str, str, str]] = [
     # claimed it, so the link rendered dead on the published wiki.
     ("docs/profiles.md", "Profiles", "Profiles"),
     ("docs/store-benefits.md", "Store-Benefits", "Store benefits"),
+    ("docs/dao-seals.md", "Dao-Seals", "Dao Seals"),
+    ("docs/dao-domains.md", "Dao-Domains", "Dao Domains"),
+    ("docs/sect-array-domains.md", "Sect-Array-Domains", "Sect Array Domains"),
     ("docs/ui.md", "UI-Integration", "UI integration"),
     ("docs/compatibility.md", "Compatibility", "Compatibility"),
     ("docs/progression-provider.md", "Progression-Provider", "Progression provider"),

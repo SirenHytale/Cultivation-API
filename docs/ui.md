@@ -126,6 +126,18 @@ Four steps, in your `CustomUIPage`:
    Safe to call with the `null` the field holds when the event was one of your own
    buttons, and with an id the player is not allowed to open.
 
+   *0.11.0:* `tryHandleMenuNav(store, ref, playerRef, navKey)` does the same and
+   returns whether a page actually opened — `false` for an unknown or hidden
+   target, an invalid player, or a page that threw. If your nav binding *locks*
+   the interface while it waits for the server, the click must be answered either
+   way, so on `false` send an empty update yourself:
+
+   ```java
+   if (!CultivationAPI.tryHandleMenuNav(store, ref, playerRef, data.nav)) {
+       sendUpdate(null, null, false);   // or the client stays on its loading state
+   }
+   ```
+
 ### Threading
 
 `getLabel`, `isVisibleTo` and `open` are called on the viewing player's world
@@ -184,6 +196,7 @@ cannot do.
 | `stat(label, value)` | A label/value row. Overloads for `Message`, `String`, `int`, `float` |
 | `note(...)` / `noteIf(condition, ...)` | A dimmed aside — a caveat, or something true of this reader only |
 | `recipe(itemId)` | A crafting recipe, resolved live from the item's own asset. Pass the id of the item that gets **crafted**. An item with no recipe renders nothing. |
+| `icon(iconPath, name, description)` | *(0.11.0)* A picture beside its name and what it means — how the Codex explains an icon the player meets somewhere else, such as a HUD effect tile. Overloads for `Message` and for translation keys. `iconPath` is the PNG's path from the asset root (`"UI/Custom/Hud/MyMod/Icons/Frenzy.png"`), the same form a HUD's `AssetImage` takes — never a document-relative `../` path |
 | `divider()` | A thin rule |
 
 Every call returns the page, so bodies chain. Two helpers keep numbers readable:
@@ -362,6 +375,23 @@ what the settings menu lists — the admin page lists everything either way.
 `isVisible()` is read on every render, so a section belonging to a subsystem the
 server owner has switched off can hide itself rather than offering settings that
 do nothing.
+
+### Search (0.11.0)
+
+The Config tab has a search bar, and it searches addon sections exactly like
+Cultivation's own. What it matches: a section's key and its label, and each
+field's key, label and tooltip. Translated labels are matched in the admin's own
+language *and* in English. A section's hint is deliberately not searched.
+
+Two consequences for a section you register:
+
+- *Give fields real labels and keys.* `"MyAddon:BrewSeconds"` is found by
+  "brew"; `"MyAddon:f3"` is found by nothing a human would type. Hyphens and
+  punctuation are ignored, so a config-file key spelling (`Brew-Seconds`) works
+  as a key too.
+- *A section whose own code throws while being read* (`getFields()`, a label) is
+  logged and left out of the results rather than failing the whole search — so a
+  broken section shows up as "missing from search", not as an error.
 
 ### Rules
 

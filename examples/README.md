@@ -18,7 +18,7 @@ ExampleAddon/
 | File | Shows |
 | --- | --- |
 | `ExampleAddon.java` | Dependency wiring, where registration goes, clean shutdown |
-| `CultivationHooks.java` | Observing (post-events), vetoing and re-tuning (pre-events), cross-world thread hopping, null-guarding `player()`, and the two 0.8.0 event classes that have no subject world at all |
+| `CultivationHooks.java` | Observing (post-events), vetoing and re-tuning (pre-events), cross-world thread hopping, null-guarding `player()`, the two 0.8.0 event classes that have no subject world at all, and the 0.11.x Dao Domain, Sect Array and ritual-abort hooks |
 | `ExampleContent.java` | `registerRace`, `registerTechnique` + a technique effect, `registerQiAbsorptionItemModifier`, `registerCodexEntry`, `registerAdminConfigSection`, `registerMenuPage` |
 
 The 0.8.0 additions are all in `CultivationHooks.java`: the Ascension capstone
@@ -26,6 +26,13 @@ The 0.8.0 additions are all in `CultivationHooks.java`: the Ascension capstone
 (`onPreTechniqueFusion`), sect abbreviations, celestial events, and a
 [Treasure Pavilion](../docs/store-benefits.md) benefit — including the thread hop a
 store-benefit listener must make and the slug-vs-key trap it must avoid.
+
+The 0.11.x additions are there too: `registerDaoDomains()` re-tunes a
+[Dao Domain](../docs/dao-domains.md) unfolding and listens to it collapsing and
+clashing, `registerSectArrays()` discounts and observes a
+[Sect Array Domain](../docs/sect-array-domains.md), and `registerVetoes()` refuses
+a `/cultivation meditate abort` — a pre-event whose listener must explain the
+refusal to the player itself.
 
 ### One hook it deliberately does not show
 
@@ -38,8 +45,8 @@ generated.
 
 ## Read this before copying
 
-**It compiles.** Every source file here builds clean with `javac` against the
-real `Cultivation-0.10.3.jar` and `Server-0.6.2.jar`, so every API
+**It compiles.** Every source file here builds clean with `javac -Xlint:all`
+against the real `Cultivation-0.11.1.jar` and `Server-0.7.2.jar`, so every API
 signature in it is verified rather than merely plausible. You cannot build it
 straight out of this repository only because neither jar can be redistributed
 here — see

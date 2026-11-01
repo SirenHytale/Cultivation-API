@@ -33,7 +33,7 @@ public final class WarEvents {
         MUSTER_FAILED,
         /** CONTEST hard-stopped because live defender presence in the hall's own world stayed at zero past the grace period - resolves in the defender's favor with no loss. */
         DEFENDER_ABSENT,
-        /** An admin or the Wars-Enabled master switch cancelled the siege outright - no consequence to either side, and the attacker's declaration cost is refunded. */
+        /** The Wars-Enabled master switch going off cancelled the siege outright (no admin command cancels a single siege yet) - no consequence to either side, and the attacker's declaration cost is refunded. */
         ABORTED
     }
 

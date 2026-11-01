@@ -29,9 +29,10 @@ EVENT_FILES: list[tuple[str, str, str]] = [
     (
         "CultivationEvents",
         "Core progression",
-        "Qi, meditation, rituals, breakthroughs, advancements, demotions, "
-        "tribulations, the Heart-Devil Trial, Qi Deviation, the Ascension "
-        "capstone, races, the skill tree and respecs.",
+        "Qi, meditation, rituals, withdrawing from an armed ritual "
+        "(`/cultivation meditate abort`, 0.11.0), breakthroughs, advancements, "
+        "demotions, tribulations, the Heart-Devil Trial, Qi Deviation, the "
+        "Ascension capstone, races, the skill tree and respecs.",
     ),
     (
         "LifespanEvents",
@@ -66,6 +67,16 @@ EVENT_FILES: list[tuple[str, str, str]] = [
         "understanding track, the open Personal Dao registry (Sword/Slaughter/"
         "Space and whatever a mod adds beside them), and Dao Enlightenment "
         "(悟道). Does not replace or collide with `DaoEvents` above.",
+    ),
+    (
+        "DaoDomainEvents",
+        "Dao Domains (0.11.1)",
+        "Dao Domains (道域): a Nascent Soul+ cultivator unfolding an anchored "
+        "aura from the Domain Heart rune in an Update 7 core ability slot, the "
+        "domain collapsing, and two hostile domains clashing. The unfold is "
+        "cancellable, with radius, duration and Qi cost re-tunable. Players are "
+        "UUIDs, and a domain lost to its caster disconnecting fires nothing - "
+        "see [Dao Domains](dao-domains.md).",
     ),
     (
         "TechniqueEvents",
@@ -126,6 +137,15 @@ EVENT_FILES: list[tuple[str, str, str]] = [
         "WarEvents",
         "Sect wars",
         "Declaring sieges and how they resolve.",
+    ),
+    (
+        "SectArrayEvents",
+        "Sect Array Domains (0.11.1)",
+        "A sect's wartime Array Domain over every chunk it has claimed: raised "
+        "only while a siege is declared against the sect, paid from the "
+        "raiser's own sect contribution, held until the siege ends, and "
+        "contested by any hostile Dao Domain unfolded inside it - see "
+        "[Sect Array Domains](sect-array-domains.md).",
     ),
     (
         "GuardianEvents",
@@ -385,12 +405,12 @@ LISTENER_RE = re.compile(
 # allowed both before `public` and captured, since a @Nullable accessor is
 # something a consumer needs to know about.
 ACCESSOR_RE = re.compile(
-    r"^\s{8}(?P<annotations>(?:@\w+\s+)*)public (?:final )?"
+    r"^\s{8}(?P<annotations>(?:@[\w.]+\s+)*)public (?:final )?"
     r"(?P<type>[\w.<>\[\], ?]+?) (?P<name>\w+)\(\)\s*\{",
     re.MULTILINE,
 )
 MUTATOR_RE = re.compile(
-    r"^\s{8}(?:@\w+\s+)*public (?:final )?void (?P<name>set\w+)\((?P<params>[^)]*)\)\s*\{",
+    r"^\s{8}(?:@[\w.]+\s+)*public (?:final )?void (?P<name>set\w+)\((?P<params>[^)]*)\)\s*\{",
     re.MULTILINE,
 )
 
@@ -411,6 +431,28 @@ def strip_javadoc(block: str) -> str:
     text = html.unescape(text)
     text = re.sub(r"\s+", " ", text).strip()
     return text
+
+
+def split_tags(doc: str) -> str:
+    """Moves a flattened javadoc's `@param` / `@return` tags out of the prose.
+
+    `strip_javadoc` joins the whole comment into one line, so a record that
+    documents its components with `@param` would otherwise read as one run-on
+    sentence. The tags become a list under the paragraph instead.
+    """
+    parts = re.split(r"\s*@(param|return)\b\s*", doc)
+    prose = parts[0].strip()
+    items = []
+    for kind, body in zip(parts[1::2], parts[2::2]):
+        body = body.strip()
+        if kind == "param":
+            name, _, description = body.partition(" ")
+            items.append(f"- `{name}` — {description.strip()}")
+        else:
+            items.append(f"- Returns {body}")
+    if not items:
+        return prose
+    return prose + "\n\n" + "\n".join(items)
 
 
 def javadoc_before(text: str, index: int) -> str:
@@ -461,7 +503,9 @@ def format_record_params(params: str) -> list[str]:
 
     cleaned = []
     for param in out:
-        param = re.sub(r"@\w+\s*", "", param).strip()
+        # [\w.]+ so a fully qualified annotation (@javax.annotation.Nullable)
+        # is stripped whole rather than leaving ".annotation.Nullable" behind.
+        param = re.sub(r"@[\w.]+\s*", "", param).strip()
         param = re.sub(r"\s+", " ", param)
         if param:
             cleaned.append(param)
@@ -506,7 +550,7 @@ def render_file(name: str, heading: str, blurb: str) -> str:
             lines.append(f"```java\n{name}.{listener}(event -> {{ /* ... */ }});\n```")
             lines.append("")
         if doc:
-            lines.append(doc)
+            lines.append(split_tags(doc))
             lines.append("")
         if params:
             lines.append("| Accessor | Type |")
@@ -534,15 +578,15 @@ def render_file(name: str, heading: str, blurb: str) -> str:
                 lines.append(f"```java\n{name}.{listener}(event -> {{ /* ... */ }});\n```")
                 lines.append("")
             if doc:
-                lines.append(doc)
+                lines.append(split_tags(doc))
                 lines.append("")
 
             rows = []
             for accessor in ACCESSOR_RE.finditer(body):
-                kind = "read (may be null)" if "@Nullable" in accessor.group("annotations") else "read"
+                kind = "read (may be null)" if "Nullable" in accessor.group("annotations") else "read"
                 rows.append((f"{accessor.group('name')}()", accessor.group("type"), kind))
             for mutator in MUTATOR_RE.finditer(body):
-                params = re.sub(r"@\w+\s*", "", mutator.group("params")).strip()
+                params = re.sub(r"@[\w.]+\s*", "", mutator.group("params")).strip()
                 param_type = params.rsplit(" ", 1)[0] if params else ""
                 rows.append((f"{mutator.group('name')}({param_type})", "void", "re-tune"))
 
@@ -562,14 +606,27 @@ def main() -> int:
         return 1
 
     total_listeners = 0
+    total_post = 0
+    total_pre = 0
     sections = []
     for name, heading, blurb in EVENT_FILES:
         path = SOURCES / f"{name}.java"
         if not path.is_file():
             print(f"warning: {path.name} is missing, skipping", file=sys.stderr)
             continue
-        total_listeners += len(LISTENER_RE.findall(path.read_text(encoding="utf-8")))
+        source = path.read_text(encoding="utf-8")
+        total_listeners += len(LISTENER_RE.findall(source))
+        total_post += len(RECORD_RE.findall(source))
+        total_pre += len(PRE_CLASS_RE.findall(source))
         sections.append(render_file(name, heading, blurb))
+
+    # An *Events.java in the sources that EVENT_FILES does not list would be
+    # silently left out of the reference - say so instead.
+    listed = {name for name, _heading, _blurb in EVENT_FILES}
+    for path in sorted(SOURCES.glob("*Events.java")):
+        if path.stem not in listed:
+            print(f"warning: {path.name} is not in EVENT_FILES, so it is not in the reference",
+                  file=sys.stderr)
 
     header = f"""# Event reference
 
@@ -597,7 +654,8 @@ CultivationEvents.onBreakthrough(event -> {{
 
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT.write_text(header + "\n\n---\n\n".join(sections) + "\n", encoding="utf-8")
-    print(f"Wrote {OUTPUT.relative_to(ROOT)} — {total_listeners} listeners, {len(sections)} sections.")
+    print(f"Wrote {OUTPUT.relative_to(ROOT)} — {total_listeners} listeners "
+          f"({total_post} post-events, {total_pre} pre-events), {len(sections)} sections.")
     return 0
 
 
